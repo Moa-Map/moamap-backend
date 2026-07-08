@@ -1,0 +1,12 @@
+plugins {
+	id 'org.springframework.boot'
+}
+
+// gateway-service는 Spring Cloud Gateway(리액티브) 기반입니다.
+// 서블릿 스택(spring-boot-starter-web)과 함께 사용하면 기동에 실패하므로 넣지 않습니다.
+dependencies {
+	implementation project(':common')
+
+	implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+}
