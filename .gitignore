@@ -45,6 +45,11 @@ bin/
 ### IDE - VS Code ###
 .vscode/
 
+### Claude Code ###
+# 개인 로컬 설정/메모리는 제외하고, 팀 공유용(.claude/settings.json, CLAUDE.md)은 커밋 가능하도록 둡니다.
+.claude/settings.local.json
+CLAUDE.local.md
+
 ### OS ###
 .DS_Store
 Thumbs.db
