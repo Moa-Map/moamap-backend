@@ -1,0 +1,9 @@
+plugins {
+	id 'java-library'
+}
+
+// common은 실행 가능한 애플리케이션이 아닌 공유 라이브러리 모듈입니다.
+dependencies {
+	// 여러 서비스가 공유하는 공통 코드(공통 응답/예외/DTO 등)의 기반 의존성.
+	api 'org.springframework.boot:spring-boot-starter-validation'
+}

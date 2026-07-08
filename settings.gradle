@@ -1,1 +1,8 @@
 rootProject.name = 'moamap'
+
+include 'common'
+include 'gateway-service'
+include 'user-service'
+include 'place-service'
+include 'map-service'
+include 'notification-service'
