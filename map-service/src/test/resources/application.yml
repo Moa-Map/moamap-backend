@@ -1,0 +1,16 @@
+# 테스트 전용 설정. src/test/resources가 클래스패스 우선순위상 main보다 앞이라
+# 테스트 실행 시엔 이 파일이 main의 application.yml을 완전히 대체한다.
+# H2 메모리 DB를 쓰므로 postgres 스키마(map_service)나 seed 스크립트가 필요 없다.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  sql:
+    init:
+      mode: never
+
+seoul:
+  api:
+    base-url: http://localhost
+    key: test-key
+    service: citydata_ppltn
