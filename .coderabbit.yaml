@@ -14,7 +14,6 @@ reviews:
       - "main"
   path_filters:
     - "!**/build/**"
-    - "!**/*.gradle"
     - "!**/generated/**"
 chat:
   auto_reply: true
