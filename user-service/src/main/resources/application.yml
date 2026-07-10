@@ -16,6 +16,10 @@ spring:
     properties:
       hibernate:
         default_schema: user_service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 management:
   endpoints:
@@ -33,7 +37,7 @@ jwt:
   refresh-token-expiration-days: ${JWT_REFRESH_EXP_DAYS:14}
 
 kakao:
-  # 우리 카카오 앱 ID(토큰 검증용). 실제 값은 환경변수로 주입.
+  # 카카오 앱 ID(토큰 검증용). 실제 값은 환경변수로 주입.
   app-id: ${KAKAO_APP_ID:0}
   token-info-uri: https://kapi.kakao.com/v1/user/access_token_info
   user-info-uri: https://kapi.kakao.com/v2/user/me
