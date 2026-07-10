@@ -1,6 +1,7 @@
 package com.moamap.user.auth.service;
 
 import com.moamap.user.auth.dto.TokenResponse;
+import com.moamap.user.auth.exception.RefreshTokenNotFoundException;
 import com.moamap.user.auth.jwt.JwtProperties;
 import com.moamap.user.auth.jwt.JwtProvider;
 import com.moamap.user.auth.oauth.OAuthClient;
@@ -34,6 +35,22 @@ public class AuthService {
                         info.nickname(), info.email(), info.profileImageUrl())));
         user.updateLastLogin(LocalDateTime.now());
         return issueTokens(user);
+    }
+
+    @Transactional
+    public TokenResponse refresh(String refreshToken) {
+        // Redis TTL이 만료를 처리하므로, 만료됐거나 없으면 findUserId가 빈 값을 준다.
+        Long userId = refreshTokenStore.findUserId(refreshToken)
+                .orElseThrow(() -> new RefreshTokenNotFoundException("리프레시 토큰을 찾을 수 없습니다."));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RefreshTokenNotFoundException("사용자를 찾을 수 없습니다."));
+        refreshTokenStore.delete(refreshToken); // 회전: 기존 토큰 폐기 후 새로 발급
+        return issueTokens(user);
+    }
+
+    @Transactional
+    public void logout(String refreshToken) {
+        refreshTokenStore.delete(refreshToken);
     }
 
     private TokenResponse issueTokens(User user) {

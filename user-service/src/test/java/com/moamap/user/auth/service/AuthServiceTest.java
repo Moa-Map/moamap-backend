@@ -1,6 +1,7 @@
 package com.moamap.user.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.moamap.user.auth.dto.TokenResponse;
+import com.moamap.user.auth.exception.RefreshTokenNotFoundException;
 import com.moamap.user.auth.jwt.JwtProperties;
 import com.moamap.user.auth.jwt.JwtProvider;
 import com.moamap.user.auth.oauth.OAuthClient;
@@ -81,5 +83,37 @@ class AuthServiceTest {
 
         assertThat(response.accessToken()).isEqualTo("access-jwt");
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void 유효한_리프레시_토큰으로_재발급하면_기존_토큰을_회전한다() {
+        User user = User.createSocialUser("kakao", "111", "길동", null, null);
+        ReflectionTestUtils.setField(user, "id", 5L);
+        given(refreshTokenStore.findUserId("old-refresh")).willReturn(Optional.of(5L));
+        given(userRepository.findById(5L)).willReturn(Optional.of(user));
+        given(jwtProvider.createAccessToken(5L, Role.USER)).willReturn("new-access");
+        given(jwtProvider.getAccessTokenExpiresInSeconds()).willReturn(1800L);
+
+        TokenResponse response = authService.refresh("old-refresh");
+
+        assertThat(response.accessToken()).isEqualTo("new-access");
+        assertThat(response.refreshToken()).isNotEqualTo("old-refresh");
+        verify(refreshTokenStore).delete("old-refresh");
+        verify(refreshTokenStore).save(anyString(), eq(5L), any(Duration.class));
+    }
+
+    @Test
+    void 없거나_만료된_리프레시_토큰이면_예외를_던진다() {
+        given(refreshTokenStore.findUserId("nope")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh("nope"))
+                .isInstanceOf(RefreshTokenNotFoundException.class);
+    }
+
+    @Test
+    void 로그아웃하면_해당_리프레시_토큰을_삭제한다() {
+        authService.logout("some-refresh");
+
+        verify(refreshTokenStore).delete("some-refresh");
     }
 }
