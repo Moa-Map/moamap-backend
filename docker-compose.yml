@@ -1,0 +1,19 @@
+# 로컬 개발용 PostgreSQL. `docker compose up -d`로 기동.
+# DB는 하나(moamap), 서비스별로 스키마를 나눠 쓴다.
+services:
+  postgres:
+    image: postgres:16
+    container_name: moamap-postgres
+    environment:
+      POSTGRES_DB: moamap
+      POSTGRES_USER: moamap
+      POSTGRES_PASSWORD: moamap
+    ports:
+      - "5432:5432"
+    volumes:
+      - moamap-pgdata:/var/lib/postgresql/data
+      # init 스크립트는 데이터 디렉터리가 비어 있는 최초 기동에만 실행된다.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+
+volumes:
+  moamap-pgdata:

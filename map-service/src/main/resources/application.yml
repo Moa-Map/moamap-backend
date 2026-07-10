@@ -4,6 +4,26 @@ server:
 spring:
   application:
     name: map-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      # ponytail: dev 편의용 update. 스키마 안정화되면 Flyway 마이그레이션으로 이관.
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    # sql.init(seed data)가 Hibernate의 테이블 생성 이후에 돌게 순서를 미룬다.
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        default_schema: map_service
+  sql:
+    init:
+      # postgres 같은 외부 DB는 기본적으로 자동 실행 안 됨 — 켜준다.
+      mode: always
+      data-locations: classpath:db/init.sql
 
 management:
   endpoints:
@@ -13,3 +33,15 @@ management:
   endpoint:
     health:
       show-details: never
+
+seoul:
+  api:
+    # 서울 열린데이터광장. KEY는 절대 커밋 금지 — 환경변수로 주입.
+    base-url: ${SEOUL_API_BASE_URL:http://openapi.seoul.go.kr:8088}
+    key: ${SEOUL_API_KEY:}
+    service: citydata_ppltn
+
+map:
+  congestion:
+    # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
+    sync-interval-ms: ${CONGESTION_SYNC_INTERVAL_MS:300000}
