@@ -53,4 +53,20 @@ class KakaoOAuthClientTest {
         assertThatThrownBy(() -> client.getUserInfo("other-app-token"))
                 .isInstanceOf(InvalidOAuthTokenException.class);
     }
+
+    @Test
+    void 사용자정보_응답이_비면_예외를_던진다() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KakaoOAuthClient client = new KakaoOAuthClient(
+                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI));
+
+        server.expect(requestTo(TOKEN_INFO_URI))
+                .andRespond(withSuccess("{\"id\":111,\"app_id\":12345}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USER_INFO_URI))
+                .andRespond(withSuccess()); // 빈 2xx 응답
+
+        assertThatThrownBy(() -> client.getUserInfo("kakao-access-token"))
+                .isInstanceOf(InvalidOAuthTokenException.class);
+    }
 }

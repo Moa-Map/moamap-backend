@@ -49,8 +49,9 @@ public class KakaoOAuthClient implements OAuthClient {
     }
 
     private KakaoUserResponse fetchUser(String accessToken) {
+        KakaoUserResponse response;
         try {
-            return restClient.get()
+            response = restClient.get()
                     .uri(properties.userInfoUri())
                     .header("Authorization", "Bearer " + accessToken)
                     .retrieve()
@@ -58,6 +59,11 @@ public class KakaoOAuthClient implements OAuthClient {
         } catch (RestClientException e) {
             throw new InvalidOAuthTokenException("카카오 사용자 정보 조회에 실패했습니다.");
         }
+        if (response == null) {
+            // 빈 2xx 응답 → toUserInfo에서 NPE(500) 나기 전에 인증 예외(401)로 변환
+            throw new InvalidOAuthTokenException("카카오 사용자 정보가 비어 있습니다.");
+        }
+        return response;
     }
 
     private OAuthUserInfo toUserInfo(KakaoUserResponse response) {

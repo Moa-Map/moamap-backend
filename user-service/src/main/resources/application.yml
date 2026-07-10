@@ -20,6 +20,11 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  http:
+    client:
+      # 외부 HTTP 호출(카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
+      connect-timeout: 2s
+      read-timeout: 3s
 
 management:
   endpoints:
