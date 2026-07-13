@@ -50,6 +50,9 @@ bin/
 .claude/settings.local.json
 CLAUDE.local.md
 
+# 팀 공유 문서는 docs/에, 로컬 전용 설계 드래프트는 docs/specs/에 둔다(원격 제외).
+docs/specs/
+
 ### OS ###
 .DS_Store
 Thumbs.db

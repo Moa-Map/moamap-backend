@@ -15,5 +15,12 @@ services:
       # init 스크립트는 데이터 디렉터리가 비어 있는 최초 기동에만 실행된다.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d
 
+  # 리프레시 토큰 저장용 Redis. TTL로 만료 토큰을 자동 삭제한다.
+  redis:
+    image: redis:7
+    container_name: moamap-redis
+    ports:
+      - "6379:6379"
+
 volumes:
   moamap-pgdata:

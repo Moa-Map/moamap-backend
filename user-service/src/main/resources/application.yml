@@ -4,6 +4,27 @@ server:
 spring:
   application:
     name: user-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: user_service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  http:
+    client:
+      # 외부 HTTP 호출(카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
+      connect-timeout: 2s
+      read-timeout: 3s
 
 management:
   endpoints:
@@ -13,3 +34,15 @@ management:
   endpoint:
     health:
       show-details: never
+
+jwt:
+  # dev 기본 시크릿. 운영은 반드시 환경변수로 교체.
+  secret: ${JWT_SECRET:moamap-local-dev-jwt-secret-change-me-32bytes+}
+  access-token-expiration-minutes: ${JWT_ACCESS_EXP_MIN:30}
+  refresh-token-expiration-days: ${JWT_REFRESH_EXP_DAYS:14}
+
+kakao:
+  # 카카오 앱 ID(토큰 검증용). 실제 값은 환경변수로 주입.
+  app-id: ${KAKAO_APP_ID:0}
+  token-info-uri: https://kapi.kakao.com/v1/user/access_token_info
+  user-info-uri: https://kapi.kakao.com/v2/user/me

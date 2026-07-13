@@ -1,0 +1,16 @@
+# 테스트 전용. H2 임베디드를 쓰므로 datasource url을 지정하지 않는다(자동 구성).
+# jwt/kakao 값은 컨텍스트 로딩에 필요해 더미 값을 채운다.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+jwt:
+  secret: test-jwt-secret-key-for-junit-min-32-bytes-long!!
+  access-token-expiration-minutes: 30
+  refresh-token-expiration-days: 14
+
+kakao:
+  app-id: 12345
+  token-info-uri: http://localhost/v1/user/access_token_info
+  user-info-uri: http://localhost/v2/user/me
