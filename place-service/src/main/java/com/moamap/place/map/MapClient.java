@@ -6,6 +6,7 @@ import com.moamap.common.response.ApiResponse;
 import com.moamap.place.map.dto.MapMemberResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -32,6 +33,8 @@ public class MapClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<ApiResponse<MapMemberResponse>>() {
                 });
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new BusinessException(CommonErrorCode.ENTITY_NOT_FOUND, "지도를 찾을 수 없습니다.");
         } catch (RestClientException e) {
             throw new BusinessException(CommonErrorCode.INTERNAL_SERVER_ERROR, "지도 서비스 호출에 실패했습니다.");
         }
