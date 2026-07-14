@@ -74,7 +74,14 @@ public class PlaceService {
     }
 
     public List<PlaceResponse> findAllByMapId(Long mapId) {
-        return placeRepository.findByMapIdAndDeletedAtIsNull(mapId).stream()
+        return placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED).stream()
+            .map(PlaceResponse::from)
+            .toList();
+    }
+
+    public List<PlaceResponse> findPendingByMapId(Long mapId, Long userId) {
+        requireReviewer(mapId, userId);
+        return placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING).stream()
             .map(PlaceResponse::from)
             .toList();
     }
@@ -95,6 +102,24 @@ public class PlaceService {
         place.delete();
     }
 
+    @Transactional
+    public PlaceResponse approve(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        requireReviewer(place.getMapId(), userId);
+        checkPending(place);
+        place.approve(userId);
+        return PlaceResponse.from(place);
+    }
+
+    @Transactional
+    public PlaceResponse reject(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        requireReviewer(place.getMapId(), userId);
+        checkPending(place);
+        place.reject(userId);
+        return PlaceResponse.from(place);
+    }
+
     private Place getOrThrow(Long id) {
         return placeRepository.findByIdAndDeletedAtIsNull(id)
             .orElseThrow(() -> new BusinessException(CommonErrorCode.ENTITY_NOT_FOUND, "장소를 찾을 수 없습니다."));
@@ -107,5 +132,25 @@ public class PlaceService {
         if (!place.getCreatedBy().equals(userId)) {
             throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "해당 장소에 대한 권한이 없습니다.");
         }
+    }
+
+    private void requireReviewer(Long mapId, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
+        if (!isReviewer(memberInfo.role())) {
+            throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "방장/관리자만 접근할 수 있습니다.");
+        }
+    }
+
+    private void checkPending(Place place) {
+        if (place.getStatus() != PlaceStatus.PENDING) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE, "이미 처리된 장소입니다.");
+        }
+    }
+
+    private boolean isReviewer(MapMemberRole role) {
+        return role == MapMemberRole.OWNER || role == MapMemberRole.ADMIN;
     }
 }

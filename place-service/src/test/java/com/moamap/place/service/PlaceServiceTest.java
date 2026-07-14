@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import com.moamap.common.exception.BusinessException;
+import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -116,7 +117,9 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
         verify(placeRepository, never()).save(any());
     }
 
@@ -127,7 +130,9 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
         verify(placeRepository, never()).save(any());
     }
 
@@ -135,7 +140,9 @@ class PlaceServiceTest {
     void create는_로그인하지_않았으면_mapService를_호출하지_않고_BusinessException을_던진다() {
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), null))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.UNAUTHORIZED);
         verifyNoInteractions(mapClient);
         verify(placeRepository, never()).save(any());
     }
@@ -147,7 +154,9 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.findById(1L))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ENTITY_NOT_FOUND);
     }
 
     @Test
@@ -168,10 +177,10 @@ class PlaceServiceTest {
     }
 
     @Test
-    void findAllByMapId는_해당_지도의_장소_목록을_반환한다() {
+    void findAllByMapId는_APPROVED_상태만_반환하고_mapClient를_호출하지_않는다() {
         // given
-        given(placeRepository.findByMapIdAndDeletedAtIsNull(10L)).willReturn(List.of(
-            Place.builder().name("스타벅스 강남점").mapId(10L).createdBy(1L).build()
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.APPROVED)).willReturn(List.of(
+            Place.builder().name("승인된 장소").mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build()
         ));
 
         // when
@@ -179,7 +188,47 @@ class PlaceServiceTest {
 
         // then
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).mapId()).isEqualTo(10L);
+        assertThat(result.get(0).name()).isEqualTo("승인된 장소");
+        verifyNoInteractions(mapClient);
+    }
+
+    @Test
+    void findPendingByMapId는_방장_관리자가_요청하면_PENDING_목록을_반환한다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING)).willReturn(List.of(
+            Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
+        ));
+
+        // when
+        List<PlaceResponse> result = placeService.findPendingByMapId(10L, 1L);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("대기중인 장소");
+    }
+
+    @Test
+    void findPendingByMapId는_방장_관리자가_아니면_BusinessException을_던진다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+        verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any());
+    }
+
+    @Test
+    void findPendingByMapId는_로그인하지_않았으면_BusinessException을_던진다() {
+        // when & then
+        assertThatThrownBy(() -> placeService.findPendingByMapId(10L, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.UNAUTHORIZED);
+        verifyNoInteractions(mapClient);
     }
 
     @Test
@@ -216,7 +265,9 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
     }
 
     @Test
@@ -233,7 +284,9 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, null, request))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.UNAUTHORIZED);
     }
 
     @Test
@@ -266,7 +319,128 @@ class PlaceServiceTest {
 
         // when & then
         assertThatThrownBy(() -> placeService.delete(1L, 2L))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
         assertThat(place.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void approve는_방장_관리자가_요청하면_APPROVED로_변경한다() {
+        // given
+        Place place = Place.builder()
+            .name("대기중인 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.PENDING)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+
+        // when
+        PlaceResponse response = placeService.approve(1L, 2L);
+
+        // then
+        assertThat(response.status()).isEqualTo(PlaceStatus.APPROVED);
+        assertThat(response.reviewedBy()).isEqualTo(2L);
+        assertThat(response.reviewedAt()).isNotNull();
+    }
+
+    @Test
+    void approve는_방장_관리자가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder()
+            .name("대기중인 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.PENDING)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.approve(1L, 3L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+        assertThat(place.getStatus()).isEqualTo(PlaceStatus.PENDING);
+    }
+
+    @Test
+    void approve는_이미_처리된_장소면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder()
+            .name("이미 승인된 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.APPROVED)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.approve(1L, 2L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    @Test
+    void reject는_방장_관리자가_요청하면_REJECTED로_변경한다() {
+        // given
+        Place place = Place.builder()
+            .name("대기중인 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.PENDING)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        PlaceResponse response = placeService.reject(1L, 2L);
+
+        // then
+        assertThat(response.status()).isEqualTo(PlaceStatus.REJECTED);
+        assertThat(response.reviewedBy()).isEqualTo(2L);
+    }
+
+    @Test
+    void reject는_방장_관리자가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder()
+            .name("대기중인 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.PENDING)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.reject(1L, 3L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+        assertThat(place.getStatus()).isEqualTo(PlaceStatus.PENDING);
+    }
+
+    @Test
+    void reject는_이미_처리된_장소면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder()
+            .name("이미 반려된 장소")
+            .mapId(10L)
+            .createdBy(1L)
+            .status(PlaceStatus.REJECTED)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.reject(1L, 2L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
     }
 }
