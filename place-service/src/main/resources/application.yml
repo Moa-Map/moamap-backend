@@ -4,6 +4,18 @@ server:
 spring:
   application:
     name: place-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: place_service
 
 management:
   endpoints:
@@ -13,3 +25,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+services:
+  map:
+    # 지도 유형/멤버 역할 조회용 map-service 내부 호출 주소.
+    base-url: ${MAP_SERVICE_URL:http://localhost:8083}
