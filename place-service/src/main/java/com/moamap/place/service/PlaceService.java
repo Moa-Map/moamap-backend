@@ -1,8 +1,8 @@
 package com.moamap.place.service;
 
-import java.util.List;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
+import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -15,6 +15,7 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,17 +75,15 @@ public class PlaceService {
         return PlaceResponse.from(getOrThrow(id));
     }
 
-    public List<PlaceResponse> findAllByMapId(Long mapId) {
-        return placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED).stream()
-            .map(PlaceResponse::from)
-            .toList();
+    public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Pageable pageable) {
+        return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable)
+            .map(PlaceResponse::from));
     }
 
-    public List<PlaceResponse> findPendingByMapId(Long mapId, Long userId) {
+    public PageResponse<PlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
         requireReviewer(mapId, userId);
-        return placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING).stream()
-            .map(PlaceResponse::from)
-            .toList();
+        return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable)
+            .map(PlaceResponse::from));
     }
 
     @Transactional

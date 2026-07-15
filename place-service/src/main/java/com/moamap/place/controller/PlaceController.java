@@ -1,7 +1,7 @@
 package com.moamap.place.controller;
 
-import java.util.List;
 import com.moamap.common.response.ApiResponse;
+import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -64,11 +66,12 @@ public class PlaceController {
         summary = "지도별 장소 목록 조회",
         description = "특정 지도에 속한, 삭제되지 않은 장소 중 APPROVED 상태만 조회한다. PENDING 상태는 별도의 승인 대기 목록 API에서 확인한다."
     )
-    public ApiResponse<List<PlaceResponse>> getAll(
+    public ApiResponse<PageResponse<PlaceResponse>> getAll(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")
-        @RequestParam Long mapId
+        @RequestParam Long mapId,
+        @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ApiResponse.success(placeService.findAllByMapId(mapId));
+        return ApiResponse.success(placeService.findAllByMapId(mapId, pageable));
     }
 
     @GetMapping("/pending")
@@ -76,13 +79,14 @@ public class PlaceController {
         summary = "승인 대기 장소 목록 조회",
         description = "특정 지도의 PENDING 상태 장소 목록을 조회한다. 해당 지도의 OWNER/ADMIN만 호출할 수 있다."
     )
-    public ApiResponse<List<PlaceResponse>> getPending(
+    public ApiResponse<PageResponse<PlaceResponse>> getPending(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")
         @RequestParam Long mapId,
         @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @RequestHeader("X-User-Id") Long userId,
+        @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ApiResponse.success(placeService.findPendingByMapId(mapId, userId));
+        return ApiResponse.success(placeService.findPendingByMapId(mapId, userId, pageable));
     }
 
     @PatchMapping("/{id}")
