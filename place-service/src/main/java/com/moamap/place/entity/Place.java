@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,8 +52,7 @@ public class Place {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "source_type", nullable = false)
-    @Builder.Default
-    private PlaceSourceType sourceType = PlaceSourceType.MANUAL;
+    private PlaceSourceType sourceType;
 
     @Column(name = "source_url", length = 1000)
     private String sourceUrl;
@@ -94,6 +94,9 @@ public class Place {
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Version
+    private Long version;
 
     public void update(String name, String address, String roadAddress, BigDecimal lat, BigDecimal lng,
             String category, String description) {
