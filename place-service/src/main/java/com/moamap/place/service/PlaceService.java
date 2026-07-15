@@ -8,6 +8,7 @@ import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
@@ -53,10 +54,10 @@ public class PlaceService {
 
     private PlaceStatus resolveInitialStatus(MapMemberResponse memberInfo) {
         if (memberInfo.role() == MapMemberRole.NONE) {
-            throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "해당 지도의 멤버가 아닙니다.");
+            throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         }
         if (memberInfo.mapType() == MapType.OFFICIAL) {
-            throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "공식 지도에는 장소를 추가할 수 없습니다.");
+            throw new BusinessException(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE);
         }
         if (memberInfo.mapType() == MapType.PRIVATE) {
             return PlaceStatus.APPROVED;
@@ -65,7 +66,7 @@ public class PlaceService {
         return switch (memberInfo.role()) {
             case OWNER, ADMIN -> PlaceStatus.APPROVED;
             case MEMBER -> PlaceStatus.PENDING;
-            case NONE -> throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "해당 지도의 멤버가 아닙니다.");
+            case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
     }
 
@@ -89,7 +90,7 @@ public class PlaceService {
     @Transactional
     public PlaceResponse update(Long id, Long userId, PlaceUpdateRequest request) {
         Place place = getOrThrow(id);
-        checkOwner(place, userId);
+        checkModifyPermission(place, userId);
         place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
             request.category(), request.description());
         return PlaceResponse.from(place);
@@ -98,7 +99,7 @@ public class PlaceService {
     @Transactional
     public void delete(Long id, Long userId) {
         Place place = getOrThrow(id);
-        checkOwner(place, userId);
+        checkModifyPermission(place, userId);
         place.delete();
     }
 
@@ -122,15 +123,28 @@ public class PlaceService {
 
     private Place getOrThrow(Long id) {
         return placeRepository.findByIdAndDeletedAtIsNull(id)
-            .orElseThrow(() -> new BusinessException(CommonErrorCode.ENTITY_NOT_FOUND, "장소를 찾을 수 없습니다."));
+            .orElseThrow(() -> new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
     }
 
-    private void checkOwner(Place place, Long userId) {
+    /**
+     * 장소 수정/삭제 권한.
+     * - PRIVATE 지도: 멤버면 누구든 가능
+     * - COMMUNITY 지도: 방장/관리자는 누구 장소든 가능, 그 외 멤버는 본인이 등록한 장소만 가능
+     * - 그 외(OFFICIAL 등): 본인이 등록한 장소만 가능
+     */
+    private void checkModifyPermission(Place place, Long userId) {
         if (userId == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
         }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(place.getMapId(), userId);
+        if (memberInfo.role() == MapMemberRole.NONE) {
+            throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        }
+        if (memberInfo.mapType() == MapType.PRIVATE || isReviewer(memberInfo.role())) {
+            return;
+        }
         if (!place.getCreatedBy().equals(userId)) {
-            throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "해당 장소에 대한 권한이 없습니다.");
+            throw new BusinessException(PlaceErrorCode.NOT_PLACE_OWNER);
         }
     }
 
@@ -140,13 +154,13 @@ public class PlaceService {
         }
         MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
         if (!isReviewer(memberInfo.role())) {
-            throw new BusinessException(CommonErrorCode.ACCESS_DENIED, "방장/관리자만 접근할 수 있습니다.");
+            throw new BusinessException(PlaceErrorCode.NOT_REVIEWER);
         }
     }
 
     private void checkPending(Place place) {
         if (place.getStatus() != PlaceStatus.PENDING) {
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT_VALUE, "이미 처리된 장소입니다.");
+            throw new BusinessException(PlaceErrorCode.ALREADY_PROCESSED);
         }
     }
 

@@ -1,8 +1,8 @@
 package com.moamap.place.map;
 
 import com.moamap.common.exception.BusinessException;
-import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.common.response.ApiResponse;
+import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.dto.MapMemberResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -34,12 +34,12 @@ public class MapClient {
                 .body(new ParameterizedTypeReference<ApiResponse<MapMemberResponse>>() {
                 });
         } catch (HttpClientErrorException.NotFound e) {
-            throw new BusinessException(CommonErrorCode.ENTITY_NOT_FOUND, "지도를 찾을 수 없습니다.");
+            throw new BusinessException(PlaceErrorCode.MAP_NOT_FOUND);
         } catch (RestClientException e) {
-            throw new BusinessException(CommonErrorCode.INTERNAL_SERVER_ERROR, "지도 서비스 호출에 실패했습니다.");
+            throw new BusinessException(PlaceErrorCode.MAP_SERVICE_UNAVAILABLE);
         }
         if (response == null || response.getData() == null) {
-            throw new BusinessException(CommonErrorCode.ENTITY_NOT_FOUND, "지도를 찾을 수 없습니다.");
+            throw new BusinessException(PlaceErrorCode.MAP_NOT_FOUND);
         }
         return response.getData();
     }

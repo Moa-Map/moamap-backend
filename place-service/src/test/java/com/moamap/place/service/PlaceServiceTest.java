@@ -11,6 +11,7 @@ import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
@@ -119,7 +120,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
         verify(placeRepository, never()).save(any());
     }
 
@@ -132,7 +133,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE);
         verify(placeRepository, never()).save(any());
     }
 
@@ -156,7 +157,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.findById(1L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ENTITY_NOT_FOUND);
+            .isEqualTo(PlaceErrorCode.PLACE_NOT_FOUND);
     }
 
     @Test
@@ -217,7 +218,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
         verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any());
     }
 
@@ -232,14 +233,11 @@ class PlaceServiceTest {
     }
 
     @Test
-    void update는_생성자가_요청하면_필드를_변경한다() {
+    void update는_COMMUNITY_지도에서_생성자_본인이면_수정된다() {
         // given
-        Place place = Place.builder()
-            .name("old")
-            .mapId(10L)
-            .createdBy(1L)
-            .build();
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
 
@@ -252,14 +250,43 @@ class PlaceServiceTest {
     }
 
     @Test
-    void update는_생성자가_아니면_BusinessException을_던진다() {
+    void update는_COMMUNITY_지도에서_방장이면_생성자가_아니어도_수정된다() {
         // given
-        Place place = Place.builder()
-            .name("old")
-            .mapId(10L)
-            .createdBy(1L)
-            .build();
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+
+        // when
+        PlaceResponse response = placeService.update(1L, 2L, request);
+
+        // then
+        assertThat(response.name()).isEqualTo("new");
+    }
+
+    @Test
+    void update는_COMMUNITY_지도에서_관리자면_생성자가_아니어도_수정된다() {
+        // given
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+
+        // when
+        PlaceResponse response = placeService.update(1L, 2L, request);
+
+        // then
+        assertThat(response.name()).isEqualTo("new");
+    }
+
+    @Test
+    void update는_COMMUNITY_지도에서_일반멤버가_본인_장소가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
 
@@ -267,17 +294,45 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_PLACE_OWNER);
+    }
+
+    @Test
+    void update는_PRIVATE_지도면_생성자가_아니어도_수정된다() {
+        // given
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+
+        // when
+        PlaceResponse response = placeService.update(1L, 2L, request);
+
+        // then
+        assertThat(response.name()).isEqualTo("new");
+    }
+
+    @Test
+    void update는_해당_지도의_멤버가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+
+        // when & then
+        assertThatThrownBy(() -> placeService.update(1L, 2L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
     }
 
     @Test
     void update는_로그인하지_않았으면_BusinessException을_던진다() {
         // given
-        Place place = Place.builder()
-            .name("old")
-            .mapId(10L)
-            .createdBy(1L)
-            .build();
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
@@ -287,17 +342,15 @@ class PlaceServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(CommonErrorCode.UNAUTHORIZED);
+        verifyNoInteractions(mapClient);
     }
 
     @Test
-    void delete는_생성자가_요청하면_소프트_삭제한다() {
+    void delete는_COMMUNITY_지도에서_생성자_본인이면_소프트_삭제한다() {
         // given
-        Place place = Place.builder()
-            .name("삭제될 장소")
-            .mapId(10L)
-            .createdBy(1L)
-            .build();
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
 
         // when
         placeService.delete(1L, 1L);
@@ -308,21 +361,90 @@ class PlaceServiceTest {
     }
 
     @Test
-    void delete는_생성자가_아니면_BusinessException을_던진다() {
+    void delete는_COMMUNITY_지도에서_방장이면_생성자가_아니어도_삭제한다() {
         // given
-        Place place = Place.builder()
-            .name("삭제될 장소")
-            .mapId(10L)
-            .createdBy(1L)
-            .build();
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        placeService.delete(1L, 2L);
+
+        // then
+        assertThat(place.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void delete는_COMMUNITY_지도에서_관리자면_생성자가_아니어도_삭제한다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+
+        // when
+        placeService.delete(1L, 2L);
+
+        // then
+        assertThat(place.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void delete는_COMMUNITY_지도에서_일반멤버가_본인_장소가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
 
         // when & then
         assertThatThrownBy(() -> placeService.delete(1L, 2L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_PLACE_OWNER);
         assertThat(place.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void delete는_PRIVATE_지도면_생성자가_아니어도_삭제한다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+
+        // when
+        placeService.delete(1L, 2L);
+
+        // then
+        assertThat(place.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void delete는_해당_지도의_멤버가_아니면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.delete(1L, 2L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
+        assertThat(place.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void delete는_로그인하지_않았으면_BusinessException을_던진다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.delete(1L, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(CommonErrorCode.UNAUTHORIZED);
+        assertThat(place.getDeletedAt()).isNull();
+        verifyNoInteractions(mapClient);
     }
 
     @Test
@@ -362,7 +484,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.approve(1L, 3L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
         assertThat(place.getStatus()).isEqualTo(PlaceStatus.PENDING);
     }
 
@@ -382,7 +504,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.approve(1L, 2L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+            .isEqualTo(PlaceErrorCode.ALREADY_PROCESSED);
     }
 
     @Test
@@ -421,7 +543,7 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.reject(1L, 3L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.ACCESS_DENIED);
+            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
         assertThat(place.getStatus()).isEqualTo(PlaceStatus.PENDING);
     }
 
@@ -441,6 +563,6 @@ class PlaceServiceTest {
         assertThatThrownBy(() -> placeService.reject(1L, 2L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.INVALID_INPUT_VALUE);
+            .isEqualTo(PlaceErrorCode.ALREADY_PROCESSED);
     }
 }
