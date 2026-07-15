@@ -6,4 +6,6 @@ plugins {
 dependencies {
 	// 여러 서비스가 공유하는 공통 코드(공통 응답/예외/DTO 등)의 기반 의존성.
 	api 'org.springframework.boot:spring-boot-starter-validation'
+	// ApiResponse의 @JsonInclude 사용을 위한 컴파일 전용 의존성 (실제 jackson-databind는 각 서비스의 starter-web이 제공)
+	compileOnly 'com.fasterxml.jackson.core:jackson-databind'
 }
