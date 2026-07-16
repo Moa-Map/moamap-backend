@@ -12,4 +12,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     Optional<Place> findByIdAndDeletedAtIsNull(Long id);
 
     Page<Place> findByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status, Pageable pageable);
+
+    boolean existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(Long mapId, String kakaoPlaceId);
 }

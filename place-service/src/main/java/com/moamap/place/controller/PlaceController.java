@@ -39,10 +39,9 @@ public class PlaceController {
     @Operation(
         summary = "장소 등록",
         description = """
-            지도에 장소를 등록한다. map-service에 요청자의 지도 내 역할을 동기 조회해 등록 상태를 결정한다.
-            - PRIVATE 지도: 멤버면 누구든 바로 APPROVED
-            - COMMUNITY 지도: OWNER/ADMIN은 바로 APPROVED, MEMBER는 PENDING(승인 대기)
-            - OFFICIAL 지도 또는 해당 지도의 멤버가 아니면 403
+            지도에 장소를 등록한다. 지도 내 역할에 따라 상태가 결정된다: PRIVATE 멤버·COMMUNITY OWNER/ADMIN은 즉시 APPROVED,
+            COMMUNITY MEMBER는 PENDING(승인 대기). OFFICIAL 지도이거나 멤버가 아니면 403.
+            인스타그램 추출 후보(PlaceCandidateResponse)를 등록할 때는 후보 값에 sourceType("INSTAGRAM")과 mapId를 추가로 채운다.
             """
     )
     public ApiResponse<PlaceResponse> create(

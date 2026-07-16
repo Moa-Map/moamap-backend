@@ -34,6 +34,7 @@ public class PlaceService {
         }
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         PlaceStatus status = resolveInitialStatus(memberInfo);
+        checkDuplicate(request.mapId(), request.kakaoPlaceId());
 
         Place place = Place.builder()
             .name(request.name())
@@ -69,6 +70,12 @@ public class PlaceService {
             case MEMBER -> PlaceStatus.PENDING;
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
+    }
+
+    private void checkDuplicate(Long mapId, String kakaoPlaceId) {
+        if (placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(mapId, kakaoPlaceId)) {
+            throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+        }
     }
 
     public PlaceResponse findById(Long id) {
