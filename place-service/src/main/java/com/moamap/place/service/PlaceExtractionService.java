@@ -40,7 +40,19 @@ public class PlaceExtractionService {
         List<PlaceCandidateResponse> noId = new ArrayList<>();
 
         for (ExtractedPlace place : extractedPlaces) {
-            for (KakaoPlaceDocument document : kakaoLocalClient.searchByKeyword(place.toSearchKeyword())) {
+            String keyword = place.toSearchKeyword();
+            if (keyword.isBlank()) {
+                log.warn("검색 키워드가 비어 있어 건너뜀: {}", place);
+                continue;
+            }
+            List<KakaoPlaceDocument> documents;
+            try {
+                documents = kakaoLocalClient.searchByKeyword(keyword);
+            } catch (RuntimeException e) {
+                log.warn("카카오 검색 실패, 해당 장소는 건너뜀: {}", keyword, e);
+                continue;
+            }
+            for (KakaoPlaceDocument document : documents) {
                 PlaceCandidateResponse candidate = toCandidate(document, sourceUrl);
                 if (candidate.kakaoPlaceId() == null) {
                     noId.add(candidate);

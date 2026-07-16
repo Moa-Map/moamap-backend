@@ -9,9 +9,10 @@ public record ExtractedPlace(
     String region
 ) {
     public String toSearchKeyword() {
+        String trimmedName = name == null ? "" : name.trim();
         if (region != null && !region.isBlank()) {
-            return (region.trim() + " " + name.trim()).trim();
+            return (region.trim() + " " + trimmedName).trim();
         }
-        return name == null ? "" : name.trim();
+        return trimmedName;
     }
 }

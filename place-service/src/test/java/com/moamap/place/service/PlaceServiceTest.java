@@ -153,6 +153,20 @@ class PlaceServiceTest {
     }
 
     @Test
+    void create는_같은_지도에_동일한_kakaoPlaceId가_있으면_BusinessException을_던진다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.DUPLICATE_PLACE);
+        verify(placeRepository, never()).save(any());
+    }
+
+    @Test
     void findById는_존재하지_않으면_BusinessException을_던진다() {
         // given
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());

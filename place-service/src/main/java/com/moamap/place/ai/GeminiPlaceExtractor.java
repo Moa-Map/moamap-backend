@@ -1,5 +1,6 @@
 package com.moamap.place.ai;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,6 +9,8 @@ import com.moamap.common.exception.BusinessException;
 import com.moamap.place.ai.dto.ExtractedPlace;
 import com.moamap.place.exception.PlaceErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -34,7 +37,13 @@ public class GeminiPlaceExtractor {
     private final GeminiProperties properties;
 
     public GeminiPlaceExtractor(RestClient.Builder builder, GeminiProperties properties) {
-        this.restClient = builder.baseUrl("https://generativelanguage.googleapis.com").build();
+        // LLM 응답은 다른 외부 호출보다 오래 걸릴 수 있어, 공용 read-timeout(3s)보다 넉넉하게 잡는다.
+        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.defaults()
+            .withReadTimeout(Duration.ofSeconds(15));
+        this.restClient = builder
+            .baseUrl("https://generativelanguage.googleapis.com")
+            .requestFactory(ClientHttpRequestFactoryBuilder.detect().build(settings))
+            .build();
         this.properties = properties;
     }
 
