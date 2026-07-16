@@ -513,8 +513,8 @@ class PlaceServiceTest {
 
         // then
         assertThat(response.status()).isEqualTo(PlaceStatus.APPROVED);
-        assertThat(response.reviewedBy()).isEqualTo(2L);
-        assertThat(response.reviewedAt()).isNotNull();
+        assertThat(response.processedBy()).isEqualTo(2L);
+        assertThat(response.processedAt()).isNotNull();
     }
 
     @Test
@@ -573,7 +573,7 @@ class PlaceServiceTest {
 
         // then
         assertThat(response.status()).isEqualTo(PlaceStatus.REJECTED);
-        assertThat(response.reviewedBy()).isEqualTo(2L);
+        assertThat(response.processedBy()).isEqualTo(2L);
     }
 
     @Test

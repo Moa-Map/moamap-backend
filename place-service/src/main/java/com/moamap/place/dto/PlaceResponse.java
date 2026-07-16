@@ -23,8 +23,8 @@ public record PlaceResponse(
     PlaceStatus status,
     BigDecimal avgRating,
     Integer commentCount,
-    Long reviewedBy,
-    LocalDateTime reviewedAt,
+    Long processedBy,
+    LocalDateTime processedAt,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {
@@ -47,8 +47,8 @@ public record PlaceResponse(
             place.getStatus(),
             place.getAvgRating(),
             place.getCommentCount(),
-            place.getReviewedBy(),
-            place.getReviewedAt(),
+            place.getProcessedBy(),
+            place.getProcessedAt(),
             place.getCreatedAt(),
             place.getUpdatedAt()
         );

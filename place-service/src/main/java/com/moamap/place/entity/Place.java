@@ -78,11 +78,11 @@ public class Place {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "reviewed_by")
-    private Long reviewedBy;
+    @Column(name = "processed_by")
+    private Long processedBy;
 
-    @Column(name = "reviewed_at")
-    private LocalDateTime reviewedAt;
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -127,16 +127,16 @@ public class Place {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void approve(Long reviewedBy) {
+    public void approve(Long processedBy) {
         this.status = PlaceStatus.APPROVED;
-        this.reviewedBy = reviewedBy;
-        this.reviewedAt = LocalDateTime.now();
+        this.processedBy = processedBy;
+        this.processedAt = LocalDateTime.now();
     }
 
-    public void reject(Long reviewedBy) {
+    public void reject(Long processedBy) {
         this.status = PlaceStatus.REJECTED;
-        this.reviewedBy = reviewedBy;
-        this.reviewedAt = LocalDateTime.now();
+        this.processedBy = processedBy;
+        this.processedAt = LocalDateTime.now();
     }
 
     public void delete() {
