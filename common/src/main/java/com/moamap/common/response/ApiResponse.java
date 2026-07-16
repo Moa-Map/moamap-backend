@@ -1,6 +1,8 @@
 package com.moamap.common.response;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moamap.common.exception.ErrorCode;
 import lombok.Getter;
 
@@ -15,7 +17,12 @@ public class ApiResponse<T> {
     private final T data;
     private final ErrorResponse error;
 
-    private ApiResponse(boolean success, T data, ErrorResponse error) {
+    @JsonCreator
+    private ApiResponse(
+        @JsonProperty("success") boolean success,
+        @JsonProperty("data") T data,
+        @JsonProperty("error") ErrorResponse error
+    ) {
         this.success = success;
         this.data = data;
         this.error = error;

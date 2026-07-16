@@ -1,5 +1,7 @@
 package com.moamap.common.response;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moamap.common.exception.ErrorCode;
 import lombok.Getter;
 
@@ -13,7 +15,12 @@ public class ErrorResponse {
     private final String message;
     private final int status;
 
-    private ErrorResponse(String code, String message, int status) {
+    @JsonCreator
+    private ErrorResponse(
+        @JsonProperty("code") String code,
+        @JsonProperty("message") String message,
+        @JsonProperty("status") int status
+    ) {
         this.code = code;
         this.message = message;
         this.status = status;
