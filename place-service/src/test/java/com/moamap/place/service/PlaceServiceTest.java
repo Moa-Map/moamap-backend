@@ -262,6 +262,29 @@ class PlaceServiceTest {
     }
 
     @Test
+    void update는_null인_필드는_기존_값을_유지한다() {
+        // given
+        Place place = Place.builder()
+            .name("old")
+            .address("old address")
+            .category("카페")
+            .mapId(10L)
+            .createdBy(1L)
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null);
+
+        // when
+        PlaceResponse response = placeService.update(1L, 1L, request);
+
+        // then
+        assertThat(response.name()).isEqualTo("new name");
+        assertThat(response.address()).isEqualTo("old address");
+        assertThat(response.category()).isEqualTo("카페");
+    }
+
+    @Test
     void update는_COMMUNITY_지도에서_방장이면_생성자가_아니어도_수정된다() {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();

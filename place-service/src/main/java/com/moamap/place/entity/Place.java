@@ -38,10 +38,10 @@ public class Place {
     @Column(name = "road_address", length = 255)
     private String roadAddress;
 
-    @Column(name = "lat", precision = 9, scale = 6)
+    @Column(name = "lat", precision = 9, scale = 6, nullable = false)
     private BigDecimal lat;
 
-    @Column(name = "lng", precision = 9, scale = 6)
+    @Column(name = "lng", precision = 9, scale = 6, nullable = false)
     private BigDecimal lng;
 
     @Column(name = "category", length = 50)
@@ -98,15 +98,32 @@ public class Place {
     @Version
     private Long version;
 
+    /**
+     * 부분 수정. null인 필드는 기존 값을 유지하고, 넘어온 필드만 바꾼다.
+     */
     public void update(String name, String address, String roadAddress, BigDecimal lat, BigDecimal lng,
             String category, String description) {
-        this.name = name;
-        this.address = address;
-        this.roadAddress = roadAddress;
-        this.lat = lat;
-        this.lng = lng;
-        this.category = category;
-        this.description = description;
+        if (name != null) {
+            this.name = name;
+        }
+        if (address != null) {
+            this.address = address;
+        }
+        if (roadAddress != null) {
+            this.roadAddress = roadAddress;
+        }
+        if (lat != null) {
+            this.lat = lat;
+        }
+        if (lng != null) {
+            this.lng = lng;
+        }
+        if (category != null) {
+            this.category = category;
+        }
+        if (description != null) {
+            this.description = description;
+        }
         this.updatedAt = LocalDateTime.now();
     }
 
