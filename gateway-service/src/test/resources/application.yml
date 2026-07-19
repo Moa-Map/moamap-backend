@@ -1,0 +1,9 @@
+# 테스트 전용 설정. src/test/resources가 클래스패스 우선이라 테스트 시 main의 application.yml을 대체한다.
+# 여기 secret은 테스트 컨텍스트 기동용 더미값이며 운영과 무관하다.
+jwt:
+  secret: test-only-jwt-secret-not-for-production-32bytes
+
+services:
+  user-url: http://localhost:8081
+  map-url: http://localhost:8083
+  place-url: http://localhost:8082
