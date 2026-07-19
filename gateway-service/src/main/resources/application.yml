@@ -4,10 +4,15 @@ server:
 spring:
   application:
     name: gateway-service
-  cloud:
-    gateway:
-      # 라우트 규칙은 각 서비스 개발 시점에 추가합니다.
-      routes: []
+
+services:
+  user-url: ${USER_SERVICE_URL:http://localhost:8081}
+  map-url: ${MAP_SERVICE_URL:http://localhost:8083}
+  place-url: ${PLACE_SERVICE_URL:http://localhost:8082}
+
+jwt:
+  # 시크릿은 커밋 안 함 (운영은 JWT_SECRET env, 로컬은 .env). 기본값 없어서 값 없으면 앱 안 뜸.
+  secret: ${JWT_SECRET}
 
 management:
   endpoints:
