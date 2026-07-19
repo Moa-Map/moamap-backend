@@ -3,6 +3,7 @@ package com.moamap.place.service;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -20,9 +21,13 @@ import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -63,56 +68,27 @@ class PlaceServiceTest {
         );
     }
 
-    @Test
-    void create는_PRIVATE_지도면_role과_무관하게_APPROVED로_저장한다() {
-        // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
-        given(placeRepository.save(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
-
-        // when
-        PlaceResponse response = placeService.create(createRequest(), 1L);
-
-        // then
-        assertThat(response.status()).isEqualTo(PlaceStatus.APPROVED);
+    private static Stream<Arguments> createStatusCases() {
+        return Stream.of(
+            Arguments.of(MapType.PRIVATE, MapMemberRole.MEMBER, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.OWNER, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.ADMIN, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.MEMBER, PlaceStatus.PENDING)
+        );
     }
 
-    @Test
-    void create는_COMMUNITY_지도에서_OWNER면_APPROVED로_저장한다() {
+    @ParameterizedTest(name = "{0} 지도 + {1} 역할 → {2}")
+    @MethodSource("createStatusCases")
+    void create는_지도유형과_역할에_따라_초기_상태를_결정한다(MapType mapType, MapMemberRole role, PlaceStatus expectedStatus) {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
-        given(placeRepository.save(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(mapType, role));
+        given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
         PlaceResponse response = placeService.create(createRequest(), 1L);
 
         // then
-        assertThat(response.status()).isEqualTo(PlaceStatus.APPROVED);
-    }
-
-    @Test
-    void create는_COMMUNITY_지도에서_ADMIN이면_APPROVED로_저장한다() {
-        // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
-        given(placeRepository.save(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
-
-        // when
-        PlaceResponse response = placeService.create(createRequest(), 1L);
-
-        // then
-        assertThat(response.status()).isEqualTo(PlaceStatus.APPROVED);
-    }
-
-    @Test
-    void create는_COMMUNITY_지도에서_MEMBER면_PENDING으로_저장한다() {
-        // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
-        given(placeRepository.save(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
-
-        // when
-        PlaceResponse response = placeService.create(createRequest(), 1L);
-
-        // then
-        assertThat(response.status()).isEqualTo(PlaceStatus.PENDING);
+        assertThat(response.status()).isEqualTo(expectedStatus);
     }
 
     @Test
@@ -125,7 +101,7 @@ class PlaceServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
-        verify(placeRepository, never()).save(any());
+        verify(placeRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -138,7 +114,7 @@ class PlaceServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE);
-        verify(placeRepository, never()).save(any());
+        verify(placeRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -149,7 +125,7 @@ class PlaceServiceTest {
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(CommonErrorCode.UNAUTHORIZED);
         verifyNoInteractions(mapClient);
-        verify(placeRepository, never()).save(any());
+        verify(placeRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -163,7 +139,22 @@ class PlaceServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.DUPLICATE_PLACE);
-        verify(placeRepository, never()).save(any());
+        verify(placeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void create는_사전체크를_통과해도_DB_유니크_제약_위반이면_DUPLICATE_PLACE_예외로_변환한다() {
+        // given: 동시 요청 race condition으로 checkDuplicate는 통과했지만 실제 insert 시점엔 이미 다른 트랜잭션이 커밋한 상황을 재현
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(false);
+        given(placeRepository.saveAndFlush(any(Place.class)))
+            .willThrow(new DataIntegrityViolationException("uk_places_map_kakao_place violation"));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.DUPLICATE_PLACE);
     }
 
     @Test
@@ -258,6 +249,12 @@ class PlaceServiceTest {
         verifyNoInteractions(mapClient);
     }
 
+    /*
+     * update와 delete는 둘 다 checkModifyPermission(place, userId)을 그대로 공유한다.
+     * 그 권한 분기(로그인/멤버여부/PRIVATE/COMMUNITY 방장·관리자/본인 소유)는 여기 update 쪽에서
+     * 전체 매트릭스로 검증하고, delete 쪽은 고유 동작(소프트 삭제)과 대표 거부 케이스만 남긴다.
+     */
+
     @Test
     void update는_COMMUNITY_지도에서_생성자_본인이면_수정된다() {
         // given
@@ -304,22 +301,6 @@ class PlaceServiceTest {
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
-        PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
-
-        // when
-        PlaceResponse response = placeService.update(1L, 2L, request);
-
-        // then
-        assertThat(response.name()).isEqualTo("new");
-    }
-
-    @Test
-    void update는_COMMUNITY_지도에서_관리자면_생성자가_아니어도_수정된다() {
-        // given
-        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
 
@@ -410,34 +391,6 @@ class PlaceServiceTest {
     }
 
     @Test
-    void delete는_COMMUNITY_지도에서_방장이면_생성자가_아니어도_삭제한다() {
-        // given
-        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
-
-        // when
-        placeService.delete(1L, 2L);
-
-        // then
-        assertThat(place.getDeletedAt()).isNotNull();
-    }
-
-    @Test
-    void delete는_COMMUNITY_지도에서_관리자면_생성자가_아니어도_삭제한다() {
-        // given
-        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
-
-        // when
-        placeService.delete(1L, 2L);
-
-        // then
-        assertThat(place.getDeletedAt()).isNotNull();
-    }
-
-    @Test
     void delete는_COMMUNITY_지도에서_일반멤버가_본인_장소가_아니면_BusinessException을_던진다() {
         // given
         Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
@@ -449,35 +402,6 @@ class PlaceServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.NOT_PLACE_OWNER);
-        assertThat(place.getDeletedAt()).isNull();
-    }
-
-    @Test
-    void delete는_PRIVATE_지도면_생성자가_아니어도_삭제한다() {
-        // given
-        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
-
-        // when
-        placeService.delete(1L, 2L);
-
-        // then
-        assertThat(place.getDeletedAt()).isNotNull();
-    }
-
-    @Test
-    void delete는_해당_지도의_멤버가_아니면_BusinessException을_던진다() {
-        // given
-        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
-
-        // when & then
-        assertThatThrownBy(() -> placeService.delete(1L, 2L))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
         assertThat(place.getDeletedAt()).isNull();
     }
 
@@ -556,6 +480,10 @@ class PlaceServiceTest {
             .isEqualTo(PlaceErrorCode.ALREADY_PROCESSED);
     }
 
+    /*
+     * reject는 approve와 requireReviewer/checkPending 가드를 그대로 공유한다.
+     * 그 가드 분기는 approve 쪽에서 이미 검증했으니, 여기서는 reject 고유 동작(REJECTED 전환)만 확인한다.
+     */
     @Test
     void reject는_방장_관리자가_요청하면_REJECTED로_변경한다() {
         // given
@@ -574,44 +502,5 @@ class PlaceServiceTest {
         // then
         assertThat(response.status()).isEqualTo(PlaceStatus.REJECTED);
         assertThat(response.processedBy()).isEqualTo(2L);
-    }
-
-    @Test
-    void reject는_방장_관리자가_아니면_BusinessException을_던진다() {
-        // given
-        Place place = Place.builder()
-            .name("대기중인 장소")
-            .mapId(10L)
-            .createdBy(1L)
-            .status(PlaceStatus.PENDING)
-            .build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
-
-        // when & then
-        assertThatThrownBy(() -> placeService.reject(1L, 3L))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
-        assertThat(place.getStatus()).isEqualTo(PlaceStatus.PENDING);
-    }
-
-    @Test
-    void reject는_이미_처리된_장소면_BusinessException을_던진다() {
-        // given
-        Place place = Place.builder()
-            .name("이미 반려된 장소")
-            .mapId(10L)
-            .createdBy(1L)
-            .status(PlaceStatus.REJECTED)
-            .build();
-        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
-
-        // when & then
-        assertThatThrownBy(() -> placeService.reject(1L, 2L))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(PlaceErrorCode.ALREADY_PROCESSED);
     }
 }

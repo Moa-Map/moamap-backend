@@ -15,6 +15,7 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +52,13 @@ public class PlaceService {
             .createdBy(userId)
             .status(status)
             .build();
-        return PlaceResponse.from(placeRepository.save(place));
+        // checkDuplicate는 흔한 경우를 빠르게 막기 위한 사전 체크일 뿐이고,
+        // 동시 요청 race condition은 uk_places_map_kakao_place 유니크 제약으로 막는다.
+        try {
+            return PlaceResponse.from(placeRepository.saveAndFlush(place));
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+        }
     }
 
     private PlaceStatus resolveInitialStatus(MapMemberResponse memberInfo) {

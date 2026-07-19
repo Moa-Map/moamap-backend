@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -18,7 +19,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "places")
+@Table(name = "places",
+    uniqueConstraints = @UniqueConstraint(name = "uk_places_map_kakao_place", columnNames = {"map_id", "kakao_place_id"}))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
