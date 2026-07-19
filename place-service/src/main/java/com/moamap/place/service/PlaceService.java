@@ -1,5 +1,6 @@
 package com.moamap.place.service;
 
+import java.util.ArrayList;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -15,6 +16,7 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PlaceService {
+
+    private static final String DUPLICATE_PLACE_CONSTRAINT = "uk_places_map_kakao_place";
 
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
@@ -48,6 +52,7 @@ public class PlaceService {
             .sourceType(request.sourceType())
             .sourceUrl(request.sourceUrl())
             .description(request.description())
+            .tags(request.tags() == null ? new ArrayList<>() : request.tags())
             .mapId(request.mapId())
             .createdBy(userId)
             .status(status)
@@ -57,8 +62,21 @@ public class PlaceService {
         try {
             return PlaceResponse.from(placeRepository.saveAndFlush(place));
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+            if (isDuplicatePlaceConstraintViolation(e)) {
+                throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+            }
+            throw e;
         }
+    }
+
+    // 길이 초과, NOT NULL 등 다른 무결성 위반까지 DUPLICATE_PLACE로 뭉개지 않도록,
+    // uk_places_map_kakao_place 제약 위반일 때만 변환한다.
+    private boolean isDuplicatePlaceConstraintViolation(DataIntegrityViolationException e) {
+        if (e.getCause() instanceof ConstraintViolationException cve) {
+            String constraintName = cve.getConstraintName();
+            return constraintName != null && constraintName.toLowerCase().contains(DUPLICATE_PLACE_CONSTRAINT);
+        }
+        return false;
     }
 
     private PlaceStatus resolveInitialStatus(MapMemberResponse memberInfo) {
@@ -105,7 +123,7 @@ public class PlaceService {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
         place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
-            request.category(), request.description());
+            request.category(), request.description(), request.tags());
         return PlaceResponse.from(place);
     }
 

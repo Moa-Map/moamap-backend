@@ -1,6 +1,5 @@
 package com.moamap.place.repository;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 import com.moamap.place.entity.PlaceReview;
 import org.springframework.data.domain.Page;
@@ -17,6 +16,7 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
 
     long countByPlaceIdAndDeletedAtIsNull(Long placeId);
 
+    // JPA의 avg()는 스펙상 항상 Double을 반환한다. BigDecimal로 선언하면 런타임에 타입 캐스팅 오류가 난다.
     @Query("select coalesce(avg(r.rating), 0) from PlaceReview r where r.placeId = :placeId and r.deletedAt is null")
-    BigDecimal averageRatingByPlaceId(@Param("placeId") Long placeId);
+    Double averageRatingByPlaceId(@Param("placeId") Long placeId);
 }

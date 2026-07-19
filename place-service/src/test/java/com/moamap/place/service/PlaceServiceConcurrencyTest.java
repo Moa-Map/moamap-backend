@@ -56,7 +56,8 @@ class PlaceServiceConcurrencyTest {
             PlaceSourceType.KAKAO_SEARCH,
             null,
             null,
-            10L
+            10L,
+            null
         );
     }
 

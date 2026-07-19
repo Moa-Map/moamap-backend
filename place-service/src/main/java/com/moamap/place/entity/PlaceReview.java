@@ -70,7 +70,8 @@ public class PlaceReview {
             this.content = content;
         }
         if (imageUrls != null) {
-            this.imageUrls = imageUrls;
+            this.imageUrls.clear();
+            this.imageUrls.addAll(imageUrls);
         }
         this.updatedAt = LocalDateTime.now();
     }

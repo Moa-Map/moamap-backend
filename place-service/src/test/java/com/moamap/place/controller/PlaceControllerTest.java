@@ -51,7 +51,7 @@ class PlaceControllerTest {
             1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
             PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
-            null, 0, null, null, null, null
+            null, 0, null, null, null, null, List.of()
         );
     }
 
@@ -59,7 +59,7 @@ class PlaceControllerTest {
         return new PlaceCreateRequest(
             "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
-            PlaceSourceType.KAKAO_SEARCH, null, null, 10L
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, null
         );
     }
 
@@ -78,6 +78,32 @@ class PlaceControllerTest {
             .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"))
             .andExpect(jsonPath("$.data.status").value("APPROVED"));
         verify(placeService).create(any(), eq(1L));
+    }
+
+    @Test
+    void create는_태그를_그대로_응답에_담아_반환한다() throws Exception {
+        // given
+        PlaceCreateRequest request = new PlaceCreateRequest(
+            "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한")
+        );
+        PlaceResponse responseWithTags = new PlaceResponse(
+            1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
+            null, 0, null, null, null, null, List.of("데이트", "조용한")
+        );
+        given(placeService.create(any(), eq(1L))).willReturn(responseWithTags);
+
+        // when & then
+        mockMvc.perform(post("/places")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.tags[0]").value("데이트"))
+            .andExpect(jsonPath("$.data.tags[1]").value("조용한"));
     }
 
     @Test
@@ -150,7 +176,7 @@ class PlaceControllerTest {
     @Test
     void update는_성공하면_200과_수정된_장소를_반환한다() throws Exception {
         // given
-        PlaceUpdateRequest request = new PlaceUpdateRequest("새 이름", null, null, null, null, null, null);
+        PlaceUpdateRequest request = new PlaceUpdateRequest("새 이름", null, null, null, null, null, null, null);
         given(placeService.update(eq(1L), eq(1L), any())).willReturn(response());
 
         // when & then

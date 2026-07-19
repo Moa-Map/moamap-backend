@@ -65,7 +65,7 @@ class PlaceReviewServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         given(placeReviewRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
-        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(new BigDecimal("5.00"));
+        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(5.0);
 
         // when
         PlaceReviewResponse response = placeReviewService.create(1L, 2L, createRequest());
@@ -97,7 +97,7 @@ class PlaceReviewServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         given(placeReviewRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
-        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(new BigDecimal("5.00"));
+        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(5.0);
         PlaceReviewCreateRequest request = new PlaceReviewCreateRequest(5, "최고예요", null);
 
         // when
@@ -167,7 +167,7 @@ class PlaceReviewServiceTest {
         PlaceReview review = PlaceReview.builder().placeId(1L).userId(2L).rating(3).build();
         given(placeReviewRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(review));
         given(placeReviewRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
-        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(new BigDecimal("4.00"));
+        given(placeReviewRepository.averageRatingByPlaceId(any())).willReturn(4.0);
         PlaceReviewUpdateRequest request = new PlaceReviewUpdateRequest(4, "수정된 리뷰", null);
 
         // when

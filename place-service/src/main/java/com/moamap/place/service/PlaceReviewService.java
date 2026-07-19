@@ -2,7 +2,7 @@ package com.moamap.place.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
+import java.util.ArrayList;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -43,7 +43,7 @@ public class PlaceReviewService {
             .userId(userId)
             .rating(request.rating())
             .content(request.content())
-            .imageUrls(request.imageUrls() == null ? List.of() : request.imageUrls())
+            .imageUrls(request.imageUrls() == null ? new ArrayList<>() : request.imageUrls())
             .build();
         placeReviewRepository.save(review);
         refreshPlaceReviewSummary(placeId);
@@ -81,7 +81,7 @@ public class PlaceReviewService {
         long count = placeReviewRepository.countByPlaceIdAndDeletedAtIsNull(placeId);
         BigDecimal average = count == 0
             ? null
-            : placeReviewRepository.averageRatingByPlaceId(placeId).setScale(2, RoundingMode.HALF_UP);
+            : BigDecimal.valueOf(placeReviewRepository.averageRatingByPlaceId(placeId)).setScale(2, RoundingMode.HALF_UP);
         placeRepository.updateReviewSummary(placeId, average, (int) count);
     }
 

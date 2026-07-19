@@ -1,6 +1,7 @@
 package com.moamap.place.service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.hibernate.exception.ConstraintViolationException;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,7 +66,8 @@ class PlaceServiceTest {
             PlaceSourceType.KAKAO_SEARCH,
             null,
             null,
-            10L
+            10L,
+            null
         );
     }
 
@@ -147,14 +150,62 @@ class PlaceServiceTest {
         // given: 동시 요청 race condition으로 checkDuplicate는 통과했지만 실제 insert 시점엔 이미 다른 트랜잭션이 커밋한 상황을 재현
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
         given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(false);
+        ConstraintViolationException cause = new ConstraintViolationException(
+            "duplicate key value violates unique constraint", null, "uk_places_map_kakao_place");
         given(placeRepository.saveAndFlush(any(Place.class)))
-            .willThrow(new DataIntegrityViolationException("uk_places_map_kakao_place violation"));
+            .willThrow(new DataIntegrityViolationException("uk_places_map_kakao_place violation", cause));
 
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.DUPLICATE_PLACE);
+    }
+
+    @Test
+    void create는_다른_무결성_제약_위반이면_DUPLICATE_PLACE로_바꾸지_않고_그대로_전파한다() {
+        // given: 유니크 제약이 아닌 다른 제약(예: 길이 초과) 위반은 중복으로 오인하면 안 된다
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(false);
+        ConstraintViolationException cause = new ConstraintViolationException(
+            "value too long for type character varying(100)", null, "places_name_check");
+        DataIntegrityViolationException thrown = new DataIntegrityViolationException("length violation", cause);
+        given(placeRepository.saveAndFlush(any(Place.class))).willThrow(thrown);
+
+        // when & then
+        assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
+            .isSameAs(thrown);
+    }
+
+    @Test
+    void create는_요청에_담긴_태그를_그대로_저장한다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
+        PlaceCreateRequest request = new PlaceCreateRequest(
+            "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한")
+        );
+
+        // when
+        PlaceResponse response = placeService.create(request, 1L);
+
+        // then
+        assertThat(response.tags()).containsExactly("데이트", "조용한");
+    }
+
+    @Test
+    void create는_태그가_없으면_빈_리스트로_저장한다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        PlaceResponse response = placeService.create(createRequest(), 1L);
+
+        // then
+        assertThat(response.tags()).isEmpty();
     }
 
     @Test
@@ -262,7 +313,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when
         PlaceResponse response = placeService.update(1L, 1L, request);
@@ -281,10 +332,11 @@ class PlaceServiceTest {
             .category("카페")
             .mapId(10L)
             .createdBy(1L)
+            .tags(new ArrayList<>(List.of("기존태그")))
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
-        PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null);
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null, null);
 
         // when
         PlaceResponse response = placeService.update(1L, 1L, request);
@@ -293,6 +345,27 @@ class PlaceServiceTest {
         assertThat(response.name()).isEqualTo("new name");
         assertThat(response.address()).isEqualTo("old address");
         assertThat(response.category()).isEqualTo("카페");
+        assertThat(response.tags()).containsExactly("기존태그");
+    }
+
+    @Test
+    void update는_태그를_보내면_기존_태그를_통째로_교체한다() {
+        // given
+        Place place = Place.builder()
+            .name("old")
+            .mapId(10L)
+            .createdBy(1L)
+            .tags(new ArrayList<>(List.of("old1", "old2")))
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, List.of("new1"));
+
+        // when
+        PlaceResponse response = placeService.update(1L, 1L, request);
+
+        // then
+        assertThat(response.tags()).containsExactly("new1");
     }
 
     @Test
@@ -302,7 +375,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when
         PlaceResponse response = placeService.update(1L, 2L, request);
@@ -318,7 +391,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
@@ -334,7 +407,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when
         PlaceResponse response = placeService.update(1L, 2L, request);
@@ -350,7 +423,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
@@ -365,7 +438,7 @@ class PlaceServiceTest {
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description");
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, null, request))
@@ -378,7 +451,7 @@ class PlaceServiceTest {
     @Test
     void delete는_COMMUNITY_지도에서_생성자_본인이면_소프트_삭제한다() {
         // given
-        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).kakaoPlaceId("26338954").build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
 
@@ -387,6 +460,8 @@ class PlaceServiceTest {
 
         // then
         assertThat(place.getDeletedAt()).isNotNull();
+        // uk_places_map_kakao_place는 deleted_at을 구분하지 않으므로, kakaoPlaceId를 비워야 같은 지도에 재등록할 수 있다.
+        assertThat(place.getKakaoPlaceId()).isNull();
         verify(placeRepository, never()).delete(any());
     }
 
