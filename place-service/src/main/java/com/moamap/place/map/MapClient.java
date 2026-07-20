@@ -29,7 +29,7 @@ public class MapClient {
         ApiResponse<MapMemberResponse> response;
         try {
             response = restClient.get()
-                .uri(properties.baseUrl() + "/maps/{mapId}/members/{userId}", mapId, userId)
+                .uri(properties.baseUrl() + "/api/v1/maps/{mapId}/members/{userId}", mapId, userId)
                 .retrieve()
                 .body(new ParameterizedTypeReference<ApiResponse<MapMemberResponse>>() {
                 });

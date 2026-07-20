@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/map/official/foot-traffic")
+@RequestMapping("/api/v1/maps/official/foot-traffic")
 @RequiredArgsConstructor
 public class FootTrafficController {
 

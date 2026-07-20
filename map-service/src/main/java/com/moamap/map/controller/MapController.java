@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Map", description = "지도 방 생성/조회/참여 API")
 @RestController
-@RequestMapping("/maps")
+@RequestMapping("/api/v1/maps")
 @RequiredArgsConstructor
 public class MapController {
 

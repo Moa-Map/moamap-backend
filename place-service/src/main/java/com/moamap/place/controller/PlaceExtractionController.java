@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/places/instagram-extractions")
+@RequestMapping("/api/v1/places/instagram-extractions")
 @RequiredArgsConstructor
 @Tag(name = "PlaceExtraction", description = "AI 기반 인스타그램 장소 추출 API")
 public class PlaceExtractionController {
@@ -25,7 +25,7 @@ public class PlaceExtractionController {
     @PostMapping
     @Operation(
         summary = "인스타그램 릴스 설명글에서 장소 후보 추출",
-        description = "설명글에서 Gemini로 장소 단서를 추출해 카카오맵 검색 후보를 반환한다. 후보는 POST /places 등록에 그대로 사용할 수 있다."
+        description = "설명글에서 Gemini로 장소 단서를 추출해 카카오맵 검색 후보를 반환한다. 후보는 POST /api/v1/places 등록에 그대로 사용할 수 있다."
     )
     public ApiResponse<List<PlaceCandidateResponse>> extract(
         @Valid @RequestBody InstagramExtractRequest request

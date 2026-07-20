@@ -53,7 +53,7 @@ class PlaceReviewControllerTest {
         given(placeReviewService.create(eq(1L), eq(2L), any())).willReturn(response());
 
         // when & then
-        mockMvc.perform(post("/places/{placeId}/reviews", 1L)
+        mockMvc.perform(post("/api/v1/places/{placeId}/reviews", 1L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -70,7 +70,7 @@ class PlaceReviewControllerTest {
             """;
 
         // when & then
-        mockMvc.perform(post("/places/{placeId}/reviews", 1L)
+        mockMvc.perform(post("/api/v1/places/{placeId}/reviews", 1L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidBody))
@@ -84,7 +84,7 @@ class PlaceReviewControllerTest {
         given(placeReviewService.findAllByPlaceId(eq(1L), any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(get("/places/{placeId}/reviews", 1L))
+        mockMvc.perform(get("/api/v1/places/{placeId}/reviews", 1L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].rating").value(5));
     }
@@ -96,7 +96,7 @@ class PlaceReviewControllerTest {
         given(placeReviewService.update(eq(1L), eq(5L), eq(2L), any())).willReturn(response());
 
         // when & then
-        mockMvc.perform(patch("/places/{placeId}/reviews/{reviewId}", 1L, 5L)
+        mockMvc.perform(patch("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -107,7 +107,7 @@ class PlaceReviewControllerTest {
     @Test
     void delete는_성공하면_204를_반환한다() throws Exception {
         // when & then
-        mockMvc.perform(delete("/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 2L))
+        mockMvc.perform(delete("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 2L))
             .andExpect(status().isNoContent());
     }
 
@@ -118,7 +118,7 @@ class PlaceReviewControllerTest {
             .given(placeReviewService).delete(1L, 5L, 3L);
 
         // when & then
-        mockMvc.perform(delete("/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 3L))
+        mockMvc.perform(delete("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 3L))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error.code").value("PLACE_012"));
     }

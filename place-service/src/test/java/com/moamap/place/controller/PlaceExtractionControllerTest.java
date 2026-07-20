@@ -46,7 +46,7 @@ class PlaceExtractionControllerTest {
         given(placeExtractionService.extractFromInstagram(any())).willReturn(List.of(candidate));
 
         // when & then
-        mockMvc.perform(post("/places/instagram-extractions")
+        mockMvc.perform(post("/api/v1/places/instagram-extractions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -61,7 +61,7 @@ class PlaceExtractionControllerTest {
             """;
 
         // when & then
-        mockMvc.perform(post("/places/instagram-extractions")
+        mockMvc.perform(post("/api/v1/places/instagram-extractions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidBody))
             .andExpect(status().isBadRequest());
