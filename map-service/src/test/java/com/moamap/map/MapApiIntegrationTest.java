@@ -39,7 +39,7 @@ class MapApiIntegrationTest {
     @Test
     @DisplayName("공개 지도를 생성하면 생성자가 OWNER로 참여되고 memberCount는 1이다")
     void createCommunityMap() throws Exception {
-        mockMvc.perform(post("/maps")
+        mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, OWNER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody("서울 팝업스토어 맵", "PUBLIC", List.of("맛집", "데이트"))))
@@ -55,7 +55,7 @@ class MapApiIntegrationTest {
     @Test
     @DisplayName("프라이빗 지도를 생성하면 소유자에게 초대 코드가 발급된다")
     void createPrivateMapGeneratesInviteCode() throws Exception {
-        mockMvc.perform(post("/maps")
+        mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, OWNER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody("우리끼리 지도", "PRIVATE", List.of())))
@@ -69,7 +69,7 @@ class MapApiIntegrationTest {
     void joinCommunityMap() throws Exception {
         long mapId = createMap(OWNER, "카페 지도", "PUBLIC");
 
-        mockMvc.perform(post("/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.memberCount").value(2))
             .andExpect(jsonPath("$.data.joined").value(true))
@@ -80,10 +80,10 @@ class MapApiIntegrationTest {
     @DisplayName("같은 지도에 두 번 참여하면 409로 거절된다")
     void joinTwiceConflict() throws Exception {
         long mapId = createMap(OWNER, "산책 지도", "PUBLIC");
-        mockMvc.perform(post("/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
             .andExpect(status().isOk());
 
-        mockMvc.perform(post("/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.error.code").value("MAP_005"));
@@ -92,7 +92,7 @@ class MapApiIntegrationTest {
     @Test
     @DisplayName("초대 코드로 프라이빗 지도에 합류할 수 있다")
     void joinPrivateByInviteCode() throws Exception {
-        String createResponse = mockMvc.perform(post("/maps")
+        String createResponse = mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, OWNER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody("비밀 지도", "PRIVATE", List.of())))
@@ -100,7 +100,7 @@ class MapApiIntegrationTest {
         String inviteCode = objectMapper.readTree(createResponse).path("data").path("inviteCode").asText();
 
         String body = objectMapper.writeValueAsString(Map.of("inviteCode", inviteCode));
-        mockMvc.perform(post("/maps/join")
+        mockMvc.perform(post("/api/v1/maps/join")
                 .header(USER_HEADER, OTHER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
@@ -112,7 +112,7 @@ class MapApiIntegrationTest {
     @DisplayName("잘못된 초대 코드는 404로 응답한다")
     void joinWithInvalidInviteCode() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of("inviteCode", "ZZZZZZ"));
-        mockMvc.perform(post("/maps/join")
+        mockMvc.perform(post("/api/v1/maps/join")
                 .header(USER_HEADER, OTHER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
@@ -124,9 +124,9 @@ class MapApiIntegrationTest {
     @DisplayName("커뮤니티 목록은 공개 지도를 반환하고 요청자의 참여 여부를 표시한다")
     void communityListShowsJoinedFlag() throws Exception {
         long mapId = createMap(OWNER, "힙플 지도", "PUBLIC");
-        mockMvc.perform(post("/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER)).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER)).andExpect(status().isOk());
 
-        mockMvc.perform(get("/maps").header(USER_HEADER, OTHER))
+        mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OTHER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].type").value("COMMUNITY"))
             .andExpect(jsonPath("$.data.content[0].joined").value(true));
@@ -137,12 +137,12 @@ class MapApiIntegrationTest {
     void memberRoleLookup() throws Exception {
         long mapId = createMap(OWNER, "역할 테스트 지도", "PUBLIC");
 
-        mockMvc.perform(get("/maps/{mapId}/members/{userId}", mapId, OWNER))
+        mockMvc.perform(get("/api/v1/maps/{mapId}/members/{userId}", mapId, OWNER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mapType").value("COMMUNITY"))
             .andExpect(jsonPath("$.data.role").value("OWNER"));
 
-        mockMvc.perform(get("/maps/{mapId}/members/{userId}", mapId, OTHER))
+        mockMvc.perform(get("/api/v1/maps/{mapId}/members/{userId}", mapId, OTHER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.role").value("NONE"));
     }
@@ -152,7 +152,7 @@ class MapApiIntegrationTest {
     void privateDetailForbiddenForNonMember() throws Exception {
         long mapId = createMap(OWNER, "숨은 지도", "PRIVATE");
 
-        mockMvc.perform(get("/maps/{mapId}", mapId).header(USER_HEADER, OTHER))
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OTHER))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error.code").value("MAP_002"));
     }
@@ -162,7 +162,7 @@ class MapApiIntegrationTest {
     void updateForbiddenForNonOwner() throws Exception {
         long mapId = createMap(OWNER, "수정 테스트", "PUBLIC");
 
-        mockMvc.perform(patch("/maps/{mapId}", mapId)
+        mockMvc.perform(patch("/api/v1/maps/{mapId}", mapId)
                 .header(USER_HEADER, OTHER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("name", "해킹시도"))))
@@ -175,7 +175,7 @@ class MapApiIntegrationTest {
     void deleteForbiddenForNonOwner() throws Exception {
         long mapId = createMap(OWNER, "삭제 테스트", "PUBLIC");
 
-        mockMvc.perform(delete("/maps/{mapId}", mapId).header(USER_HEADER, OTHER))
+        mockMvc.perform(delete("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OTHER))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error.code").value("MAP_004"));
     }
@@ -183,7 +183,7 @@ class MapApiIntegrationTest {
     @Test
     @DisplayName("이름이 비어 있으면 400으로 검증 실패한다")
     void createWithBlankNameBadRequest() throws Exception {
-        mockMvc.perform(post("/maps")
+        mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, OWNER)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody("", "PUBLIC", List.of())))
@@ -194,7 +194,7 @@ class MapApiIntegrationTest {
     @Test
     @DisplayName("인증 헤더(X-User-Id)가 없으면 401이다")
     void createWithoutUserHeaderUnauthorized() throws Exception {
-        mockMvc.perform(post("/maps")
+        mockMvc.perform(post("/api/v1/maps")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody("헤더없음", "PUBLIC", List.of())))
             .andExpect(status().isUnauthorized())
@@ -202,7 +202,7 @@ class MapApiIntegrationTest {
     }
 
     private long createMap(long userId, String name, String visibility) throws Exception {
-        String response = mockMvc.perform(post("/maps")
+        String response = mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, userId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createBody(name, visibility, List.of())))

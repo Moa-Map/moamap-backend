@@ -28,18 +28,18 @@ class GatewayConfigTest {
     }
 
     @Test
-    void map_service_라우트는_maps와_map_경로를_처리한다() {
+    void map_service_라우트는_maps_경로를_처리한다() {
         Route mapRoute = findRoute("map-service");
 
-        assertThat(matches(mapRoute, "/maps")).isTrue();
-        assertThat(matches(mapRoute, "/map/official/foot-traffic")).isTrue();
+        assertThat(matches(mapRoute, "/api/v1/maps")).isTrue();
+        assertThat(matches(mapRoute, "/api/v1/maps/official/foot-traffic")).isTrue();
     }
 
     @Test
     void place_service_라우트는_places_경로를_처리한다() {
         Route placeRoute = findRoute("place-service");
 
-        assertThat(matches(placeRoute, "/places")).isTrue();
+        assertThat(matches(placeRoute, "/api/v1/places")).isTrue();
     }
 
     private Route findRoute(String id) {

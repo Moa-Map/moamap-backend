@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/places")
+@RequestMapping("/api/v1/places")
 @RequiredArgsConstructor
 @Tag(name = "Place", description = "장소 등록/조회/수정/삭제 및 등록 승인·반려 API")
 public class PlaceController {

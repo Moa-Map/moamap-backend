@@ -27,7 +27,7 @@ class JwtAuthenticationFilterTest {
     void 유효한_토큰이면_X_User_Id를_주입한다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(
-            MockServerHttpRequest.post("/places").header(HttpHeaders.AUTHORIZATION, bearer(7L)));
+            MockServerHttpRequest.post("/api/v1/places").header(HttpHeaders.AUTHORIZATION, bearer(7L)));
 
         filter.filter(exchange, chain).block();
 
@@ -37,7 +37,7 @@ class JwtAuthenticationFilterTest {
     @Test
     void 보호_경로에_토큰이_없으면_401을_반환한다() {
         CapturingChain chain = new CapturingChain();
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/places"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/places"));
 
         filter.filter(exchange, chain).block();
 
@@ -49,7 +49,7 @@ class JwtAuthenticationFilterTest {
     void 보호_경로에_위조된_토큰이면_401을_반환한다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(
-            MockServerHttpRequest.post("/places").header(HttpHeaders.AUTHORIZATION, "Bearer tampered.token.value"));
+            MockServerHttpRequest.post("/api/v1/places").header(HttpHeaders.AUTHORIZATION, "Bearer tampered.token.value"));
 
         filter.filter(exchange, chain).block();
 
@@ -61,7 +61,7 @@ class JwtAuthenticationFilterTest {
     void 클라이언트가_보낸_X_User_Id는_토큰_값으로_덮어쓴다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(
-            MockServerHttpRequest.post("/places")
+            MockServerHttpRequest.post("/api/v1/places")
                 .header(USER_ID_HEADER, "999")
                 .header(HttpHeaders.AUTHORIZATION, bearer(7L)));
 
@@ -73,7 +73,7 @@ class JwtAuthenticationFilterTest {
     @Test
     void 공개_경로는_토큰이_없어도_통과하며_X_User_Id를_주입하지_않는다() {
         CapturingChain chain = new CapturingChain();
-        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/maps"));
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/maps"));
 
         filter.filter(exchange, chain).block();
 
@@ -85,7 +85,7 @@ class JwtAuthenticationFilterTest {
     void 공개_경로에서_클라이언트가_보낸_X_User_Id는_제거된다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(
-            MockServerHttpRequest.get("/maps").header(USER_ID_HEADER, "999"));
+            MockServerHttpRequest.get("/api/v1/maps").header(USER_ID_HEADER, "999"));
 
         filter.filter(exchange, chain).block();
 

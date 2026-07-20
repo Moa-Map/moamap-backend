@@ -69,7 +69,7 @@ class PlaceControllerTest {
         given(placeService.create(any(), eq(1L))).willReturn(response());
 
         // when & then
-        mockMvc.perform(post("/places")
+        mockMvc.perform(post("/api/v1/places")
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(createRequest())))
@@ -97,7 +97,7 @@ class PlaceControllerTest {
         given(placeService.create(any(), eq(1L))).willReturn(responseWithTags);
 
         // when & then
-        mockMvc.perform(post("/places")
+        mockMvc.perform(post("/api/v1/places")
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -115,7 +115,7 @@ class PlaceControllerTest {
             """;
 
         // when & then
-        mockMvc.perform(post("/places")
+        mockMvc.perform(post("/api/v1/places")
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidBody))
@@ -129,7 +129,7 @@ class PlaceControllerTest {
         given(placeService.findById(1L)).willReturn(response());
 
         // when & then
-        mockMvc.perform(get("/places/{id}", 1L))
+        mockMvc.perform(get("/api/v1/places/{id}", 1L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(1))
             .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"));
@@ -141,7 +141,7 @@ class PlaceControllerTest {
         given(placeService.findById(999L)).willThrow(new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
 
         // when & then
-        mockMvc.perform(get("/places/{id}", 999L))
+        mockMvc.perform(get("/api/v1/places/{id}", 999L))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.error.code").value("PLACE_001"));
@@ -154,7 +154,7 @@ class PlaceControllerTest {
         given(placeService.findAllByMapId(eq(10L), any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(get("/places").param("mapId", "10"))
+        mockMvc.perform(get("/api/v1/places").param("mapId", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].id").value(1))
             .andExpect(jsonPath("$.data.totalElements").value(1));
@@ -167,7 +167,7 @@ class PlaceControllerTest {
         given(placeService.findPendingByMapId(eq(10L), eq(2L), any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(get("/places/pending").param("mapId", "10").header("X-User-Id", 2L))
+        mockMvc.perform(get("/api/v1/places/pending").param("mapId", "10").header("X-User-Id", 2L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].id").value(1));
         verify(placeService).findPendingByMapId(eq(10L), eq(2L), any());
@@ -180,7 +180,7 @@ class PlaceControllerTest {
         given(placeService.update(eq(1L), eq(1L), any())).willReturn(response());
 
         // when & then
-        mockMvc.perform(patch("/places/{id}", 1L)
+        mockMvc.perform(patch("/api/v1/places/{id}", 1L)
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -191,7 +191,7 @@ class PlaceControllerTest {
     @Test
     void delete는_성공하면_204를_반환한다() throws Exception {
         // when & then
-        mockMvc.perform(delete("/places/{id}", 1L).header("X-User-Id", 1L))
+        mockMvc.perform(delete("/api/v1/places/{id}", 1L).header("X-User-Id", 1L))
             .andExpect(status().isNoContent());
         verify(placeService).delete(1L, 1L);
     }
@@ -202,7 +202,7 @@ class PlaceControllerTest {
         given(placeService.approve(1L, 2L)).willReturn(response());
 
         // when & then
-        mockMvc.perform(patch("/places/{id}/approve", 1L).header("X-User-Id", 2L))
+        mockMvc.perform(patch("/api/v1/places/{id}/approve", 1L).header("X-User-Id", 2L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.status").value("APPROVED"));
     }
@@ -213,7 +213,7 @@ class PlaceControllerTest {
         given(placeService.reject(1L, 2L)).willReturn(response());
 
         // when & then
-        mockMvc.perform(patch("/places/{id}/reject", 1L).header("X-User-Id", 2L))
+        mockMvc.perform(patch("/api/v1/places/{id}/reject", 1L).header("X-User-Id", 2L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(1));
     }

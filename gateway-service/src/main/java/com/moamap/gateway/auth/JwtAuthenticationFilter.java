@@ -36,8 +36,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // 토큰 없이 열어줄 경로. 나머지는 다 토큰 필요.
     private static final List<PublicEndpoint> PUBLIC_ENDPOINTS = List.of(
         PublicEndpoint.of(null, "/api/v1/auth/**"),
-        PublicEndpoint.of(HttpMethod.GET, "/maps/**"),
-        PublicEndpoint.of(HttpMethod.GET, "/map/**")
+        PublicEndpoint.of(HttpMethod.GET, "/api/v1/maps/**")
     );
 
     private final JwtValidator jwtValidator;

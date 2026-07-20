@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/places/instagram-extractions")
+@RequestMapping("/api/v1/places/instagram-extractions")
 @RequiredArgsConstructor
 @Tag(name = "PlaceExtraction", description = "AI 기반 인스타그램 장소 추출 API")
 public class PlaceExtractionController {

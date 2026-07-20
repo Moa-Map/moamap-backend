@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/places/{placeId}/reviews")
+@RequestMapping("/api/v1/places/{placeId}/reviews")
 @RequiredArgsConstructor
 @Tag(name = "PlaceReview", description = "장소 별점/댓글/사진 리뷰 API")
 public class PlaceReviewController {
