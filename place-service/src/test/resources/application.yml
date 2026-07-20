@@ -1,0 +1,5 @@
+# 테스트 전용. H2 임베디드를 쓰므로 datasource url을 지정하지 않는다(자동 구성).
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
