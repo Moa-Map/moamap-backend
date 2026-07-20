@@ -41,6 +41,9 @@ public class User {
     @Column(name = "profile_image_url", columnDefinition = "TEXT")
     private String profileImageUrl;
 
+    @Column(name = "introduction", columnDefinition = "TEXT")
+    private String introduction;
+
     @Column(nullable = false, length = 30)
     private String provider;
 
@@ -80,6 +83,21 @@ public class User {
 
     public void updateLastLogin(LocalDateTime at) {
         this.lastLoginAt = at;
+    }
+
+    public void updateProfile(String nickname, String profileImageUrl, String email, String introduction) {
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
+        if (email != null) {
+            this.email = email;
+        }
+        if (introduction != null) {
+            this.introduction = introduction;
+        }
     }
 
     @PrePersist
