@@ -3,6 +3,8 @@ package com.moamap.user.auth.oauth;
 import com.moamap.user.auth.exception.InvalidOAuthTokenException;
 import com.moamap.user.auth.oauth.dto.KakaoTokenInfo;
 import com.moamap.user.auth.oauth.dto.KakaoUserResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -10,6 +12,7 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class KakaoOAuthClient implements OAuthClient {
 
+    private static final Logger log = LoggerFactory.getLogger(KakaoOAuthClient.class);
     private static final String PROVIDER = "kakao";
 
     private final RestClient restClient;
@@ -41,6 +44,7 @@ public class KakaoOAuthClient implements OAuthClient {
                     .retrieve()
                     .body(KakaoTokenInfo.class);
         } catch (RestClientException e) {
+            log.warn("카카오 토큰 정보 조회 실패: {}", e.getMessage(), e);
             throw new InvalidOAuthTokenException("카카오 토큰 정보 조회에 실패했습니다.");
         }
         if (tokenInfo == null || tokenInfo.appId() != properties.appId()) {
@@ -57,6 +61,7 @@ public class KakaoOAuthClient implements OAuthClient {
                     .retrieve()
                     .body(KakaoUserResponse.class);
         } catch (RestClientException e) {
+            log.warn("카카오 사용자 정보 조회 실패: {}", e.getMessage(), e);
             throw new InvalidOAuthTokenException("카카오 사용자 정보 조회에 실패했습니다.");
         }
         if (response == null) {

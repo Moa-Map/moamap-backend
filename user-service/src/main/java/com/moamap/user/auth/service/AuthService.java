@@ -32,9 +32,17 @@ public class AuthService {
         User user = userRepository.findByProviderAndProviderId(info.provider(), info.providerId())
                 .orElseGet(() -> userRepository.save(User.createSocialUser(
                         info.provider(), info.providerId(),
-                        info.nickname(), info.email(), info.profileImageUrl())));
+                        resolveNickname(info), info.email(), info.profileImageUrl())));
         user.updateLastLogin(LocalDateTime.now());
         return issueTokens(user);
+    }
+
+    // 닉네임은 카카오 동의항목에서 선택 동의라 거부 시 null로 온다. NOT NULL 컬럼이므로 기본값으로 대체.
+    private String resolveNickname(OAuthUserInfo info) {
+        if (info.nickname() != null && !info.nickname().isBlank()) {
+            return info.nickname();
+        }
+        return "kakao_" + info.providerId();
     }
 
     @Transactional
