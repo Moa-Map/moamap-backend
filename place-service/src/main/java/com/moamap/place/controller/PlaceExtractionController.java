@@ -25,7 +25,7 @@ public class PlaceExtractionController {
     @PostMapping
     @Operation(
         summary = "인스타그램 릴스 설명글에서 장소 후보 추출",
-        description = "설명글에서 Gemini로 장소 단서를 추출해 카카오맵 검색 후보를 반환한다. 후보는 POST /places 등록에 그대로 사용할 수 있다."
+        description = "설명글에서 Gemini로 장소 단서를 추출해 카카오맵 검색 후보를 반환한다. 후보는 POST /api/v1/places 등록에 그대로 사용할 수 있다."
     )
     public ApiResponse<List<PlaceCandidateResponse>> extract(
         @Valid @RequestBody InstagramExtractRequest request
