@@ -2,6 +2,8 @@ package com.moamap.place.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
@@ -23,10 +25,11 @@ public record PlaceResponse(
     PlaceStatus status,
     BigDecimal avgRating,
     Integer commentCount,
-    Long reviewedBy,
-    LocalDateTime reviewedAt,
+    Long processedBy,
+    LocalDateTime processedAt,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    List<String> tags
 ) {
 
     public static PlaceResponse from(Place place) {
@@ -47,10 +50,11 @@ public record PlaceResponse(
             place.getStatus(),
             place.getAvgRating(),
             place.getCommentCount(),
-            place.getReviewedBy(),
-            place.getReviewedAt(),
+            place.getProcessedBy(),
+            place.getProcessedAt(),
             place.getCreatedAt(),
-            place.getUpdatedAt()
+            place.getUpdatedAt(),
+            new ArrayList<>(place.getTags())
         );
     }
 }

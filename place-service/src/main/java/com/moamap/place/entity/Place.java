@@ -2,14 +2,20 @@ package com.moamap.place.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -18,7 +24,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "places")
+@Table(name = "places",
+    uniqueConstraints = @UniqueConstraint(name = "uk_places_map_kakao_place", columnNames = {"map_id", "kakao_place_id"}))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -78,11 +85,17 @@ public class Place {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "reviewed_by")
-    private Long reviewedBy;
+    @ElementCollection
+    @CollectionTable(name = "place_tag", joinColumns = @JoinColumn(name = "place_id"))
+    @Column(name = "tag", length = 30)
+    @Builder.Default
+    private List<String> tags = new ArrayList<>();
 
-    @Column(name = "reviewed_at")
-    private LocalDateTime reviewedAt;
+    @Column(name = "processed_by")
+    private Long processedBy;
+
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -102,7 +115,7 @@ public class Place {
      * 부분 수정. null인 필드는 기존 값을 유지하고, 넘어온 필드만 바꾼다.
      */
     public void update(String name, String address, String roadAddress, BigDecimal lat, BigDecimal lng,
-            String category, String description) {
+            String category, String description, List<String> tags) {
         if (name != null) {
             this.name = name;
         }
@@ -124,22 +137,29 @@ public class Place {
         if (description != null) {
             this.description = description;
         }
+        if (tags != null) {
+            this.tags.clear();
+            this.tags.addAll(tags);
+        }
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void approve(Long reviewedBy) {
+    public void approve(Long processedBy) {
         this.status = PlaceStatus.APPROVED;
-        this.reviewedBy = reviewedBy;
-        this.reviewedAt = LocalDateTime.now();
+        this.processedBy = processedBy;
+        this.processedAt = LocalDateTime.now();
     }
 
-    public void reject(Long reviewedBy) {
+    public void reject(Long processedBy) {
         this.status = PlaceStatus.REJECTED;
-        this.reviewedBy = reviewedBy;
-        this.reviewedAt = LocalDateTime.now();
+        this.processedBy = processedBy;
+        this.processedAt = LocalDateTime.now();
     }
 
     public void delete() {
         this.deletedAt = LocalDateTime.now();
+        // uk_places_map_kakao_place는 deleted_at을 구분하지 않는다.
+        // kakaoPlaceId를 비워서 유니크 제약 대상에서 빼야, 같은 지도에 같은 장소를 다시 등록할 수 있다.
+        this.kakaoPlaceId = null;
     }
 }

@@ -31,6 +31,18 @@ management:
     health:
       show-details: never
 
+kakao:
+  local:
+    # 카카오 로컬(키워드 검색) API. REST API 키는 절대 커밋 금지 — 환경변수로 주입.
+    rest-api-key: ${KAKAO_REST_API_KEY:}
+    base-url: https://dapi.kakao.com/v2/local/search/keyword.json
+
+gemini:
+  api:
+    # 인스타그램 설명글 → 장소 추출용 Google Gemini API. 키는 절대 커밋 금지 — 환경변수로 주입.
+    key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL_ID:}
+
 services:
   map:
     # 지도 유형/멤버 역할 조회용 map-service 내부 호출 주소.
