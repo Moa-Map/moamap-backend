@@ -20,7 +20,7 @@ public class GatewayConfig {
     @Bean
     public RouteLocator routeLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-            .route("user-service", r -> r.path("/api/v1/auth/**").uri(serviceUrls.userUrl()))
+            .route("user-service", r -> r.path("/api/v1/auth/**", "/api/v1/users/**").uri(serviceUrls.userUrl()))
             .route("map-service", r -> r.path("/maps/**", "/map/**").uri(serviceUrls.mapUrl()))
             .route("place-service", r -> r.path("/places/**").uri(serviceUrls.placeUrl()))
             .build();
