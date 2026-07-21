@@ -1,3 +1,13 @@
+# flavor/image는 이름으로 조회해 ID를 자동으로 얻는다 (UUID 직접 입력 불필요).
+data "nhncloud_compute_flavor_v2" "node" {
+  name = var.node_flavor_name
+}
+
+data "nhncloud_images_image_v2" "node" {
+  name        = var.node_image_name
+  most_recent = true
+}
+
 # NKS(쿠버네티스) 클러스터. node_count로 기본 노드그룹이 함께 생성된다.
 # labels는 NHN NKS(Magnum) 필수 설정 — 값은 대부분 변수/콘솔 확인값으로 채운다.
 resource "nhncloud_kubernetes_cluster_v1" "main" {
@@ -6,7 +16,7 @@ resource "nhncloud_kubernetes_cluster_v1" "main" {
 
   fixed_network = nhncloud_networking_vpc_v2.main.id
   fixed_subnet  = nhncloud_networking_vpcsubnet_v2.main.id
-  flavor_id     = var.flavor_id
+  flavor_id     = data.nhncloud_compute_flavor_v2.node.id
   keypair       = var.keypair_name
   node_count    = var.node_count
 
@@ -18,7 +28,7 @@ resource "nhncloud_kubernetes_cluster_v1" "main" {
 
     external_network_id     = var.external_network_id
     external_subnet_id_list = var.external_subnet_id
-    node_image              = var.node_image_id
+    node_image              = data.nhncloud_images_image_v2.node.id
 
     master_lb_floating_ip_enabled = "true"
     cert_manager_api              = "true"

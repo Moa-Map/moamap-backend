@@ -15,7 +15,7 @@ Provider는 [`nhn-cloud/nhncloud`](https://registry.terraform.io/providers/nhn-c
 ## 사전 준비 (콘솔에서 수동)
 1. NHN Cloud **API 계정**(username/password) + **테넌트 ID**, 리전 확인
 2. 노드 접속용 **keypair** 생성
-3. `flavor_id`, `node_image_id`, `external_network_id`, `external_subnet_id` 등 ID 확인
+3. 값 확인: 노드 사양/이미지는 **이름**으로 넣는다(`node_flavor_name`·`node_image_name`). `external_network_id`/`external_subnet_id`는 `openstack network list --external`("Public Network") + `openstack subnet list`로 확인
 4. (원격 state 쓸 경우) Object Storage **버킷** 생성
 
 ## 사용법

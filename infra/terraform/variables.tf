@@ -47,13 +47,14 @@ variable "availability_zone" {
   type        = string
 }
 
-variable "flavor_id" {
-  description = "워커 노드 인스턴스 타입 ID. NHN 콘솔에서 확인."
+variable "node_flavor_name" {
+  description = "워커 노드 사양 이름(ID가 아니라 이름). 기본은 최소 권장 2vCPU/4GB. 다른 사양은 openstack flavor list로 확인."
   type        = string
+  default     = "u2.c2m4"
 }
 
-variable "node_image_id" {
-  description = "워커 노드 이미지 ID. NHN 콘솔에서 확인."
+variable "node_image_name" {
+  description = "워커 노드 이미지 이름. NKS 노드그룹 생성 화면/openstack image list의 이미지 '이름'을 그대로."
   type        = string
 }
 
