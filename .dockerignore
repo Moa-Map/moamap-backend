@@ -1,0 +1,21 @@
+# 빌드 컨텍스트에서 제외 — 빌드 산출물/IDE/인프라/시크릿은 이미지에 넣지 않는다.
+.git/
+.github/
+**/build/
+.gradle/
+**/.gradle/
+.idea/
+*.iml
+.vscode/
+
+# 인프라·시크릿 (이미지에 절대 포함 금지)
+infra/
+k8s/
+.env
+.env.*
+*.tfvars
+openrc
+
+# 문서
+docs/
+*.md
