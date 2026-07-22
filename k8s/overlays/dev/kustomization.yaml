@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: moamap
+
+resources:
+  - ../../base
+
+# 개발 환경 조정은 여기서 한다. 예) 이미지 태그·replicas 패치
+# images:
+#   - name: REPLACE_ME_NCR/moamap/gateway-service
+#     newTag: dev
