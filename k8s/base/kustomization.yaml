@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - gateway-service/deployment.yaml
+  - gateway-service/service.yaml
+  - user-service/deployment.yaml
+  - user-service/service.yaml
+  - map-service/deployment.yaml
+  - map-service/service.yaml
+  - place-service/deployment.yaml
+  - place-service/service.yaml
+# Secret은 값이 민감하므로 여기 포함하지 않고 별도로 apply 한다 (secrets/ 참고).

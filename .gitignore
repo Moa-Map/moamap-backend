@@ -54,6 +54,11 @@ CLAUDE.local.md
 # 팀 공유 문서는 docs/에, 로컬 전용 설계 드래프트는 docs/specs/에 둔다(원격 제외).
 docs/specs/
 
+### Kubernetes ###
+# 실제 시크릿 매니페스트는 커밋 금지 (예시 템플릿만 커밋)
+k8s/secrets/*.yaml
+!k8s/secrets/*.example.yaml
+
 ### OS ###
 .DS_Store
 Thumbs.db

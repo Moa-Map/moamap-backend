@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: moamap-config
+  namespace: moamap
+# 비밀이 아닌 설정만. 비밀(비번·키·JWT_SECRET)은 Secret(app-secrets)에 둔다.
+data:
+  # 서비스 간 내부 호출 주소 (k8s 서비스 DNS)
+  USER_SERVICE_URL: "http://user-service:8081"
+  MAP_SERVICE_URL: "http://map-service:8083"
+  PLACE_SERVICE_URL: "http://place-service:8082"
+  # DB/Redis 호스트 — 배포 이슈에서 실제 값으로 채운다 (관리형 or 클러스터 내 배포)
+  DB_URL: "jdbc:postgresql://REPLACE_ME_db_host:5432/moamap"
+  REDIS_HOST: "REPLACE_ME_redis_host"
+  REDIS_PORT: "6379"

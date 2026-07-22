@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+  namespace: moamap
+spec:
+  # 외부 진입점 — LoadBalancer로 만들면 NHN이 공인 IP(플로팅 IP)를 붙여준다.
+  type: LoadBalancer
+  selector:
+    app: gateway-service
+  ports:
+    - port: 80
+      targetPort: 8080
