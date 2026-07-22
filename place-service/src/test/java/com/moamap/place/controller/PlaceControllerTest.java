@@ -5,12 +5,15 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PhotoUploadUrlRequest;
+import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
 import com.moamap.place.exception.PlaceErrorCode;
+import com.moamap.place.service.PlacePhotoService;
 import com.moamap.place.service.PlaceService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,12 +49,15 @@ class PlaceControllerTest {
     @MockitoBean
     private PlaceService placeService;
 
+    @MockitoBean
+    private PlacePhotoService placePhotoService;
+
     private PlaceResponse response() {
         return new PlaceResponse(
             1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
             PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
-            null, 0, null, null, null, null, List.of()
+            null, 0, null, null, null, null, List.of(), List.of()
         );
     }
 
@@ -59,7 +65,7 @@ class PlaceControllerTest {
         return new PlaceCreateRequest(
             "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
-            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, null
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, null, null
         );
     }
 
@@ -86,13 +92,13 @@ class PlaceControllerTest {
         PlaceCreateRequest request = new PlaceCreateRequest(
             "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
-            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한")
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한"), null
         );
         PlaceResponse responseWithTags = new PlaceResponse(
             1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
             PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
-            null, 0, null, null, null, null, List.of("데이트", "조용한")
+            null, 0, null, null, null, null, List.of("데이트", "조용한"), List.of()
         );
         given(placeService.create(any(), eq(1L))).willReturn(responseWithTags);
 
@@ -216,5 +222,83 @@ class PlaceControllerTest {
         mockMvc.perform(patch("/api/v1/places/{id}/reject", 1L).header("X-User-Id", 2L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(1));
+    }
+
+    /*
+     * 장소 사진 업로드 presigned URL 발급 엔드포인트.
+     * 권한 분기(3-1)/파일 검증(3-2) 자체는 PlacePhotoServiceTest에서 이미 검증했으므로,
+     * 여기서는 라우팅/바인딩/상태 코드 배선만 확인한다.
+     */
+
+    private PhotoUploadUrlRequest photoUploadUrlRequest() {
+        return new PhotoUploadUrlRequest(10L, "image/jpeg", 1024L);
+    }
+
+    private PhotoUploadUrlResponse photoUploadUrlResponse() {
+        return new PhotoUploadUrlResponse(
+            "https://upload.example.com/signed",
+            "places/10/uuid.jpg",
+            "https://cdn.moamap.com/places/10/uuid.jpg",
+            300L
+        );
+    }
+
+    @Test
+    void photoUploadUrl은_성공하면_200과_발급_결과를_반환한다() throws Exception {
+        // given
+        given(placePhotoService.issueUploadUrl(any(), eq(1L))).willReturn(photoUploadUrlResponse());
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.uploadUrl").value("https://upload.example.com/signed"))
+            .andExpect(jsonPath("$.data.objectKey").value("places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data.fileUrl").value("https://cdn.moamap.com/places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data.expiresInSeconds").value(300));
+    }
+
+    @Test
+    void photoUploadUrl은_X_User_Id_헤더가_없으면_401을_반환한다() throws Exception {
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+            .andExpect(status().isUnauthorized());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrl(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_서비스가_OFFICIAL_지도_거부를_던지면_403을_반환한다() throws Exception {
+        // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
+        given(placePhotoService.issueUploadUrl(any(), eq(1L)))
+            .willThrow(new BusinessException(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("PLACE_003"));
+    }
+
+    @Test
+    void photoUploadUrl은_contentType이_비어있으면_400을_반환한다() throws Exception {
+        // given: contentType이 @NotBlank 위반
+        String invalidBody = """
+            {"mapId": 10, "contentType": "", "fileSize": 1024}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrl(any(), any());
     }
 }

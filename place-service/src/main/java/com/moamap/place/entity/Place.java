@@ -14,6 +14,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -22,6 +23,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "places",
@@ -90,6 +92,16 @@ public class Place {
     @Column(name = "tag", length = 30)
     @Builder.Default
     private List<String> tags = new ArrayList<>();
+
+    // tags/imageUrls와 달리 @OrderColumn을 추가한다: 사진은 "인덱스 0 = 대표 사진" 계약이 있어
+    // 순서가 결정적으로 보존되어야 한다(청사진 5장).
+    @ElementCollection
+    @CollectionTable(name = "place_photos", joinColumns = @JoinColumn(name = "place_id"))
+    @Column(name = "photo_url", length = 1000)
+    @OrderColumn(name = "sort_order")
+    @BatchSize(size = 50)
+    @Builder.Default
+    private List<String> photoUrls = new ArrayList<>();
 
     @Column(name = "processed_by")
     private Long processedBy;

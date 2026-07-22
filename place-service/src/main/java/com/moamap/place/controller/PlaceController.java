@@ -2,9 +2,12 @@ package com.moamap.place.controller;
 
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PhotoUploadUrlRequest;
+import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
+import com.moamap.place.service.PlacePhotoService;
 import com.moamap.place.service.PlaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,6 +36,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlaceController {
 
     private final PlaceService placeService;
+    private final PlacePhotoService placePhotoService;
+
+    @PostMapping("/photo-upload-url")
+    @Operation(
+        summary = "장소 사진 업로드 presigned URL 발급",
+        description = """
+            장소 사진 업로드용 presigned PUT URL을 1건 발급한다. 발급 권한은 장소 등록 권한과 동일하다(OFFICIAL 지도 불가, 지도 멤버여야 함).
+            발급받은 uploadUrl로 클라이언트가 직접 PUT 업로드한 뒤, fileUrl을 장소 등록 요청의 photoUrls에 담아 전달한다.
+            """
+    )
+    public ApiResponse<PhotoUploadUrlResponse> photoUploadUrl(
+        @Valid @RequestBody PhotoUploadUrlRequest request,
+        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
+        @RequestHeader("X-User-Id") Long userId
+    ) {
+        return ApiResponse.success(placePhotoService.issueUploadUrl(request, userId));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
