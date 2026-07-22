@@ -1,11 +1,14 @@
 package com.moamap.place.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.common.storage.ObjectStoragePresigner;
 import com.moamap.common.storage.PresignedUploadUrl;
 import com.moamap.place.dto.PhotoUploadUrlRequest;
+import com.moamap.place.dto.PhotoUploadUrlRequest.FileSpec;
 import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
@@ -34,19 +37,28 @@ public class PlacePhotoService {
         this.objectStoragePresigner = objectStoragePresigner;
     }
 
-    public PhotoUploadUrlResponse issueUploadUrl(PhotoUploadUrlRequest request, Long userId) {
+    public List<PhotoUploadUrlResponse> issueUploadUrls(PhotoUploadUrlRequest request, Long userId) {
         if (userId == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
         }
+        // 권한 판단은 요청의 mapId 1개에 대해 1번만 수행한다(청사진 3-1) — 파일 수와 무관.
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         checkRegistrable(memberInfo);
-        checkContentType(request.contentType());
-        checkFileSize(request.fileSize());
 
-        PresignedUploadUrl presigned = objectStoragePresigner.presign(
-            KEY_PREFIX + request.mapId(), request.contentType(), EXPIRES_IN_SECONDS);
-        return new PhotoUploadUrlResponse(
-            presigned.uploadUrl(), presigned.objectKey(), presigned.fileUrl(), presigned.expiresInSeconds());
+        // 원자적 거부(청사진 3-2/3-3): 전량 검증을 먼저 마치고, 하나라도 위반이면 발급을 전혀 시작하지 않는다.
+        for (FileSpec file : request.files()) {
+            checkContentType(file.contentType());
+            checkFileSize(file.fileSize());
+        }
+
+        List<PhotoUploadUrlResponse> responses = new ArrayList<>();
+        for (FileSpec file : request.files()) {
+            PresignedUploadUrl presigned = objectStoragePresigner.presign(
+                KEY_PREFIX + request.mapId(), file.contentType(), EXPIRES_IN_SECONDS);
+            responses.add(new PhotoUploadUrlResponse(
+                presigned.uploadUrl(), presigned.objectKey(), presigned.fileUrl(), presigned.expiresInSeconds()));
+        }
+        return responses;
     }
 
     // 사진 발급 권한 판단은 장소 등록 권한 판단(PlaceService.resolveInitialStatus)과 동일 규칙이다(청사진 3-1).

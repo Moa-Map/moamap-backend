@@ -1,5 +1,6 @@
 package com.moamap.place.controller;
 
+import java.util.List;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PhotoUploadUrlRequest;
@@ -40,18 +41,18 @@ public class PlaceController {
 
     @PostMapping("/photo-upload-url")
     @Operation(
-        summary = "장소 사진 업로드 presigned URL 발급",
+        summary = "장소 사진 업로드 presigned URL 최대 5장 일괄 발급",
         description = """
-            장소 사진 업로드용 presigned PUT URL을 1건 발급한다. 발급 권한은 장소 등록 권한과 동일하다(OFFICIAL 지도 불가, 지도 멤버여야 함).
-            발급받은 uploadUrl로 클라이언트가 직접 PUT 업로드한 뒤, fileUrl을 장소 등록 요청의 photoUrls에 담아 전달한다.
+            장소 사진 업로드용 presigned PUT URL을 한 요청에 최대 5장 일괄 발급한다. 발급 권한은 장소 등록 권한과 동일하다(OFFICIAL 지도 불가, 지도 멤버여야 함).
+            발급받은 각 uploadUrl로 클라이언트가 직접 PUT 업로드한 뒤, fileUrl 목록을 장소 등록 요청의 photoUrls에 담아 전달한다.
             """
     )
-    public ApiResponse<PhotoUploadUrlResponse> photoUploadUrl(
+    public ApiResponse<List<PhotoUploadUrlResponse>> photoUploadUrl(
         @Valid @RequestBody PhotoUploadUrlRequest request,
         @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
         @RequestHeader("X-User-Id") Long userId
     ) {
-        return ApiResponse.success(placePhotoService.issueUploadUrl(request, userId));
+        return ApiResponse.success(placePhotoService.issueUploadUrls(request, userId));
     }
 
     @PostMapping

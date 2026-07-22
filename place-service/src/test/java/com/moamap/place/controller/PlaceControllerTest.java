@@ -225,13 +225,17 @@ class PlaceControllerTest {
     }
 
     /*
-     * 장소 사진 업로드 presigned URL 발급 엔드포인트.
-     * 권한 분기(3-1)/파일 검증(3-2) 자체는 PlacePhotoServiceTest에서 이미 검증했으므로,
-     * 여기서는 라우팅/바인딩/상태 코드 배선만 확인한다.
+     * 장소 사진 업로드 presigned URL 배치 발급 엔드포인트(청사진 배치 발급 변경).
+     * 권한 분기(3-1)/파일 검증(3-2)/원자적 거부(3-2, 3-3) 자체는 PlacePhotoServiceTest에서 이미 검증했으므로,
+     * 여기서는 라우팅/바인딩(리스트 형태)/상태 코드 배선만 확인한다.
      */
 
-    private PhotoUploadUrlRequest photoUploadUrlRequest() {
-        return new PhotoUploadUrlRequest(10L, "image/jpeg", 1024L);
+    private PhotoUploadUrlRequest.FileSpec fileSpec(String contentType, long fileSize) {
+        return new PhotoUploadUrlRequest.FileSpec(contentType, fileSize);
+    }
+
+    private PhotoUploadUrlRequest photoUploadUrlRequest(PhotoUploadUrlRequest.FileSpec... files) {
+        return new PhotoUploadUrlRequest(10L, List.of(files));
     }
 
     private PhotoUploadUrlResponse photoUploadUrlResponse() {
@@ -244,21 +248,24 @@ class PlaceControllerTest {
     }
 
     @Test
-    void photoUploadUrl은_성공하면_200과_발급_결과를_반환한다() throws Exception {
+    void photoUploadUrl은_성공하면_200과_발급_결과_리스트를_반환한다() throws Exception {
         // given
-        given(placePhotoService.issueUploadUrl(any(), eq(1L))).willReturn(photoUploadUrlResponse());
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
+            .willReturn(List.of(photoUploadUrlResponse(), photoUploadUrlResponse()));
 
         // when & then
         mockMvc.perform(post("/api/v1/places/photo-upload-url")
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+                .content(objectMapper.writeValueAsString(
+                    photoUploadUrlRequest(fileSpec("image/jpeg", 1024L), fileSpec("image/png", 2048L)))))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.data.uploadUrl").value("https://upload.example.com/signed"))
-            .andExpect(jsonPath("$.data.objectKey").value("places/10/uuid.jpg"))
-            .andExpect(jsonPath("$.data.fileUrl").value("https://cdn.moamap.com/places/10/uuid.jpg"))
-            .andExpect(jsonPath("$.data.expiresInSeconds").value(300));
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].uploadUrl").value("https://upload.example.com/signed"))
+            .andExpect(jsonPath("$.data[0].objectKey").value("places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data[0].fileUrl").value("https://cdn.moamap.com/places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data[0].expiresInSeconds").value(300));
     }
 
     @Test
@@ -266,31 +273,31 @@ class PlaceControllerTest {
         // when & then
         mockMvc.perform(post("/api/v1/places/photo-upload-url")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(fileSpec("image/jpeg", 1024L)))))
             .andExpect(status().isUnauthorized());
-        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrl(any(), any());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
     }
 
     @Test
     void photoUploadUrl은_서비스가_OFFICIAL_지도_거부를_던지면_403을_반환한다() throws Exception {
         // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
-        given(placePhotoService.issueUploadUrl(any(), eq(1L)))
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
             .willThrow(new BusinessException(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE));
 
         // when & then
         mockMvc.perform(post("/api/v1/places/photo-upload-url")
                 .header("X-User-Id", 1L)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(photoUploadUrlRequest())))
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(fileSpec("image/jpeg", 1024L)))))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error.code").value("PLACE_003"));
     }
 
     @Test
     void photoUploadUrl은_contentType이_비어있으면_400을_반환한다() throws Exception {
-        // given: contentType이 @NotBlank 위반
+        // given: files[0].contentType이 @NotBlank 위반
         String invalidBody = """
-            {"mapId": 10, "contentType": "", "fileSize": 1024}
+            {"mapId": 10, "files": [{"contentType": "", "fileSize": 1024}]}
             """;
 
         // when & then
@@ -299,6 +306,79 @@ class PlaceControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidBody))
             .andExpect(status().isBadRequest());
-        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrl(any(), any());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_빈_리스트이면_400을_반환한다() throws Exception {
+        // given: @NotEmpty 위반(청사진 2장/3-5)
+        String invalidBody = """
+            {"mapId": 10, "files": []}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_없으면_400을_반환한다() throws Exception {
+        // given: @NotEmpty(null도 위반)
+        String invalidBody = """
+            {"mapId": 10}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_6개면_400을_반환한다() throws Exception {
+        // given: @Size(max=5) 위반(청사진 3-5, 발급 요청 단위 상한)
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L)
+                ))))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_5개면_통과해서_서비스를_호출한다() throws Exception {
+        // given: @Size(max=5) 경계값(허용)
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
+            .willReturn(List.of(photoUploadUrlResponse(), photoUploadUrlResponse(), photoUploadUrlResponse(),
+                photoUploadUrlResponse(), photoUploadUrlResponse()));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L)
+                ))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(5));
+        verify(placePhotoService).issueUploadUrls(any(), eq(1L));
     }
 }
