@@ -30,6 +30,11 @@ variable "subnet_cidr" {
   default     = "10.0.1.0/24"
 }
 
+variable "gateway_id" {
+  description = "콘솔에서 생성한 Internet Gateway UUID."
+  type        = string
+}
+
 # ---------------- NKS 클러스터 ----------------
 variable "cluster_name" {
   description = "NKS 클러스터 이름."
@@ -64,12 +69,12 @@ variable "keypair_name" {
 }
 
 variable "external_network_id" {
-  description = "외부(인터넷) 네트워크 ID. NHN 콘솔에서 확인."
+  description = "공인 IP를 할당받을 외부 네트워크 ID(Public Network). 라우팅테이블 조회의 external_network_id로 확인."
   type        = string
 }
 
 variable "external_subnet_id" {
-  description = "외부 서브넷 ID. NHN 콘솔에서 확인."
+  description = "외부 네트워크의 서브넷 ID. 여러 개를 넣을 때는 콜론(:)으로 구분."
   type        = string
 }
 

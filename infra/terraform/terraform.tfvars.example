@@ -15,8 +15,15 @@ boot_volume_size = "50"
 boot_volume_type = "General HDD"
 
 # 콘솔/CLI에서 확인해 채울 값 ------------------------------------
-kube_tag            = "REPLACE_ME_kube_version"         # 예: v1.32.x (NKS 생성화면 지원목록)
-node_image_name     = "REPLACE_ME_node_image_name"     # NKS 노드 이미지 이름 (콘솔)
-keypair_name        = "REPLACE_ME_keypair_name"        # 콘솔 Key Pair 이름
-external_network_id = "REPLACE_ME_external_network_id" # `openstack network list --external` 의 "Public Network"
-external_subnet_id  = "REPLACE_ME_external_subnet_id"  # `openstack subnet list --network <위 ID>`
+kube_tag        = "REPLACE_ME_kube_version"    # 예: v1.32.x (NKS 생성화면 지원목록)
+node_image_name = "REPLACE_ME_node_image_name" # NKS 노드 이미지 이름 (콘솔)
+keypair_name    = "REPLACE_ME_keypair_name"    # 콘솔 Key Pair 이름
+
+# 인터넷 게이트웨이 — 콘솔(Network > Internet Gateway)에서 생성 후 VPC에 연결.
+# 이게 없으면 NKS가 ncr_sgw/obs_sgw(서비스 게이트웨이)를 필수로 요구한다.
+gateway_id = "REPLACE_ME_internet_gateway_id"
+
+# 마스터 LB 공인 IP를 할당받을 외부 네트워크. 내부 VPC가 아니라 NHN이 제공하는 "Public Network".
+# 확인: GET /v2.0/networks?router:external=true  또는 라우팅테이블 조회의 external_network_id
+external_network_id = "REPLACE_ME_external_network_id"
+external_subnet_id  = "REPLACE_ME_external_subnet_id" # 위 네트워크의 서브넷. 여러 개면 콜론(:)으로 구분

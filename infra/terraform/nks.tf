@@ -25,7 +25,7 @@ resource "nhncloud_kubernetes_cluster_v1" "main" {
     availability_zone = var.availability_zone
     boot_volume_size  = var.boot_volume_size
     boot_volume_type  = var.boot_volume_type
-
+    # 공인 IP(마스터 LB용)를 할당받을 외부 네트워크 — 내부 VPC가 아니라 Public Network.
     external_network_id     = var.external_network_id
     external_subnet_id_list = var.external_subnet_id
     node_image              = data.nhncloud_images_image_v2.node.id
