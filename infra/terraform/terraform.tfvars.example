@@ -1,0 +1,29 @@
+# 이 파일을 terraform.tfvars로 복사해 값을 채운다. (terraform.tfvars는 gitignore 대상 — 커밋 금지)
+# REPLACE_ME 항목만 NHN Cloud 콘솔/CLI에서 확인해 채우면 된다.
+
+region            = "KR1"
+availability_zone = "kr-pub-a"
+
+# 네트워크 (기본값 그대로 사용 가능)
+vpc_cidr    = "10.0.0.0/16"
+subnet_cidr = "10.0.1.0/24"
+
+# NKS 노드 — 최소 권장: 2대 x 2vCPU/4GB (앱 5개 + k8s 시스템 파드 기준)
+node_count       = 2
+node_flavor_name = "u2.c2m4" # 2vCPU/4GB. 다른 사양은 `openstack flavor list`
+boot_volume_size = "50"
+boot_volume_type = "General HDD"
+
+# 콘솔/CLI에서 확인해 채울 값 ------------------------------------
+kube_tag        = "REPLACE_ME_kube_version"    # 예: v1.32.x (NKS 생성화면 지원목록)
+node_image_name = "REPLACE_ME_node_image_name" # NKS 노드 이미지 이름 (콘솔)
+keypair_name    = "REPLACE_ME_keypair_name"    # 콘솔 Key Pair 이름
+
+# 인터넷 게이트웨이 — 콘솔(Network > Internet Gateway)에서 생성 후 VPC에 연결.
+# 이게 없으면 NKS가 ncr_sgw/obs_sgw(서비스 게이트웨이)를 필수로 요구한다.
+gateway_id = "REPLACE_ME_internet_gateway_id"
+
+# 마스터 LB 공인 IP를 할당받을 외부 네트워크. 내부 VPC가 아니라 NHN이 제공하는 "Public Network".
+# 확인: GET /v2.0/networks?router:external=true  또는 라우팅테이블 조회의 external_network_id
+external_network_id = "REPLACE_ME_external_network_id"
+external_subnet_id  = "REPLACE_ME_external_subnet_id" # 위 네트워크의 서브넷. 여러 개면 콜론(:)으로 구분
