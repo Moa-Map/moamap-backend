@@ -13,11 +13,20 @@ spec:
       labels:
         app: gateway-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ncr-cred # NCR pull 인증 (배포 이슈에서 생성)
       containers:
         - name: gateway-service
           image: REPLACE_ME_NCR/moamap/gateway-service:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8080
           envFrom:
@@ -25,6 +34,9 @@ spec:
                 name: moamap-config
             - secretRef:
                 name: moamap-secrets
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /actuator/health
@@ -43,3 +55,6 @@ spec:
               memory: 256Mi
             limits:
               memory: 512Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}

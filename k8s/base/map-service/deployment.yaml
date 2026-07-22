@@ -13,11 +13,20 @@ spec:
       labels:
         app: map-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ncr-cred
       containers:
         - name: map-service
           image: REPLACE_ME_NCR/moamap/map-service:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8083
           envFrom:
@@ -25,6 +34,9 @@ spec:
                 name: moamap-config
             - secretRef:
                 name: moamap-secrets
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /actuator/health
@@ -43,3 +55,6 @@ spec:
               memory: 256Mi
             limits:
               memory: 512Mi
+      volumes:
+        - name: tmp
+          emptyDir: {}
