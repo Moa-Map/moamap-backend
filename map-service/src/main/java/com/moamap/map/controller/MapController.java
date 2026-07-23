@@ -12,6 +12,7 @@ import com.moamap.map.dto.PageResponse;
 import com.moamap.map.entity.MapType;
 import com.moamap.map.service.MapService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,7 @@ public class MapController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MapDetailResponse> create(
-        @RequestHeader(USER_ID_HEADER) Long userId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId,
         @Valid @RequestBody MapCreateRequest request
     ) {
         return ApiResponse.success(mapService.create(request, userId));
@@ -56,7 +57,7 @@ public class MapController {
         @RequestParam(required = false) String tag,
         @RequestParam(required = false) MapSort sort,
         @PageableDefault(size = 20) Pageable pageable,
-        @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
+        @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
     ) {
         return ApiResponse.success(PageResponse.from(mapService.getCommunityMaps(tag, sort, pageable, userId)));
     }
@@ -66,7 +67,7 @@ public class MapController {
     public ApiResponse<PageResponse<MapSummaryResponse>> getMyMaps(
         @RequestParam MapType type,
         @PageableDefault(size = 20) Pageable pageable,
-        @RequestHeader(USER_ID_HEADER) Long userId
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         return ApiResponse.success(PageResponse.from(mapService.getMyMaps(type, pageable, userId)));
     }
@@ -75,7 +76,7 @@ public class MapController {
     @GetMapping("/{mapId}")
     public ApiResponse<MapDetailResponse> getDetail(
         @PathVariable Long mapId,
-        @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
+        @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
     ) {
         return ApiResponse.success(mapService.getDetail(mapId, userId));
     }
@@ -84,7 +85,7 @@ public class MapController {
     @PatchMapping("/{mapId}")
     public ApiResponse<MapDetailResponse> update(
         @PathVariable Long mapId,
-        @RequestHeader(USER_ID_HEADER) Long userId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId,
         @Valid @RequestBody MapUpdateRequest request
     ) {
         return ApiResponse.success(mapService.update(mapId, userId, request));
@@ -95,7 +96,7 @@ public class MapController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
         @PathVariable Long mapId,
-        @RequestHeader(USER_ID_HEADER) Long userId
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         mapService.delete(mapId, userId);
     }
@@ -104,7 +105,7 @@ public class MapController {
     @PostMapping("/{mapId}/join")
     public ApiResponse<MapDetailResponse> joinCommunity(
         @PathVariable Long mapId,
-        @RequestHeader(USER_ID_HEADER) Long userId
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         return ApiResponse.success(mapService.joinCommunity(mapId, userId));
     }
@@ -112,7 +113,7 @@ public class MapController {
     @Operation(summary = "초대 코드로 지도 합류", description = "프라이빗 지도에 초대 코드로 합류한다.")
     @PostMapping("/join")
     public ApiResponse<MapDetailResponse> joinByInviteCode(
-        @RequestHeader(USER_ID_HEADER) Long userId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId,
         @Valid @RequestBody JoinByInviteCodeRequest request
     ) {
         return ApiResponse.success(mapService.joinByInviteCode(request.inviteCode(), userId));
@@ -123,7 +124,7 @@ public class MapController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(
         @PathVariable Long mapId,
-        @RequestHeader(USER_ID_HEADER) Long userId
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         mapService.leave(mapId, userId);
     }

@@ -9,7 +9,8 @@ data:
   USER_SERVICE_URL: "http://user-service:8081"
   MAP_SERVICE_URL: "http://map-service:8083"
   PLACE_SERVICE_URL: "http://place-service:8082"
-  # DB/Redis 호스트 — 배포 이슈에서 실제 값으로 채운다 (관리형 or 클러스터 내 배포)
-  DB_URL: "jdbc:postgresql://REPLACE_ME_db_host:5432/moamap"
-  REDIS_HOST: "REPLACE_ME_redis_host"
+  # DB/Redis 호스트 — 개발/테스트 임시로 클러스터 내 postgres/redis Pod 사용.
+  # 운영 환경은 관리형 DB로 교체 예정 (prod 네임스페이스 분리 시 정리).
+  DB_URL: "jdbc:postgresql://postgres:5432/moamap"
+  REDIS_HOST: "redis"
   REDIS_PORT: "6379"

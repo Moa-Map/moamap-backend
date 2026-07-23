@@ -10,6 +10,17 @@ services:
   map-url: ${MAP_SERVICE_URL:http://localhost:8083}
   place-url: ${PLACE_SERVICE_URL:http://localhost:8082}
 
+# 통합 Swagger UI — 각 서비스 api-docs를 gateway가 프록시(/xxx-service/v3/api-docs)해서 한 페이지에서 모아 봄.
+springdoc:
+  swagger-ui:
+    urls:
+      - name: user-service
+        url: /user-service/v3/api-docs
+      - name: map-service
+        url: /map-service/v3/api-docs
+      - name: place-service
+        url: /place-service/v3/api-docs
+
 jwt:
   # 시크릿은 커밋 안 함 (운영은 JWT_SECRET env, 로컬은 .env). 기본값 없어서 값 없으면 앱 안 뜸.
   secret: ${JWT_SECRET}
