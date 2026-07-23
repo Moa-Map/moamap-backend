@@ -6,6 +6,16 @@ namespace: moamap
 resources:
   - ../../base
 
+# 유동인구 혼잡도 동기화 주기 — 테스트 중 API 호출량을 줄이려고 1시간으로 늘림 (기본값은 5분).
+patches:
+  - target:
+      kind: ConfigMap
+      name: moamap-config
+    patch: |-
+      - op: add
+        path: /data/CONGESTION_SYNC_INTERVAL_MS
+        value: "3600000"
+
 # 개발 환경 조정은 여기서 한다. 예) 이미지 태그·replicas 패치
 # images:
 #   - name: REPLACE_ME_NCR/moamap/gateway-service
