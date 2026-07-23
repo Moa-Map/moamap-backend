@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-로컬 테스트용 JWT 발급 스크립트. JWT_SECRET을 네트워크로 보내지 않고
-이 컴퓨터 안에서만 서명한다. 절대 커밋/공유하지 말 것 — .gitignore에 이미 제외됨.
+로컬 테스트용 JWT 발급 스크립트. 이 파일 자체는 시크릿을 담고 있지 않으므로 커밋/공유해도 된다.
+JWT_SECRET은 실행할 때 환경변수로만 넘기고, 그 값 자체(터미널 출력·채팅 등)는 절대 공유하지 말 것.
 
 사용법:
   JWT_SECRET="실제시크릿값" python3 scripts/gen-test-jwt.py 1
