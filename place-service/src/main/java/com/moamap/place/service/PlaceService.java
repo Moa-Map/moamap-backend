@@ -1,9 +1,12 @@
 package com.moamap.place.service;
 
 import java.util.ArrayList;
+import java.util.List;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PlaceBulkCreateRequest;
+import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -16,12 +19,15 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -31,6 +37,7 @@ public class PlaceService {
 
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
+    private final PlaceBulkRegistrar placeBulkRegistrar;
 
     @Transactional
     public PlaceResponse create(PlaceCreateRequest request, Long userId) {
@@ -67,6 +74,55 @@ public class PlaceService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 장소 일괄 등록. 건별로 부분 성공한다.
+     *
+     * 클래스에 @Transactional(readOnly = true)가 걸려 있으므로, 이 루프가 바깥 트랜잭션에
+     * 묶이지 않도록 NOT_SUPPORTED로 명시한다. 실제 쓰기는 PlaceBulkRegistrar가
+     * 건별 REQUIRES_NEW 트랜잭션에서 수행한다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PlaceBulkCreateResponse createBulk(PlaceBulkCreateRequest request, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        // 지도 권한·유형은 맵 단위라 루프 밖에서 한 번만 확인한다.
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
+        PlaceStatus status = resolveInitialStatus(memberInfo);
+
+        List<PlaceBulkCreateResponse.Result> results = new ArrayList<>(request.places().size());
+        int created = 0;
+        for (int index = 0; index < request.places().size(); index++) {
+            PlaceBulkCreateRequest.Item item = request.places().get(index);
+            try {
+                Long placeId = placeBulkRegistrar.register(item, request.mapId(), userId, status);
+                results.add(PlaceBulkCreateResponse.Result.created(index, item.name(), placeId));
+                created++;
+            } catch (BusinessException e) {
+                // 지금은 등록기가 DUPLICATE_PLACE만 던지지만, 다른 도메인 예외를 중복으로
+                // 뭉개지 않도록 코드를 확인하고 분기한다.
+                if (e.getErrorCode() == PlaceErrorCode.DUPLICATE_PLACE) {
+                    results.add(PlaceBulkCreateResponse.Result.duplicate(index, item.name(), e.getMessage()));
+                } else {
+                    results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), e.getMessage()));
+                }
+            } catch (DataIntegrityViolationException e) {
+                // 사전 체크를 통과한 뒤 동시 요청이 먼저 들어온 경우.
+                if (isDuplicatePlaceConstraintViolation(e)) {
+                    results.add(PlaceBulkCreateResponse.Result.duplicate(
+                        index, item.name(), PlaceErrorCode.DUPLICATE_PLACE.getMessage()));
+                } else {
+                    results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), "등록에 실패했습니다."));
+                }
+            } catch (RuntimeException e) {
+                log.warn("일괄 등록 중 예상치 못한 실패: index={}, name={}", index, item.name(), e);
+                results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), "등록에 실패했습니다."));
+            }
+        }
+        return new PlaceBulkCreateResponse(
+            request.places().size(), created, request.places().size() - created, results);
     }
 
     // 길이 초과, NOT NULL 등 다른 무결성 위반까지 DUPLICATE_PLACE로 뭉개지 않도록,

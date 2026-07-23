@@ -2,6 +2,8 @@ package com.moamap.place.controller;
 
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PlaceBulkCreateRequest;
+import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -50,6 +52,23 @@ public class PlaceController {
         @RequestHeader("X-User-Id") Long userId
     ) {
         return ApiResponse.success(placeService.create(request, userId));
+    }
+
+    @PostMapping("/bulk")
+    @Operation(
+        summary = "장소 일괄 등록",
+        description = """
+            여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
+            전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
+            지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            """
+    )
+    public ApiResponse<PlaceBulkCreateResponse> createBulk(
+        @Valid @RequestBody PlaceBulkCreateRequest request,
+        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
+        @RequestHeader("X-User-Id") Long userId
+    ) {
+        return ApiResponse.success(placeService.createBulk(request, userId));
     }
 
     @GetMapping("/{id}")

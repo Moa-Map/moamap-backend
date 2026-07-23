@@ -31,7 +31,7 @@ import static org.mockito.BDDMockito.given;
  * checkDuplicate의 SELECT-then-INSERT race condition을 실제로 막아주는지 검증한다.
  */
 @DataJpaTest
-@Import(PlaceService.class)
+@Import({PlaceService.class, PlaceBulkRegistrar.class})
 @TestPropertySource(properties = "spring.jpa.properties.hibernate.default_schema=")
 class PlaceServiceConcurrencyTest {
 
