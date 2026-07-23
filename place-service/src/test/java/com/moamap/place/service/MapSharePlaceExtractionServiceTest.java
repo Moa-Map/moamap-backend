@@ -26,6 +26,7 @@ import org.mockito.quality.Strictness;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
@@ -102,8 +103,11 @@ class MapSharePlaceExtractionServiceTest {
     void extract는_매칭_실패건을_사유와_함께_따로_보고한다() {
         ExtractedList list = new ExtractedList(PlaceSourceType.NAVER_MAP, "list-id", "원슐랭",
             null, 2, List.of(place("청년다방"), place("없는가게")));
-        given(kakaoPlaceMatcher.match(any()))
-            .willReturn(MatchResult.matched(document("111", "청년다방")))
+        // 재매칭은 병렬로 호출되므로 호출 순서에 의존하는 스텁은 flaky하다.
+        // 입력(장소명)에 따라 결과를 고정한다.
+        given(kakaoPlaceMatcher.match(argThat(p -> p != null && "청년다방".equals(p.name()))))
+            .willReturn(MatchResult.matched(document("111", "청년다방")));
+        given(kakaoPlaceMatcher.match(argThat(p -> p != null && "없는가게".equals(p.name()))))
             .willReturn(MatchResult.unmatched(UnmatchReason.NAME_MISMATCH));
 
         MapShareExtractResponse response = service(provider(PlaceSourceType.NAVER_MAP, "naver.me", list))
