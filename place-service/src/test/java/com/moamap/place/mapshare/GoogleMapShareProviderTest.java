@@ -20,6 +20,14 @@ class GoogleMapShareProviderTest {
     }
 
     @Test
+    void supports는_호스트가_아닌_경로_쿼리에_도메인이_섞여도_거부한다() {
+        // SSRF 방지: 부분 문자열이 아니라 실제 호스트로 판정해야 한다.
+        assertThat(provider.supports("http://169.254.169.254/maps?x=google.com")).isFalse();
+        assertThat(provider.supports("http://evil.com/goo.gl/maps")).isFalse();
+        assertThat(provider.supports("http://goo.gl.evil.com/maps")).isFalse();
+    }
+
+    @Test
     void findListId는_data_파라미터의_2s_뒤_값을_뽑는다() {
         assertThat(GoogleMapShareProvider.findListId(
             "https://www.google.com/maps/@/data=!4m3!11m2!2s7HluZjfYJKBw0-5fFiBQRY6bISz_yQ!3e3"))

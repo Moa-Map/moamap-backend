@@ -53,7 +53,7 @@ public class NaverMapShareProvider implements MapShareProvider {
 
     @Override
     public boolean supports(String url) {
-        return url.contains("naver.me") || url.contains("map.naver.com");
+        return ShareLinkUrlParser.hostMatches(url, "naver.me", "map.naver.com");
     }
 
     @Override

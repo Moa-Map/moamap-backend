@@ -44,9 +44,8 @@ public class KakaoMapShareProvider implements MapShareProvider {
 
     @Override
     public boolean supports(String url) {
-        return url.contains("kko.to")
-            || url.contains("map.kakao.com")
-            || url.contains("applink.map.kakao.com");
+        // applink.map.kakao.com은 map.kakao.com 서브도메인이라 아래 도메인으로 함께 매칭된다.
+        return ShareLinkUrlParser.hostMatches(url, "kko.to", "map.kakao.com");
     }
 
     @Override

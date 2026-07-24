@@ -35,6 +35,14 @@ class NaverMapShareProviderTest {
     }
 
     @Test
+    void supports는_호스트가_아닌_경로_쿼리에_도메인이_섞여도_거부한다() {
+        // SSRF 방지: 부분 문자열이 아니라 실제 호스트로 판정해야 한다.
+        assertThat(provider.supports("http://169.254.169.254/latest/meta-data/?x=map.naver.com")).isFalse();
+        assertThat(provider.supports("http://evil.com/naver.me")).isFalse();
+        assertThat(provider.supports("http://naver.me.evil.com/path")).isFalse();
+    }
+
+    @Test
     void findShareId는_쿼리스트링의_id에서_32자리_hex를_뽑는다() {
         assertThat(NaverMapShareProvider.findShareId(
             "https://map.naver.com/p?id=189963DE7AF14407A72B4316370DEDE5"))

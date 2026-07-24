@@ -59,9 +59,8 @@ public class GoogleMapShareProvider implements MapShareProvider {
 
     @Override
     public boolean supports(String url) {
-        return url.contains("maps.app.goo.gl")
-            || url.contains("google.com/maps")
-            || url.contains("goo.gl/maps");
+        // maps.app.goo.gl은 goo.gl 서브도메인이라 goo.gl로 함께 매칭된다.
+        return ShareLinkUrlParser.hostMatches(url, "goo.gl", "google.com");
     }
 
     @Override

@@ -21,6 +21,14 @@ class KakaoMapShareProviderTest {
     }
 
     @Test
+    void supports는_호스트가_아닌_경로_쿼리에_도메인이_섞여도_거부한다() {
+        // SSRF 방지: 부분 문자열이 아니라 실제 호스트로 판정해야 한다.
+        assertThat(provider.supports("http://169.254.169.254/?x=map.kakao.com")).isFalse();
+        assertThat(provider.supports("http://evil.com/kko.to")).isFalse();
+        assertThat(provider.supports("http://map.kakao.com.evil.com/path")).isFalse();
+    }
+
+    @Test
     void findFolderId는_folderid_파라미터를_뽑는다() {
         assertThat(KakaoMapShareProvider.findFolderId(
             "https://map.kakao.com/?target=other&folderid=23211144")).isEqualTo("23211144");
