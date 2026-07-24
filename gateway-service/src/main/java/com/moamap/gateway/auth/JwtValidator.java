@@ -1,8 +1,8 @@
 package com.moamap.gateway.auth;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import javax.crypto.SecretKey;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -18,7 +18,7 @@ public class JwtValidator {
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public Optional<Long> extractUserId(String token) {
+    public TokenValidation validate(String token) {
         try {
             String subject = Jwts.parser()
                 .verifyWith(key)
@@ -26,9 +26,12 @@ public class JwtValidator {
                 .parseSignedClaims(token)
                 .getPayload()
                 .getSubject();
-            return Optional.of(Long.valueOf(subject));
+            return TokenValidation.valid(Long.valueOf(subject));
+        } catch (ExpiredJwtException e) {
+            // 만료는 위조·형식오류와 구분한다. 앱이 리프레시로 자동 갱신할 수 있게.
+            return TokenValidation.expired();
         } catch (JwtException | IllegalArgumentException e) {
-            return Optional.empty(); // 위조·만료·형식오류는 인증 실패로
+            return TokenValidation.invalid();
         }
     }
 }

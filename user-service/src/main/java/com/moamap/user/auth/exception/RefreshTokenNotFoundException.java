@@ -1,8 +1,11 @@
 package com.moamap.user.auth.exception;
 
-public class RefreshTokenNotFoundException extends RuntimeException {
+import com.moamap.common.exception.BusinessException;
+import com.moamap.user.exception.UserErrorCode;
+
+public class RefreshTokenNotFoundException extends BusinessException {
 
     public RefreshTokenNotFoundException(String message) {
-        super(message);
+        super(UserErrorCode.REFRESH_TOKEN_EXPIRED, message);
     }
 }
