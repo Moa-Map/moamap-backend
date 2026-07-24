@@ -1,6 +1,7 @@
 package com.moamap.map.controller;
 
 import java.util.List;
+import com.moamap.common.response.ApiResponse;
 import com.moamap.map.dto.FootTrafficAreaResponse;
 import com.moamap.map.dto.FootTrafficCongestionResponse;
 import com.moamap.map.service.FootTrafficQueryService;
@@ -17,12 +18,12 @@ public class FootTrafficController {
     private final FootTrafficQueryService queryService;
 
     @GetMapping("/areas")
-    public List<FootTrafficAreaResponse> getAreas() {
-        return queryService.findAllAreas();
+    public ApiResponse<List<FootTrafficAreaResponse>> getAreas() {
+        return ApiResponse.success(queryService.findAllAreas());
     }
 
     @GetMapping("/congestion")
-    public List<FootTrafficCongestionResponse> getCongestion() {
-        return queryService.findAllCongestion();
+    public ApiResponse<List<FootTrafficCongestionResponse>> getCongestion() {
+        return ApiResponse.success(queryService.findAllCongestion());
     }
 }
