@@ -54,6 +54,19 @@ class MyPageControllerTest {
     }
 
     @Test
+    void 시각은_오프셋_포함_ISO_8601_문자열로_직렬화된다() throws Exception {
+        MyPageResponse fixed = new MyPageResponse(1L, "길동", "a@b.com", "http://img", "kakao", Role.USER,
+                Instant.parse("2026-07-24T08:15:00Z"), Instant.parse("2026-01-01T00:00:00Z"), null);
+        given(myPageService.getMyPage(1L)).willReturn(fixed);
+
+        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", 1L))
+                .andExpect(status().isOk())
+                // epoch 숫자/배열이 아니라 ...Z 문자열로 나가야 앱이 타임존을 오해하지 않는다.
+                .andExpect(jsonPath("$.data.lastLoginAt").value("2026-07-24T08:15:00Z"))
+                .andExpect(jsonPath("$.data.createdAt").value("2026-01-01T00:00:00Z"));
+    }
+
+    @Test
     void 자기소개가_없는_사용자를_조회하면_자기소개는_null이다() throws Exception {
         given(myPageService.getMyPage(2L)).willReturn(
                 응답(2L, "길동", "a@b.com", "http://img", null));
