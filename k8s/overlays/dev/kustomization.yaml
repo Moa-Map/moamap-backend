@@ -1,13 +1,25 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: moamap
+namespace: dev
 
 resources:
   - ../../base
 
+# base/namespace.yaml은 공용 이름(moamap)으로 고정돼 있어서, dev 전용으로 이름만 덮어씀.
 # 유동인구 혼잡도 동기화 주기 — 테스트 중 API 호출량을 줄이려고 1시간으로 늘림 (기본값은 5분).
+#
+# PUBLIC_GATEWAY_URL — Swagger servers용 gateway 외부 주소. 비밀값 아님.
+#   Service 재생성 시에만 IP가 바뀜 — 안 맞으면 아래로 확인 후 갱신:
+#   kubectl get svc -n dev gateway-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 patches:
+  - target:
+      kind: Namespace
+      name: moamap
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: dev
   - target:
       kind: ConfigMap
       name: moamap-config
@@ -15,6 +27,9 @@ patches:
       - op: add
         path: /data/CONGESTION_SYNC_INTERVAL_MS
         value: "3600000"
+      - op: add
+        path: /data/PUBLIC_GATEWAY_URL
+        value: "http://125.6.39.211"
 
 # 개발 환경 조정은 여기서 한다. GitHub Actions가 빌드 후 newTag를 커밋 SHA로 갱신함.
 # #46 머지로 base의 image가 이미 실제 NCR 경로라 newName은 불필요, newTag만 갱신.

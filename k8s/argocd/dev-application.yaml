@@ -11,8 +11,7 @@ spec:
     path: k8s/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    # TODO: #46 머지 후 dev/prod 네임스페이스 분리되면 moamap -> dev로 변경.
-    namespace: moamap
+    namespace: dev
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
