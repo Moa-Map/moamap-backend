@@ -119,14 +119,14 @@ public class PlaceController {
     }
 
     @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "장소 삭제", description = "장소를 등록한 본인만 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
-    public void delete(
+    public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
         @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
         @RequestHeader("X-User-Id") Long userId
     ) {
         placeService.delete(id, userId);
+        return ApiResponse.success();
     }
 
     @PatchMapping("/{id}/approve")

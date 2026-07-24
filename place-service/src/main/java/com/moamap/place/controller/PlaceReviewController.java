@@ -67,14 +67,14 @@ public class PlaceReviewController {
     }
 
     @DeleteMapping("/{reviewId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "리뷰 삭제", description = "본인이 작성한 리뷰만 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
-    public void delete(
+    public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
         @Parameter(description = "리뷰 ID", example = "1") @PathVariable Long reviewId,
         @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
         @RequestHeader("X-User-Id") Long userId
     ) {
         placeReviewService.delete(placeId, reviewId, userId);
+        return ApiResponse.success();
     }
 }

@@ -105,10 +105,11 @@ class PlaceReviewControllerTest {
     }
 
     @Test
-    void delete는_성공하면_204를_반환한다() throws Exception {
+    void delete는_성공하면_success_envelope을_반환한다() throws Exception {
         // when & then
         mockMvc.perform(delete("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 2L))
-            .andExpect(status().isNoContent());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test
