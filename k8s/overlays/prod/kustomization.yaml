@@ -1,29 +1,29 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: moamap
+namespace: prod
 
 resources:
   - ../../base
 
-# 유동인구 혼잡도 동기화 주기 — 테스트 중 API 호출량을 줄이려고 1시간으로 늘림 (기본값은 5분).
+# base/namespace.yaml은 공용 이름(moamap)으로 고정돼 있어서, prod 전용으로 이름만 덮어씀.
 patches:
   - target:
-      kind: ConfigMap
-      name: moamap-config
+      kind: Namespace
+      name: moamap
     patch: |-
-      - op: add
-        path: /data/CONGESTION_SYNC_INTERVAL_MS
-        value: "3600000"
+      - op: replace
+        path: /metadata/name
+        value: prod
 
-# 개발 환경 조정은 여기서 한다. GitHub Actions가 빌드 후 newTag를 커밋 SHA로 갱신함.
+# GitHub Actions(cd-prod.yml)가 main push 시 newTag를 커밋 SHA로 갱신함.
 # #46 머지로 base의 image가 이미 실제 NCR 경로라 newName은 불필요, newTag만 갱신.
 images:
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/gateway-service
-    newTag: dev
+    newTag: prod
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/user-service
-    newTag: dev
+    newTag: prod
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/map-service
-    newTag: dev
+    newTag: prod
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/place-service
-    newTag: dev
+    newTag: prod

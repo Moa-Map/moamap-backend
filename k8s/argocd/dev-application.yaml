@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: moamap-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Moa-Map/moamap-backend.git
+    targetRevision: develop
+    path: k8s/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    # TODO: #46 머지 후 dev/prod 네임스페이스 분리되면 moamap -> dev로 변경.
+    namespace: moamap
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    # 자동 동기화 안 함 — 배포는 ArgoCD UI/CLI에서 수동 승인.
