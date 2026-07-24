@@ -3,6 +3,8 @@ package com.moamap.gateway.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -58,6 +60,20 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void 보호_경로에_만료된_토큰이면_EXPIRED_TOKEN_코드로_401을_반환한다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+            MockServerHttpRequest.post("/api/v1/places").header(HttpHeaders.AUTHORIZATION, expiredBearer(7L)));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(chain.invoked()).isFalse();
+        String body = exchange.getResponse().getBodyAsString().block();
+        assertThat(body).contains("COMMON_007"); // EXPIRED_TOKEN
+    }
+
+    @Test
     void 클라이언트가_보낸_X_User_Id는_토큰_값으로_덮어쓴다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(
@@ -106,6 +122,16 @@ class JwtAuthenticationFilterTest {
 
     private static String bearer(long userId) {
         String token = Jwts.builder().subject(String.valueOf(userId))
+            .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .compact();
+        return "Bearer " + token;
+    }
+
+    private static String expiredBearer(long userId) {
+        Instant past = Instant.now().minusSeconds(60);
+        String token = Jwts.builder().subject(String.valueOf(userId))
+            .issuedAt(Date.from(past.minusSeconds(60)))
+            .expiration(Date.from(past))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
             .compact();
         return "Bearer " + token;

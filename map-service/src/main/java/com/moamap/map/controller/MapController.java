@@ -92,12 +92,12 @@ public class MapController {
 
     @Operation(summary = "지도 삭제", description = "OWNER만 삭제할 수 있다.")
     @DeleteMapping("/{mapId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(
+    public ApiResponse<Void> delete(
         @PathVariable Long mapId,
         @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         mapService.delete(mapId, userId);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "커뮤니티 지도 참여", description = "공개 지도에 바로 참여한다.")
@@ -120,12 +120,12 @@ public class MapController {
 
     @Operation(summary = "지도 나가기", description = "참여 중인 지도에서 나간다. OWNER는 나갈 수 없다.")
     @DeleteMapping("/{mapId}/members/me")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void leave(
+    public ApiResponse<Void> leave(
         @PathVariable Long mapId,
         @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         mapService.leave(mapId, userId);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "멤버 역할 조회", description = "지도 유형과 해당 사용자의 역할을 반환한다. (place-service 승인 판단용)")

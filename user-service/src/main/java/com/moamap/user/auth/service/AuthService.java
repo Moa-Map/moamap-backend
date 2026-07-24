@@ -10,7 +10,8 @@ import com.moamap.user.refreshtoken.RefreshTokenStore;
 import com.moamap.user.user.entity.User;
 import com.moamap.user.user.repository.UserRepository;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,13 @@ public class AuthService {
     @Transactional
     public TokenResponse login(String kakaoAccessToken) {
         OAuthUserInfo info = oAuthClient.getUserInfo(kakaoAccessToken);
-        User user = userRepository.findByProviderAndProviderId(info.provider(), info.providerId())
-                .orElseGet(() -> userRepository.save(User.createSocialUser(
-                        info.provider(), info.providerId(),
-                        resolveNickname(info), info.email(), info.profileImageUrl())));
-        user.updateLastLogin(LocalDateTime.now());
-        return issueTokens(user);
+        Optional<User> existing = userRepository.findByProviderAndProviderId(info.provider(), info.providerId());
+        boolean newUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> userRepository.save(User.createSocialUser(
+                info.provider(), info.providerId(),
+                resolveNickname(info), info.email(), info.profileImageUrl())));
+        user.updateLastLogin(Instant.now());
+        return issueTokens(user, newUser);
     }
 
     // 닉네임은 카카오 동의항목에서 선택 동의라 거부 시 null로 온다. NOT NULL 컬럼이므로 기본값으로 대체.
@@ -53,7 +55,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RefreshTokenNotFoundException("사용자를 찾을 수 없습니다."));
         refreshTokenStore.delete(refreshToken); // 회전: 기존 토큰 폐기 후 새로 발급
-        return issueTokens(user);
+        return issueTokens(user, false);
     }
 
     @Transactional
@@ -61,12 +63,13 @@ public class AuthService {
         refreshTokenStore.delete(refreshToken);
     }
 
-    private TokenResponse issueTokens(User user) {
+    private TokenResponse issueTokens(User user, boolean newUser) {
         String accessToken = jwtProvider.createAccessToken(user.getId(), user.getRole());
         String refreshToken = UUID.randomUUID().toString();
         Duration ttl = Duration.ofDays(jwtProperties.refreshTokenExpirationDays());
         refreshTokenStore.save(refreshToken, user.getId(), ttl);
         return new TokenResponse(
-                accessToken, refreshToken, "Bearer", jwtProvider.getAccessTokenExpiresInSeconds());
+                accessToken, refreshToken, "Bearer",
+                jwtProvider.getAccessTokenExpiresInSeconds(), ttl.getSeconds(), newUser);
     }
 }

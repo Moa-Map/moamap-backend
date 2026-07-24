@@ -11,7 +11,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -54,17 +54,18 @@ public class User {
     @Column(nullable = false, length = 20)
     private Role role;
 
+    // 시각은 UTC 기준 Instant로 저장한다. 응답도 오프셋(...Z) 포함 ISO-8601로 나가 앱이 로컬로 변환한다.
     @Column(name = "last_login_at")
-    private LocalDateTime lastLoginAt;
+    private Instant lastLoginAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    private Instant deletedAt;
 
     private User(String provider, String providerId, String nickname,
                  String email, String profileImageUrl) {
@@ -81,7 +82,7 @@ public class User {
         return new User(provider, providerId, nickname, email, profileImageUrl);
     }
 
-    public void updateLastLogin(LocalDateTime at) {
+    public void updateLastLogin(Instant at) {
         this.lastLoginAt = at;
     }
 
@@ -102,13 +103,13 @@ public class User {
 
     @PrePersist
     void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = Instant.now();
     }
 }

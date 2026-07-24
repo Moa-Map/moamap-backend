@@ -65,6 +65,8 @@ class AuthServiceTest {
         assertThat(response.refreshToken()).isNotBlank();
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresIn()).isEqualTo(1800L);
+        assertThat(response.refreshTokenExpiresIn()).isEqualTo(Duration.ofDays(14).getSeconds());
+        assertThat(response.isNewUser()).isTrue();
         verify(refreshTokenStore).save(anyString(), eq(1L), any(Duration.class));
     }
 
@@ -82,6 +84,7 @@ class AuthServiceTest {
         TokenResponse response = authService.login("kakao-token");
 
         assertThat(response.accessToken()).isEqualTo("access-jwt");
+        assertThat(response.isNewUser()).isFalse();
         verify(userRepository, never()).save(any(User.class));
     }
 

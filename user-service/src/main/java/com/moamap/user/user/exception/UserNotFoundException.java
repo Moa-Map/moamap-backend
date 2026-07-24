@@ -1,8 +1,11 @@
 package com.moamap.user.user.exception;
 
-public class UserNotFoundException extends RuntimeException {
+import com.moamap.common.exception.BusinessException;
+import com.moamap.user.exception.UserErrorCode;
+
+public class UserNotFoundException extends BusinessException {
 
     public UserNotFoundException(String message) {
-        super(message);
+        super(UserErrorCode.USER_NOT_FOUND, message);
     }
 }
