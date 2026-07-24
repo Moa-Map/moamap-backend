@@ -28,14 +28,18 @@ class AuthControllerTest {
     @Test
     void 카카오_로그인_성공시_토큰을_반환한다() throws Exception {
         given(authService.login("kakao-token"))
-                .willReturn(new TokenResponse("access", "refresh", "Bearer", 1800));
+                .willReturn(new TokenResponse("access", "refresh", "Bearer", 1800, 1209600, true));
 
         mockMvc.perform(post("/api/v1/auth/kakao/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"kakaoAccessToken\":\"kakao-token\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").value("access"))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").value("access"))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.data.expiresIn").value(1800))
+                .andExpect(jsonPath("$.data.refreshTokenExpiresIn").value(1209600))
+                .andExpect(jsonPath("$.data.isNewUser").value(true));
     }
 
     @Test
@@ -54,6 +58,8 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/kakao/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"kakaoAccessToken\":\"bad\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("USER_001"));
     }
 }
