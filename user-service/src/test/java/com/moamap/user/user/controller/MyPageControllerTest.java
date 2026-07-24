@@ -13,7 +13,7 @@ import com.moamap.user.user.dto.UpdateMyPageRequest;
 import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.exception.UserNotFoundException;
 import com.moamap.user.user.service.MyPageService;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -33,7 +33,7 @@ class MyPageControllerTest {
     private static MyPageResponse 응답(Long id, String nickname, String email, String profileImageUrl,
                                       String introduction) {
         return new MyPageResponse(id, nickname, email, profileImageUrl, "kakao", Role.USER,
-                LocalDateTime.now(), LocalDateTime.now(), introduction);
+                Instant.now(), Instant.now(), introduction);
     }
 
     @Test
@@ -43,13 +43,27 @@ class MyPageControllerTest {
 
         mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", 1L))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.nickname").value("길동"))
-                .andExpect(jsonPath("$.email").value("a@b.com"))
-                .andExpect(jsonPath("$.profileImageUrl").value("http://img"))
-                .andExpect(jsonPath("$.provider").value("kakao"))
-                .andExpect(jsonPath("$.role").value("USER"))
-                .andExpect(jsonPath("$.introduction").value("안녕하세요"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(1L))
+                .andExpect(jsonPath("$.data.nickname").value("길동"))
+                .andExpect(jsonPath("$.data.email").value("a@b.com"))
+                .andExpect(jsonPath("$.data.profileImageUrl").value("http://img"))
+                .andExpect(jsonPath("$.data.provider").value("kakao"))
+                .andExpect(jsonPath("$.data.role").value("USER"))
+                .andExpect(jsonPath("$.data.introduction").value("안녕하세요"));
+    }
+
+    @Test
+    void 시각은_오프셋_포함_ISO_8601_문자열로_직렬화된다() throws Exception {
+        MyPageResponse fixed = new MyPageResponse(1L, "길동", "a@b.com", "http://img", "kakao", Role.USER,
+                Instant.parse("2026-07-24T08:15:00Z"), Instant.parse("2026-01-01T00:00:00Z"), null);
+        given(myPageService.getMyPage(1L)).willReturn(fixed);
+
+        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", 1L))
+                .andExpect(status().isOk())
+                // epoch 숫자/배열이 아니라 ...Z 문자열로 나가야 앱이 타임존을 오해하지 않는다.
+                .andExpect(jsonPath("$.data.lastLoginAt").value("2026-07-24T08:15:00Z"))
+                .andExpect(jsonPath("$.data.createdAt").value("2026-01-01T00:00:00Z"));
     }
 
     @Test
@@ -59,7 +73,7 @@ class MyPageControllerTest {
 
         mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", 2L))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.introduction").value(org.hamcrest.Matchers.nullValue()));
+                .andExpect(jsonPath("$.data.introduction").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
@@ -67,7 +81,9 @@ class MyPageControllerTest {
         given(myPageService.getMyPage(999L)).willThrow(new UserNotFoundException("사용자를 찾을 수 없습니다."));
 
         mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", 999L))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("USER_003"));
     }
 
     @Test
@@ -80,8 +96,8 @@ class MyPageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nickname\":\"새닉네임\",\"profileImageUrl\":\"http://new\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("새닉네임"))
-                .andExpect(jsonPath("$.profileImageUrl").value("http://new"));
+                .andExpect(jsonPath("$.data.nickname").value("새닉네임"))
+                .andExpect(jsonPath("$.data.profileImageUrl").value("http://new"));
     }
 
     @Test
@@ -113,7 +129,8 @@ class MyPageControllerTest {
                         .header("X-User-Id", 999L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nickname\":\"새닉네임\"}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("USER_003"));
     }
 
     @Test
@@ -126,7 +143,7 @@ class MyPageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"new@b.com\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("new@b.com"));
+                .andExpect(jsonPath("$.data.email").value("new@b.com"));
     }
 
     @Test
@@ -148,6 +165,6 @@ class MyPageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"introduction\":\"안녕하세요\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.introduction").value("안녕하세요"));
+                .andExpect(jsonPath("$.data.introduction").value("안녕하세요"));
     }
 }

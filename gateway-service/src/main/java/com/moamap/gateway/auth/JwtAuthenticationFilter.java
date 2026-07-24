@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.CommonErrorCode;
+import com.moamap.common.exception.ErrorCode;
 import com.moamap.common.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -52,17 +53,26 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-        Optional<Long> userId = resolveToken(request).flatMap(jwtValidator::extractUserId);
+        TokenValidation validation = resolveToken(request)
+            .map(jwtValidator::validate)
+            .orElseGet(TokenValidation::invalid); // 토큰 자체가 없으면 무효 취급 (단, 공개 경로면 통과)
 
-        if (userId.isEmpty() && !isPublic(request)) {
-            return unauthorized(exchange);
+        if (!validation.isValid() && !isPublic(request)) {
+            // 만료면 EXPIRED_TOKEN(앱이 자동 갱신), 없음·위조면 UNAUTHORIZED(재로그인)로 구분해서 알려준다.
+            ErrorCode errorCode = validation.status() == TokenValidation.Status.EXPIRED
+                ? CommonErrorCode.EXPIRED_TOKEN
+                : CommonErrorCode.UNAUTHORIZED;
+            return reject(exchange, errorCode);
         }
 
+        Long userId = validation.isValid() ? validation.userId() : null;
         ServerHttpRequest mutatedRequest = request.mutate()
             .headers(headers -> {
                 // 클라가 보낸 X-User-Id는 무조건 버리고 검증된 것만 넣는다 (사칭 방지)
                 headers.remove(USER_ID_HEADER);
-                userId.ifPresent(id -> headers.set(USER_ID_HEADER, String.valueOf(id)));
+                if (userId != null) {
+                    headers.set(USER_ID_HEADER, String.valueOf(userId));
+                }
             })
             .build();
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
@@ -87,11 +97,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return PUBLIC_ENDPOINTS.stream().anyMatch(endpoint -> endpoint.matches(method, path));
     }
 
-    private Mono<Void> unauthorized(ServerWebExchange exchange) {
+    private Mono<Void> reject(ServerWebExchange exchange, ErrorCode errorCode) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.setStatusCode(HttpStatus.valueOf(errorCode.getStatus()));
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        DataBuffer buffer = response.bufferFactory().wrap(serialize(ApiResponse.error(CommonErrorCode.UNAUTHORIZED)));
+        DataBuffer buffer = response.bufferFactory().wrap(serialize(ApiResponse.error(errorCode)));
         return response.writeWith(Mono.just(buffer));
     }
 

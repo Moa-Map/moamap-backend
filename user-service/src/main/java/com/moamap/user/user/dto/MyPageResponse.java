@@ -1,7 +1,7 @@
 package com.moamap.user.user.dto;
 
 import com.moamap.user.user.entity.Role;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record MyPageResponse(
         Long id,
@@ -10,8 +10,9 @@ public record MyPageResponse(
         String profileImageUrl,
         String provider,
         Role role,
-        LocalDateTime lastLoginAt,
-        LocalDateTime createdAt,
+        // UTC 오프셋(...Z) 포함 ISO-8601로 직렬화된다. 앱은 파싱 후 기기 로컬(KST)로 변환.
+        Instant lastLoginAt,
+        Instant createdAt,
         String introduction
 ) {
 }
