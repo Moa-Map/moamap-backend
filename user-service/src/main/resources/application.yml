@@ -46,3 +46,11 @@ kakao:
   app-id: ${KAKAO_APP_ID:0}
   token-info-uri: https://kapi.kakao.com/v1/user/access_token_info
   user-info-uri: https://kapi.kakao.com/v2/user/me
+  # 아래는 개발용 카카오 콜백(dev-login)에서만 사용
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8081/api/v1/auth/test/kakao/callback}
+  token-uri: https://kauth.kakao.com/oauth/token
+
+# 개발용 카카오 로그인 콜백 활성화 플래그. 운영에서는 반드시 false(기본값)로 두어 엔드포인트 자체가 뜨지 않게 한다.
+dev-login:
+  enabled: ${DEV_LOGIN_ENABLED:false}

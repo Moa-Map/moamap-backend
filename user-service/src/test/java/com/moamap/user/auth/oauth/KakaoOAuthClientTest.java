@@ -21,7 +21,7 @@ class KakaoOAuthClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KakaoOAuthClient client = new KakaoOAuthClient(
-                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI));
+                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI, null, null, null));
 
         server.expect(requestTo(TOKEN_INFO_URI))
                 .andRespond(withSuccess("{\"id\":111,\"app_id\":12345}", MediaType.APPLICATION_JSON));
@@ -45,7 +45,7 @@ class KakaoOAuthClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KakaoOAuthClient client = new KakaoOAuthClient(
-                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI));
+                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI, null, null, null));
 
         server.expect(requestTo(TOKEN_INFO_URI))
                 .andRespond(withSuccess("{\"id\":111,\"app_id\":99999}", MediaType.APPLICATION_JSON));
@@ -59,7 +59,7 @@ class KakaoOAuthClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KakaoOAuthClient client = new KakaoOAuthClient(
-                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI));
+                builder, new KakaoProperties(12345L, TOKEN_INFO_URI, USER_INFO_URI, null, null, null));
 
         server.expect(requestTo(TOKEN_INFO_URI))
                 .andRespond(withSuccess("{\"id\":111,\"app_id\":12345}", MediaType.APPLICATION_JSON));
