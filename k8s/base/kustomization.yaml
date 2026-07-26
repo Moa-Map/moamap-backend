@@ -10,7 +10,7 @@ configMapGenerator:
 resources:
   - namespace.yaml
   - configmap.yaml
-  - postgres/deployment.yaml
+  - postgres/statefulset.yaml
   - postgres/service.yaml
   - redis/deployment.yaml
   - redis/service.yaml
