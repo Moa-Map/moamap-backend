@@ -1,0 +1,9 @@
+# dev 클러스터에서만 개발용 카카오 로그인 콜백을 켠다. base에는 절대 넣지 않는다
+# (base가 그대로 prod 오버레이에 흘러들어가면 운영에서 엔드포인트가 열릴 수 있음).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: moamap-config
+  namespace: moamap
+data:
+  DEV_LOGIN_ENABLED: "true"
