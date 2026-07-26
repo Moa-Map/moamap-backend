@@ -15,13 +15,14 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1001
         seccompProfile:
           type: RuntimeDefault
       imagePullSecrets:
         - name: ncr-cred
       containers:
         - name: user-service
-          image: REPLACE_ME_NCR/moamap/user-service:latest
+          image: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/user-service:latest
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
