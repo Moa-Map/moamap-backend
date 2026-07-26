@@ -9,6 +9,8 @@ resources:
 # PUBLIC_GATEWAY_URL — Swagger servers용 gateway 외부 주소. 비밀값 아님.
 #   Service 재생성 시에만 IP가 바뀜 — 안 맞으면 아래로 확인 후 갱신:
 #   kubectl get svc -n dev gateway-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+#
+# DEV_LOGIN_ENABLED — 개발용 카카오 로그인 콜백 활성화. dev에서만 켠다(운영 오버레이에는 넣지 않음).
 patches:
   - target:
       kind: Namespace
@@ -27,6 +29,9 @@ patches:
       - op: add
         path: /data/PUBLIC_GATEWAY_URL
         value: "http://125.6.39.211"
+      - op: add
+        path: /data/DEV_LOGIN_ENABLED
+        value: "true"
 # 개발 환경 조정은 여기서 한다. GitHub Actions가 빌드 후 newTag를 커밋 SHA로 갱신함.
 # #46 머지로 base의 image가 이미 실제 NCR 경로라 newName은 불필요, newTag만 갱신.
 images:

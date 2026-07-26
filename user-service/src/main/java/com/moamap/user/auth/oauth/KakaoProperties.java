@@ -6,6 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record KakaoProperties(
         long appId,
         String tokenInfoUri,
-        String userInfoUri
+        String userInfoUri,
+        // 아래는 개발용 카카오 콜백(dev-login)에서만 쓰는 인가코드 교환 설정.
+        String restApiKey,
+        String redirectUri,
+        String tokenUri
 ) {
 }
