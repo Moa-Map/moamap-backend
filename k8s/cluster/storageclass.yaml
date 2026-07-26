@@ -1,0 +1,20 @@
+# StorageClass는 네임스페이스에 속하지 않는 클러스터 전역 리소스라 base/overlays 밖에 둔다.
+# base에 넣으면 dev·prod 오버레이가 같은 리소스를 각각 관리하려 해 충돌하므로,
+# 클러스터당 1회만 apply하는 리소스는 이 디렉터리로 분리했다. (적용법은 README.md 참고)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cinder-block
+  annotations:
+    # 기본 StorageClass로 지정 — PVC에 storageClassName을 생략해도 이걸 쓴다.
+    storageclass.kubernetes.io/is-default-class: "true"
+# NKS의 cinder-csi-plugin 애드온이 제공하는 프로비저너. 애드온 미설치 시 PVC가 Pending에 걸린다.
+provisioner: cinder.csi.openstack.org
+# PVC를 지워도 볼륨(데이터)은 남긴다 — DB 데이터를 실수로 날리지 않기 위함.
+# 대신 방치하면 과금이 계속되므로 정리 절차를 README.md에 문서화했다.
+reclaimPolicy: Retain
+# Pod가 스케줄될 노드가 정해진 뒤에 볼륨을 만든다.
+# Immediate로 두면 볼륨이 먼저 임의 AZ에 생겨 다른 AZ에 뜬 Pod에 붙지 못한다(블록스토리지는 AZ 간 이동 불가).
+volumeBindingMode: WaitForFirstConsumer
+# 운영 중 용량 부족 시 PVC 수정만으로 늘릴 수 있게 허용.
+allowVolumeExpansion: true
