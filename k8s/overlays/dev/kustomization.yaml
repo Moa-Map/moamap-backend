@@ -32,6 +32,9 @@ patches:
       - op: add
         path: /data/DEV_LOGIN_ENABLED
         value: "true"
+      - op: add
+        path: /data/KAKAO_REDIRECT_URI
+        value: "http://125.6.39.211/api/v1/auth/test/kakao/callback"
 # 개발 환경 조정은 여기서 한다. GitHub Actions가 빌드 후 newTag를 커밋 SHA로 갱신함.
 # #46 머지로 base의 image가 이미 실제 NCR 경로라 newName은 불필요, newTag만 갱신.
 images:
