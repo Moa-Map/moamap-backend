@@ -45,3 +45,25 @@ map:
   congestion:
     # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
     sync-interval-ms: ${CONGESTION_SYNC_INTERVAL_MS:300000}
+  recommendation:
+    # 홈 화면 추천 지도. 값을 바꿔가며 추천 결과를 조정할 수 있게 코드 밖으로 뺐다.
+    default-size: 5
+    max-size: 20
+    # 점수를 매길 후보 상한. 지도가 늘어도 계산량이 이 선에서 유지된다.
+    candidate-limit: 300
+    weights:
+      # 합이 1이 되도록 유지한다. 관심 프로필이 비면 tag 몫이 나머지에 배분된다.
+      tag: 0.55
+      popularity: 0.25
+      freshness: 0.20
+    diversity:
+      # 결과가 한 사람의 지도나 한 주제로 쏠리지 않게 하는 보정값
+      max-per-owner: 1
+      tag-overlap-penalty: 0.15
+    profile:
+      # 직접 만들거나 운영하는 지도에 주는 가중
+      manager-role-weight: 1.5
+      # 참여 시점이 오래될수록 영향력이 줄어드는 기준(일)
+      recency-half-life-days: 60
+      # 지도 생성일이 오래될수록 신선도가 낮아지는 기준(일)
+      freshness-half-life-days: 90
