@@ -1,5 +1,6 @@
 package com.moamap.place.controller;
 
+import java.util.List;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceBulkCreateRequest;
@@ -7,6 +8,7 @@ import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
+import com.moamap.place.service.PlacePhotoService;
 import com.moamap.place.service.PlaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,6 +37,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlaceController {
 
     private final PlaceService placeService;
+    private final PlacePhotoService placePhotoService;
+
+    @PostMapping("/photo-upload-url")
+    @Operation(
+        summary = "장소 사진 업로드 presigned URL 최대 5장 일괄 발급",
+        description = """
+            장소 사진 업로드용 presigned PUT URL을 한 요청에 최대 5장 일괄 발급한다. 발급 권한은 장소 등록 권한과 동일하다(OFFICIAL 지도 불가, 지도 멤버여야 함).
+            발급받은 각 uploadUrl로 클라이언트가 직접 PUT 업로드한 뒤, fileUrl 목록을 장소 등록 요청의 photoUrls에 담아 전달한다.
+            """
+    )
+    public ApiResponse<List<PhotoUploadUrlResponse>> photoUploadUrl(
+        @Valid @RequestBody PhotoUploadUrlRequest request,
+        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
+        @RequestHeader("X-User-Id") Long userId
+    ) {
+        return ApiResponse.success(placePhotoService.issueUploadUrls(request, userId));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -48,8 +67,7 @@ public class PlaceController {
     )
     public ApiResponse<PlaceResponse> create(
         @Valid @RequestBody PlaceCreateRequest request,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         return ApiResponse.success(placeService.create(request, userId));
     }
@@ -100,8 +118,7 @@ public class PlaceController {
     public ApiResponse<PageResponse<PlaceResponse>> getPending(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")
         @RequestParam Long mapId,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId,
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
         @PageableDefault(size = 20) Pageable pageable
     ) {
         return ApiResponse.success(placeService.findPendingByMapId(mapId, userId, pageable));
@@ -111,8 +128,7 @@ public class PlaceController {
     @Operation(summary = "장소 정보 수정", description = "장소를 등록한 본인만 이름/주소/좌표/카테고리/설명을 수정할 수 있다.")
     public ApiResponse<PlaceResponse> update(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId,
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
         @Valid @RequestBody PlaceUpdateRequest request
     ) {
         return ApiResponse.success(placeService.update(id, userId, request));
@@ -122,8 +138,7 @@ public class PlaceController {
     @Operation(summary = "장소 삭제", description = "장소를 등록한 본인만 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
     public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         placeService.delete(id, userId);
         return ApiResponse.success();
@@ -136,8 +151,7 @@ public class PlaceController {
     )
     public ApiResponse<PlaceResponse> approve(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
-        @Parameter(description = "요청자(승인자) 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         return ApiResponse.success(placeService.approve(id, userId));
     }
@@ -149,8 +163,7 @@ public class PlaceController {
     )
     public ApiResponse<PlaceResponse> reject(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
-        @Parameter(description = "요청자(반려자) 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         return ApiResponse.success(placeService.reject(id, userId));
     }

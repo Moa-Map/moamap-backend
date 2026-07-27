@@ -37,7 +37,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // 토큰 없이 열어줄 경로. 나머지는 다 토큰 필요.
     private static final List<PublicEndpoint> PUBLIC_ENDPOINTS = List.of(
         PublicEndpoint.of(null, "/api/v1/auth/**"),
-        PublicEndpoint.of(HttpMethod.GET, "/api/v1/maps/**")
+        PublicEndpoint.of(HttpMethod.GET, "/api/v1/maps/**"),
+        // 통합 Swagger UI — 테스트 편의를 위해 공개.
+        PublicEndpoint.of(HttpMethod.GET, "/swagger-ui.html"),
+        PublicEndpoint.of(HttpMethod.GET, "/swagger-ui/**"),
+        PublicEndpoint.of(HttpMethod.GET, "/webjars/**"),
+        PublicEndpoint.of(HttpMethod.GET, "/user-service/v3/api-docs/**"),
+        PublicEndpoint.of(HttpMethod.GET, "/map-service/v3/api-docs/**"),
+        PublicEndpoint.of(HttpMethod.GET, "/place-service/v3/api-docs/**")
     );
 
     private final JwtValidator jwtValidator;

@@ -15,13 +15,14 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1001
         seccompProfile:
           type: RuntimeDefault
       imagePullSecrets:
         - name: ncr-cred # NCR pull 인증 (배포 이슈에서 생성)
       containers:
         - name: gateway-service
-          image: REPLACE_ME_NCR/moamap/gateway-service:latest
+          image: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/gateway-service:latest
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

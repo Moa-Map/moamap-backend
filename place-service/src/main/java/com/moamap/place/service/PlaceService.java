@@ -60,6 +60,7 @@ public class PlaceService {
             .sourceUrl(request.sourceUrl())
             .description(request.description())
             .tags(request.tags() == null ? new ArrayList<>() : request.tags())
+            .photoUrls(request.photoUrls() == null ? new ArrayList<>() : request.photoUrls())
             .mapId(request.mapId())
             .createdBy(userId)
             .status(status)

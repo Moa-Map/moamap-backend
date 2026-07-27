@@ -3,3 +3,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+# S3Presigner는 빈 생성 시점에 region/endpoint 등을 즉시 검증하므로, 컨텍스트 로딩 테스트(@SpringBootTest)가
+# 통과하려면 형식이 유효한 값이 필요하다(실제 스토리지 호출은 없음 — 값 자체는 의미 없는 테스트용 placeholder).
+storage:
+  endpoint: http://localhost:9000
+  region: kr-standard
+  bucket: test-bucket
+  public-base-url: http://localhost:9000
+  access-key: test-access-key
+  secret-key: test-secret-key

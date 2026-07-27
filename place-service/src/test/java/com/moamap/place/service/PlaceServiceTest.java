@@ -70,6 +70,7 @@ class PlaceServiceTest {
             null,
             null,
             10L,
+            null,
             null
         );
     }
@@ -188,7 +189,7 @@ class PlaceServiceTest {
         PlaceCreateRequest request = new PlaceCreateRequest(
             "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
-            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한")
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한"), null
         );
 
         // when

@@ -38,8 +38,7 @@ public class PlaceReviewController {
     @Operation(summary = "리뷰 작성", description = "해당 지도의 멤버(또는 팔로워)만 작성할 수 있다. 한 사용자가 같은 장소에 여러 개 남길 수 있다.")
     public ApiResponse<PlaceReviewResponse> create(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId,
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
         @Valid @RequestBody PlaceReviewCreateRequest request
     ) {
         return ApiResponse.success(placeReviewService.create(placeId, userId, request));
@@ -59,8 +58,7 @@ public class PlaceReviewController {
     public ApiResponse<PlaceReviewResponse> update(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
         @Parameter(description = "리뷰 ID", example = "1") @PathVariable Long reviewId,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId,
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,
         @Valid @RequestBody PlaceReviewUpdateRequest request
     ) {
         return ApiResponse.success(placeReviewService.update(placeId, reviewId, userId, request));
@@ -71,8 +69,7 @@ public class PlaceReviewController {
     public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
         @Parameter(description = "리뷰 ID", example = "1") @PathVariable Long reviewId,
-        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
-        @RequestHeader("X-User-Id") Long userId
+        @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         placeReviewService.delete(placeId, reviewId, userId);
         return ApiResponse.success();
