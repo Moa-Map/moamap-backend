@@ -188,7 +188,7 @@ public class PlaceService {
     public void delete(Long id, Long userId) {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
-        place.delete();
+        place.delete(userId);
     }
 
     @Transactional
