@@ -462,6 +462,8 @@ class PlaceServiceTest {
         assertThat(place.getDeletedAt()).isNotNull();
         // uk_places_map_kakao_place는 deleted_at을 구분하지 않으므로, kakaoPlaceId를 비워야 같은 지도에 재등록할 수 있다.
         assertThat(place.getKakaoPlaceId()).isNull();
+        // 삭제 행위자를 deletedBy에 기록해야 활동 로그(PLACE_DELETED)의 actorId로 노출할 수 있다.
+        assertThat(place.getDeletedBy()).isEqualTo(1L);
         verify(placeRepository, never()).delete(any());
     }
 
