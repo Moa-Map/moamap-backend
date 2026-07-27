@@ -12,5 +12,10 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 	runtimeOnly 'org.postgresql:postgresql'
 
+	// ObjectStorageConfig가 S3Presigner 빈을 직접 구성하므로(AWS SDK 클래스 직접 참조), common의 런타임 전이만으로는
+	// 부족해 이 서비스에서도 명시적으로 의존성을 추가한다(청사진 6장 4번 각주).
+	implementation platform('software.amazon.awssdk:bom:2.49.0')
+	implementation 'software.amazon.awssdk:s3'
+
 	testRuntimeOnly 'com.h2database:h2'
 }

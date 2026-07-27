@@ -57,6 +57,7 @@ class PlaceServiceConcurrencyTest {
             null,
             null,
             10L,
+            null,
             null
         );
     }

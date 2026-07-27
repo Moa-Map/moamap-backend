@@ -108,4 +108,57 @@ class PlaceRepositoryTest {
         Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
         assertThat(found.getTags()).containsExactly("유지됨");
     }
+
+    /*
+     * 장소 사진(photoUrls)은 tags와 달리 "인덱스 0 = 대표 사진" 계약이 있어 순서가 결정적으로
+     * 보존되어야 한다(청사진 5장). @OrderColumn(sort_order) 없이 순수 @ElementCollection(bag)만
+     * 썼다면 재조회 시 순서가 뒤섞일 수 있으므로, 5장을 저장했다가 다시 읽어 순서가 그대로인지 확인한다.
+     */
+
+    @Test
+    void 사진_URL을_저장하면_저장한_순서_그대로_조회된다() {
+        List<String> photos = new ArrayList<>(List.of(
+            "https://cdn.moamap.com/places/10/rep.jpg",
+            "https://cdn.moamap.com/places/10/2.jpg",
+            "https://cdn.moamap.com/places/10/3.jpg",
+            "https://cdn.moamap.com/places/10/4.jpg",
+            "https://cdn.moamap.com/places/10/5.jpg"
+        ));
+        Place saved = placeRepository.saveAndFlush(placeBuilder().photoUrls(photos).build());
+        entityManager.clear();
+
+        Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+
+        assertThat(found.getPhotoUrls()).containsExactly(
+            "https://cdn.moamap.com/places/10/rep.jpg",
+            "https://cdn.moamap.com/places/10/2.jpg",
+            "https://cdn.moamap.com/places/10/3.jpg",
+            "https://cdn.moamap.com/places/10/4.jpg",
+            "https://cdn.moamap.com/places/10/5.jpg"
+        );
+    }
+
+    @Test
+    void 사진이_없으면_빈_리스트로_저장되고_조회된다() {
+        Place saved = placeRepository.saveAndFlush(placeBuilder().build());
+        entityManager.clear();
+
+        Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+
+        assertThat(found.getPhotoUrls()).isEmpty();
+    }
+
+    @Test
+    void 대표_사진은_인덱스_0에_저장된_사진이다() {
+        List<String> photos = new ArrayList<>(List.of(
+            "https://cdn.moamap.com/places/10/rep.jpg",
+            "https://cdn.moamap.com/places/10/2.jpg"
+        ));
+        Place saved = placeRepository.saveAndFlush(placeBuilder().photoUrls(photos).build());
+        entityManager.clear();
+
+        Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+
+        assertThat(found.getPhotoUrls().get(0)).isEqualTo("https://cdn.moamap.com/places/10/rep.jpg");
+    }
 }

@@ -19,6 +19,7 @@ public record PlaceCreateRequest(
     String sourceUrl,
     String description,
     @NotNull Long mapId,
-    List<@Size(max = 30) String> tags
+    List<@Size(max = 30) String> tags,
+    @Size(max = 5) List<@Size(max = 1000) String> photoUrls
 ) {
 }

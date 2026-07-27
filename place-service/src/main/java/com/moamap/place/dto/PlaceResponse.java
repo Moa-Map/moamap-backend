@@ -29,7 +29,8 @@ public record PlaceResponse(
     LocalDateTime processedAt,
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
-    List<String> tags
+    List<String> tags,
+    List<String> photoUrls
 ) {
 
     public static PlaceResponse from(Place place) {
@@ -54,7 +55,8 @@ public record PlaceResponse(
             place.getProcessedAt(),
             place.getCreatedAt(),
             place.getUpdatedAt(),
-            new ArrayList<>(place.getTags())
+            new ArrayList<>(place.getTags()),
+            new ArrayList<>(place.getPhotoUrls())
         );
     }
 }
