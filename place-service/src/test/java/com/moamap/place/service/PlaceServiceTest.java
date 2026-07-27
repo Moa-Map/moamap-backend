@@ -51,6 +51,9 @@ class PlaceServiceTest {
     @Mock
     private MapClient mapClient;
 
+    @Mock
+    private PlaceBulkRegistrar placeBulkRegistrar;
+
     @InjectMocks
     private PlaceService placeService;
 

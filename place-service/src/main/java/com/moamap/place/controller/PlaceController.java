@@ -3,8 +3,8 @@ package com.moamap.place.controller;
 import java.util.List;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
-import com.moamap.place.dto.PhotoUploadUrlRequest;
-import com.moamap.place.dto.PhotoUploadUrlResponse;
+import com.moamap.place.dto.PlaceBulkCreateRequest;
+import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
@@ -72,6 +72,23 @@ public class PlaceController {
         return ApiResponse.success(placeService.create(request, userId));
     }
 
+    @PostMapping("/bulk")
+    @Operation(
+        summary = "장소 일괄 등록",
+        description = """
+            여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
+            전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
+            지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            """
+    )
+    public ApiResponse<PlaceBulkCreateResponse> createBulk(
+        @Valid @RequestBody PlaceBulkCreateRequest request,
+        @Parameter(description = "요청자 사용자 ID", required = true, example = "1")
+        @RequestHeader("X-User-Id") Long userId
+    ) {
+        return ApiResponse.success(placeService.createBulk(request, userId));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "장소 단건 조회", description = "삭제되지 않은 장소를 id로 조회한다.")
     public ApiResponse<PlaceResponse> getById(
@@ -118,13 +135,13 @@ public class PlaceController {
     }
 
     @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "장소 삭제", description = "장소를 등록한 본인만 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
-    public void delete(
+    public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
         @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId
     ) {
         placeService.delete(id, userId);
+        return ApiResponse.success();
     }
 
     @PatchMapping("/{id}/approve")

@@ -23,6 +23,9 @@ public enum PlaceErrorCode implements ErrorCode {
     DUPLICATE_PLACE("PLACE_010", "해당 지도에 이미 등록된 장소입니다.", 409),
     REVIEW_NOT_FOUND("PLACE_011", "리뷰를 찾을 수 없습니다.", 404),
     NOT_REVIEW_OWNER("PLACE_012", "본인이 작성한 리뷰만 수정/삭제할 수 있습니다.", 403),
+    UNSUPPORTED_SHARE_LINK("PLACE_013", "지원하지 않는 공유 링크입니다. 네이버지도·카카오맵·구글맵의 리스트 공유 링크를 넣어주세요.", 400),
+    SHARE_LINK_EXTRACTION_FAILED("PLACE_014", "공유 링크에서 장소 목록을 가져오지 못했습니다. 공개된 리스트인지 확인해 주세요.", 502),
+    SHARE_LIST_STRUCTURE_CHANGED("PLACE_015", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502);
     INVALID_FILE_TYPE("PLACE_013", "허용되지 않은 파일 형식입니다.", 400),
     FILE_SIZE_EXCEEDED("PLACE_014", "파일 크기가 허용치를 초과했습니다.", 400);
 
