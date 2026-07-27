@@ -17,6 +17,8 @@ public interface MapMemberRepository extends JpaRepository<MapMember, Long> {
 
     List<MapMember> findByUserIdAndMapIdIn(Long userId, Collection<Long> mapIds);
 
+    List<MapMember> findByUserId(Long userId);
+
     @Modifying
     @Query("delete from MapMember mm where mm.mapId = :mapId")
     void deleteByMapId(@Param("mapId") Long mapId);
