@@ -3,6 +3,8 @@ package com.moamap.place.controller;
 import java.util.List;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PhotoUploadUrlRequest;
+import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.dto.PlaceBulkCreateRequest;
 import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
