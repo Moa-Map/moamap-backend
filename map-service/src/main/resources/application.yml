@@ -41,6 +41,16 @@ seoul:
     key: ${SEOUL_API_KEY:}
     service: citydata_ppltn
 
+storage:
+  # NHN Cloud Object Storage(S3 호환) 연동. 자격증명은 절대 커밋 금지 — 환경변수로 주입.
+  # endpoint가 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:}
+  region: ${OBJECT_STORAGE_REGION:kr-standard}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+  public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+
 map:
   congestion:
     # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
