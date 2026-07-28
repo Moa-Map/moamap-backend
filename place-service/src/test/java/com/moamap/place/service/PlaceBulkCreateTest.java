@@ -8,6 +8,7 @@ import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -55,6 +56,12 @@ class PlaceBulkCreateTest {
 
     @MockitoBean
     private MapClient mapClient;
+
+    // createBulk는 이 발행기를 루프 종료 후 직접 호출한다(청사진 3-3(가)). 이 테스트 스위트는
+    // 부분 성공/커밋 자체가 관심사라 발행 여부는 PlaceServiceTest에서 다루고, 여기서는 컨텍스트가
+    // 뜨는 데 필요한 협력자만 mock으로 채운다.
+    @MockitoBean
+    private PlaceCountEventPublisher placeCountEventPublisher;
 
     @BeforeEach
     void setUp() {
