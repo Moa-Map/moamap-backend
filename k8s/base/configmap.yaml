@@ -14,5 +14,7 @@ data:
   DB_URL: "jdbc:postgresql://postgres:5432/moamap"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
   # 개발용 카카오 로그인 콜백(dev-login) 리다이렉트 주소. dev-login.enabled=true일 때만 쓰인다.
   KAKAO_REDIRECT_URI: "REPLACE_ME_kakao_redirect_uri"

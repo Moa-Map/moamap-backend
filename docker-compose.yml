@@ -22,5 +22,19 @@ services:
     ports:
       - "6379:6379"
 
+  # place-service ↔ map-service 이벤트 브로커 (place count 동기화 등에 사용).
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: moamap-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: moamap
+      RABBITMQ_DEFAULT_PASS: moamap
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - moamap-rabbitmq-data:/var/lib/rabbitmq
+
 volumes:
   moamap-pgdata:
+  moamap-rabbitmq-data:
