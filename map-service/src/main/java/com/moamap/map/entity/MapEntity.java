@@ -61,6 +61,10 @@ public class MapEntity extends BaseTimeEntity {
     @Column(name = "member_count", nullable = false)
     private int memberCount;
 
+    /** place-service의 장소 변경 이벤트로 갱신되는 비정규화 카운트. 목록 노출 대상(APPROVED·미삭제) 개수. */
+    @Column(name = "place_count", nullable = false, columnDefinition = "integer not null default 0")
+    private int placeCount;
+
     @ElementCollection
     @CollectionTable(name = "map_tag", joinColumns = @JoinColumn(name = "map_id"))
     @Column(name = "tag", length = 30)
