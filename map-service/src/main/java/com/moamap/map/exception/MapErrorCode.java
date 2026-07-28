@@ -19,7 +19,10 @@ public enum MapErrorCode implements ErrorCode {
     NOT_COMMUNITY_MAP("MAP_006", "공개 지도가 아니어서 바로 참여할 수 없습니다.", 400),
     INVALID_INVITE_CODE("MAP_007", "유효하지 않은 초대 코드입니다.", 404),
     OWNER_CANNOT_LEAVE("MAP_008", "소유자는 지도를 나갈 수 없습니다. 지도를 삭제하거나 소유권을 넘기세요.", 400),
-    INVITE_CODE_GENERATION_FAILED("MAP_009", "초대 코드 생성에 실패했습니다. 다시 시도해 주세요.", 500);
+    INVITE_CODE_GENERATION_FAILED("MAP_009", "초대 코드 생성에 실패했습니다. 다시 시도해 주세요.", 500),
+    INVALID_FILE_TYPE("MAP_010", "허용되지 않은 파일 형식입니다.", 400),
+    FILE_SIZE_EXCEEDED("MAP_011", "파일 크기가 허용치를 초과했습니다.", 400),
+    STORAGE_NOT_CONFIGURED("MAP_012", "이미지 업로드를 사용할 수 없습니다.", 503);
 
     private final String code;
     private final String message;
