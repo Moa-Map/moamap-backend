@@ -8,6 +8,7 @@ import com.moamap.place.dto.PlaceReviewCreateRequest;
 import com.moamap.place.dto.PlaceReviewResponse;
 import com.moamap.place.dto.PlaceReviewUpdateRequest;
 import com.moamap.place.exception.PlaceErrorCode;
+import com.moamap.place.service.PlaceReviewPhotoService;
 import com.moamap.place.service.PlaceReviewService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,9 @@ class PlaceReviewControllerTest {
 
     @MockitoBean
     private PlaceReviewService placeReviewService;
+
+    @MockitoBean
+    private PlaceReviewPhotoService placeReviewPhotoService;
 
     private PlaceReviewResponse response() {
         return new PlaceReviewResponse(1L, 1L, 2L, 5, "최고예요", List.of("https://img/1.jpg"), null, null);
