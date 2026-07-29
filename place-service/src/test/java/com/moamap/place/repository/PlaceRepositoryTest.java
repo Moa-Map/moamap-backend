@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -193,6 +195,31 @@ class PlaceRepositoryTest {
         long count = placeRepository.countByMapIdAndStatusAndDeletedAtIsNull(999L, PlaceStatus.APPROVED);
 
         assertThat(count).isZero();
+    }
+
+    /*
+     * findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull은 place-service가
+     * findPendingByMapId의 MEMBER 분기에서 "본인이 등록한 PENDING만" 걸러내는 데 쓴다(청사진 3-1(나)).
+     * 다른 작성자의 PENDING과 soft-delete된 건은 절대 섞이면 안 된다(청사진 3-4 불변 조건 4, 5).
+     */
+
+    @Test
+    void findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull은_같은_지도의_PENDING_장소_중_해당_작성자_것만_반환한다() {
+        placeRepository.saveAndFlush(
+            placeBuilder().kakaoPlaceId("P1").status(PlaceStatus.PENDING).createdBy(1L).build());
+        placeRepository.saveAndFlush(
+            placeBuilder().kakaoPlaceId("P2").status(PlaceStatus.PENDING).createdBy(2L).build());
+        Place deleted = placeRepository.saveAndFlush(
+            placeBuilder().kakaoPlaceId("P3").status(PlaceStatus.PENDING).createdBy(1L).build());
+        deleted.delete(1L);
+        placeRepository.saveAndFlush(deleted);
+        entityManager.clear();
+
+        Page<Place> result = placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(
+            10L, PlaceStatus.PENDING, 1L, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getKakaoPlaceId()).isEqualTo("P1");
     }
 
     @Test
