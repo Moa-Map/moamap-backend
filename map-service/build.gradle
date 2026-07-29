@@ -11,6 +11,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+
+	// ObjectStorageConfig가 S3Presigner 빈을 직접 구성하므로(AWS SDK 클래스 직접 참조),
+	// common의 런타임 전이만으로는 컴파일이 되지 않아 명시적으로 선언한다(place-service와 동일).
+	implementation platform('software.amazon.awssdk:bom:2.49.0')
+	implementation 'software.amazon.awssdk:s3'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	runtimeOnly 'org.postgresql:postgresql'
 

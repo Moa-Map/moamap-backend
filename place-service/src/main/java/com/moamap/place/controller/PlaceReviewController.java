@@ -5,6 +5,9 @@ import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceReviewCreateRequest;
 import com.moamap.place.dto.PlaceReviewResponse;
 import com.moamap.place.dto.PlaceReviewUpdateRequest;
+import com.moamap.place.dto.ReviewPhotoUploadUrlRequest;
+import com.moamap.place.dto.ReviewPhotoUploadUrlResponse;
+import com.moamap.place.service.PlaceReviewPhotoService;
 import com.moamap.place.service.PlaceReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +35,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlaceReviewController {
 
     private final PlaceReviewService placeReviewService;
+    private final PlaceReviewPhotoService placeReviewPhotoService;
+
+    @PostMapping("/photo-upload-url")
+    @Operation(
+        summary = "리뷰 이미지 업로드 URL 발급",
+        description = """
+            리뷰 이미지를 올릴 presigned PUT URL을 발급한다. 이미지는 1장만 허용한다. 발급 권한은 리뷰 작성 권한과 동일하다(해당 지도의 멤버).
+            발급받은 uploadUrl로 파일을 직접 PUT한 뒤, 같은 응답의 fileUrl을 리뷰 작성 요청의 imageUrls에 담아 전달한다.
+            """
+    )
+    public ApiResponse<ReviewPhotoUploadUrlResponse> photoUploadUrl(
+        @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
+        @Parameter(hidden = true) @RequestHeader(value = "X-User-Id", required = false) Long userId,
+        @Valid @RequestBody ReviewPhotoUploadUrlRequest request
+    ) {
+        return ApiResponse.success(placeReviewPhotoService.issueUploadUrl(placeId, request, userId));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
