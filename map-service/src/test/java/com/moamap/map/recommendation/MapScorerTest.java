@@ -98,4 +98,14 @@ class MapScorerTest {
     void 후보가_없으면_빈_목록을_돌려준다() {
         assertThat(scorer.score(List.of(), InterestProfile.empty(), NOW)).isEmpty();
     }
+
+    @Test
+    void 콜드스타트에서는_멤버_수가_많고_오래된_지도가_적고_최신인_지도보다_앞선다() {
+        MapEntity manyOld = map(1L, 101L, List.of("러닝"), 3200, NOW.minusDays(90));
+        MapEntity fewNew = map(2L, 102L, List.of("혼밥"), 980, NOW.minusDays(5));
+
+        List<ScoredMap> scored = scorer.score(List.of(fewNew, manyOld), InterestProfile.empty(), NOW);
+
+        assertThat(scored.get(0).map().getId()).isEqualTo(1L);
+    }
 }

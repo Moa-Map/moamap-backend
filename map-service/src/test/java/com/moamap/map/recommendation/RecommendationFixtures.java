@@ -36,9 +36,10 @@ final class RecommendationFixtures {
             5,
             20,
             300,
-            new RecommendationProperties.Weights(0.55, 0.25, 0.20),
+            new RecommendationProperties.Weights(0.55, 0.25, 0.20,
+                new RecommendationProperties.Weights.ColdStart(0.80, 0.20)),
             new RecommendationProperties.Diversity(1, 0.15),
-            new RecommendationProperties.Profile(1.5, 60, 90)
+            new RecommendationProperties.Profile(1.5, 0.4, 60, 90)
         );
     }
 }

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * 점수 = 태그 유사도 x w1 + 인기도 x w2 + 신선도 x w3 (각 요소는 0~1로 정규화)
  *
  * 참여 이력이 없어 관심 프로필이 비어 있으면 태그 항목이 항상 0이 되어 모든 후보가 같은 점수를 받는다.
- * 그래서 이때는 태그 몫을 인기도·신선도에 비례 배분해, 신규 사용자에게도 의미 있는 순서가 나오게 한다.
+ * 그래서 이때는 설정된 콜드스타트 가중치(popularity/freshness)를 그대로 쓴다.
  */
 @Component
 @RequiredArgsConstructor
@@ -79,20 +79,16 @@ public class MapScorer {
     }
 
     /**
-     * 관심 프로필이 비어 있으면 태그 몫을 나머지 두 요소에 비례 배분한다.
+     * 관심 프로필이 비어 있으면(콜드스타트) 태그 몫은 0이고, 나머지는 설정값을 그대로 쓴다.
+     * 비례 배분은 아무도 결정하지 않은 파생값을 만들어내므로 쓰지 않는다.
      */
     private Weights resolveWeights(InterestProfile profile) {
         RecommendationProperties.Weights configured = properties.weights();
         if (!profile.isEmpty()) {
             return new Weights(configured.tag(), configured.popularity(), configured.freshness());
         }
-
-        double remaining = configured.popularity() + configured.freshness();
-        if (remaining <= 0) {
-            return new Weights(0, 0.5, 0.5);
-        }
-        double scale = 1.0 / remaining;
-        return new Weights(0, configured.popularity() * scale, configured.freshness() * scale);
+        RecommendationProperties.Weights.ColdStart coldStart = configured.coldStart();
+        return new Weights(0, coldStart.popularity(), coldStart.freshness());
     }
 
     private record Weights(double tag, double popularity, double freshness) {

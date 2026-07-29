@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.moamap.map.entity.MapRole;
+import com.moamap.map.entity.MapType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -33,7 +34,7 @@ public class UserInterestProfiler {
 
         Map<String, Double> weights = new HashMap<>();
         for (JoinedMap joined : joinedMaps) {
-            double mapWeight = roleWeight(joined.role()) * recencyWeight(joined.joinedAt(), now);
+            double mapWeight = signalWeight(joined.type(), joined.role()) * recencyWeight(joined.joinedAt(), now);
             // 같은 지도 안에서 태그가 중복돼도 한 번만 반영한다.
             for (String tag : distinctTags(joined.tags())) {
                 weights.merge(tag, mapWeight, Double::sum);
@@ -51,10 +52,15 @@ public class UserInterestProfiler {
             .collect(Collectors.toUnmodifiableSet());
     }
 
-    private double roleWeight(MapRole role) {
-        return (role == MapRole.OWNER || role == MapRole.ADMIN)
-            ? properties.profile().managerRoleWeight()
-            : 1.0;
+    private double signalWeight(MapType type, MapRole role) {
+        if (role == MapRole.OWNER || role == MapRole.ADMIN) {
+            return properties.profile().managerRoleWeight();
+        }
+        // 초대로 들어간 프라이빗 지도는 "내가 고른 컨셉"이 아니므로 신호를 약하게 본다.
+        if (type == MapType.PRIVATE) {
+            return properties.profile().invitedMemberWeight();
+        }
+        return 1.0;
     }
 
     /**

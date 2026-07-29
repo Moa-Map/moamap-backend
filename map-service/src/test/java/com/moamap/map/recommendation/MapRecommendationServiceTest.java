@@ -1,6 +1,8 @@
 package com.moamap.map.recommendation;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.LongStream;
 import com.moamap.map.dto.MapRecommendationResponse;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
@@ -10,6 +12,7 @@ import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -26,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -171,6 +175,78 @@ class MapRecommendationServiceTest {
 
         // 상한(20)을 넘겨 요청해도 예외 없이 동작한다.
         assertThat(service().recommend(USER_ID, 999)).hasSize(1);
+    }
+
+    @Test
+    void 태그_후보가_상한을_채우면_인기_지도_조회를_생략한다() {
+        RecommendationProperties props = properties();
+        MapEntity joinedMap = map(9000L, 9000L, List.of("맛집"), 5, NOW);
+        List<Long> tagIds = LongStream.rangeClosed(1, props.candidateLimit()).boxed().toList();
+
+        givenMembership(joinedMap, MapRole.MEMBER);
+        given(mapRepository.findCandidateIdsByTags(any(), anyCollection(), any(Pageable.class)))
+            .willReturn(tagIds);
+        given(mapRepository.findAllWithTagsByIdIn(anyCollection()))
+            .willReturn(List.of(joinedMap))
+            .willReturn(List.of());
+
+        service().recommend(USER_ID, 5);
+
+        verify(mapRepository, never()).findPopularIds(any(), any(Pageable.class));
+    }
+
+    @Test
+    void 태그_후보가_일부만_차면_남은_자리만큼만_인기_지도를_요청한다() {
+        RecommendationProperties props = properties();
+        int tagCount = 50;
+        MapEntity joinedMap = map(9000L, 9000L, List.of("맛집"), 5, NOW);
+        List<Long> tagIds = LongStream.rangeClosed(1, tagCount).boxed().toList();
+
+        givenMembership(joinedMap, MapRole.MEMBER);
+        given(mapRepository.findCandidateIdsByTags(any(), anyCollection(), any(Pageable.class)))
+            .willReturn(tagIds);
+        given(mapRepository.findPopularIds(any(), any(Pageable.class))).willReturn(List.of());
+        given(mapRepository.findAllWithTagsByIdIn(anyCollection()))
+            .willReturn(List.of(joinedMap))
+            .willReturn(List.of());
+
+        service().recommend(USER_ID, 5);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(mapRepository).findPopularIds(any(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(props.candidateLimit() - tagCount);
+    }
+
+    @Test
+    void 후보_총_개수는_candidate_limit을_넘지_않는다() {
+        RecommendationProperties props = properties();
+        int tagCount = 250;
+        MapEntity joinedMap = map(9000L, 9000L, List.of("맛집"), 5, NOW);
+        List<Long> tagIds = LongStream.rangeClosed(1, tagCount).boxed().toList();
+        List<Long> popularIds = LongStream.rangeClosed(1000, 1299).boxed().toList();
+
+        givenMembership(joinedMap, MapRole.MEMBER);
+        given(mapRepository.findCandidateIdsByTags(any(), anyCollection(), any(Pageable.class)))
+            .willReturn(tagIds);
+        // 실제 Spring Data JPA는 Pageable의 페이지 크기를 SQL LIMIT으로 내리므로,
+        // 요청받은 크기만큼만 잘라 돌려주도록 스텁도 그 동작을 그대로 모사한다.
+        given(mapRepository.findPopularIds(any(), any(Pageable.class)))
+            .willAnswer(invocation -> {
+                int pageSize = invocation.getArgument(1, Pageable.class).getPageSize();
+                return popularIds.subList(0, Math.min(pageSize, popularIds.size()));
+            });
+        given(mapRepository.findAllWithTagsByIdIn(anyCollection()))
+            .willReturn(List.of(joinedMap))
+            .willReturn(List.of());
+
+        service().recommend(USER_ID, 5);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<Long>> idsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(mapRepository, times(2)).findAllWithTagsByIdIn(idsCaptor.capture());
+        Collection<Long> candidateIds = idsCaptor.getAllValues().get(1);
+
+        assertThat(candidateIds.size()).isEqualTo(props.candidateLimit());
     }
 
     private void givenMembership(MapEntity map, MapRole role) {

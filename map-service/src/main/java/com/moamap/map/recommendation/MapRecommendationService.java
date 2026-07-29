@@ -75,7 +75,7 @@ public class MapRecommendationService {
             .map(membership -> {
                 MapEntity map = joinedMaps.get(membership.getMapId());
                 return (map == null) ? null
-                    : new JoinedMap(map.getTags(), membership.getRole(), membership.getCreatedAt());
+                    : new JoinedMap(map.getTags(), map.getType(), membership.getRole(), membership.getCreatedAt());
             })
             .filter(Objects::nonNull)
             .toList();
@@ -84,19 +84,24 @@ public class MapRecommendationService {
     }
 
     /**
-     * 관심 태그와 겹치는 지도를 우선 모으고, 모자라면 인기 지도로 채운다.
+     * 관심 태그와 겹치는 지도를 우선 모으고, 모자라면 남은 자리만큼 인기 지도로 채운다.
+     * 태그 후보가 이미 상한을 채웠으면 인기 쿼리를 호출하지 않는다 — 후보 총량이 candidate-limit을 넘지 않게 하기 위함이다.
      * 이미 참여했거나 직접 만든 지도는 추천 대상에서 뺀다.
      */
     private List<MapEntity> collectCandidates(InterestProfile profile, Set<Long> excludedMapIds, Long userId) {
-        PageRequest limit = PageRequest.of(0, properties.candidateLimit());
+        int candidateLimit = properties.candidateLimit();
         Set<Long> candidateIds = new LinkedHashSet<>();
 
         if (!profile.isEmpty()) {
-            candidateIds.addAll(
-                mapRepository.findCandidateIdsByTags(MapType.COMMUNITY, profile.tags(), limit));
+            candidateIds.addAll(mapRepository.findCandidateIdsByTags(
+                MapType.COMMUNITY, profile.tags(), PageRequest.of(0, candidateLimit)));
         }
-        // 태그 후보만으로는 다양성이 부족할 수 있어 인기 지도를 함께 넣는다. 콜드스타트일 때는 이쪽이 전부다.
-        candidateIds.addAll(mapRepository.findPopularIds(MapType.COMMUNITY, limit));
+        // 태그 후보만으로는 다양성이 부족할 수 있어 남은 자리만큼 인기 지도를 채운다. 콜드스타트일 때는 이쪽이 전부다.
+        int remaining = candidateLimit - candidateIds.size();
+        if (remaining > 0) {
+            candidateIds.addAll(mapRepository.findPopularIds(
+                MapType.COMMUNITY, PageRequest.of(0, remaining)));
+        }
         candidateIds.removeAll(excludedMapIds);
 
         if (candidateIds.isEmpty()) {
