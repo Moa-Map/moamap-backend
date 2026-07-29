@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -33,6 +34,11 @@ public class ObjectStorageConfig {
             .endpointOverride(URI.create(properties.endpoint()))
             .credentialsProvider(StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(properties.accessKey(), properties.secretKey())))
+            // endpoint 자체가 /v1/AUTH_xxx 경로를 포함하는 NHN Cloud 특성상, path-style을 강제하지 않으면
+            // SDK가 virtual-hosted-style URL을 만들어 그 경로가 object key에 잘못 섞여 들어간다.
+            .serviceConfiguration(S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build())
             .build();
     }
 
