@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
+import com.moamap.place.entity.PlaceStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -160,6 +161,38 @@ class PlaceRepositoryTest {
         Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
         assertThat(found.getPhotoUrls()).isEmpty();
+    }
+
+    /*
+     * countByMapIdAndStatusAndDeletedAtIsNull은 place-service가 이벤트 발행 시점에
+     * "목록 노출 대상" 절대 개수를 세는 쿼리다(청사진 2-2, 3-3(가) 5단계).
+     * PENDING/REJECTED/소프트삭제는 어떤 경우에도 세면 안 된다(청사진 3-4 불변 조건).
+     */
+
+    @Test
+    void countByMapIdAndStatusAndDeletedAtIsNull은_같은_지도의_APPROVED_미삭제_장소만_센다() {
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").status(PlaceStatus.APPROVED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A2").status(PlaceStatus.APPROVED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("P1").status(PlaceStatus.PENDING).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("R1").status(PlaceStatus.REJECTED).build());
+        Place softDeleted = placeRepository.saveAndFlush(
+            placeBuilder().kakaoPlaceId("D1").status(PlaceStatus.APPROVED).build());
+        softDeleted.delete(1L);
+        placeRepository.saveAndFlush(softDeleted);
+        entityManager.clear();
+
+        long count = placeRepository.countByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.APPROVED);
+
+        assertThat(count).isEqualTo(2);
+    }
+
+    @Test
+    void countByMapIdAndStatusAndDeletedAtIsNull은_다른_지도의_장소는_세지_않는다() {
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").status(PlaceStatus.APPROVED).build());
+
+        long count = placeRepository.countByMapIdAndStatusAndDeletedAtIsNull(999L, PlaceStatus.APPROVED);
+
+        assertThat(count).isZero();
     }
 
     @Test

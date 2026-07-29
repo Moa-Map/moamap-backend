@@ -8,12 +8,15 @@ import java.util.stream.Stream;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PlaceBulkCreateRequest;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.PlaceCountChangeSignal;
+import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -29,6 +32,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -37,8 +41,10 @@ import org.springframework.data.domain.Pageable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -53,6 +59,12 @@ class PlaceServiceTest {
 
     @Mock
     private PlaceBulkRegistrar placeBulkRegistrar;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private PlaceCountEventPublisher placeCountEventPublisher;
 
     @InjectMocks
     private PlaceService placeService;
@@ -583,5 +595,186 @@ class PlaceServiceTest {
         // then
         assertThat(response.status()).isEqualTo(PlaceStatus.REJECTED);
         assertThat(response.processedBy()).isEqualTo(2L);
+    }
+
+    /*
+     * 청사진 3-1(가) 결정 규칙 표: 목록 노출 대상(APPROVED·미삭제) 집합의 크기를 바꾸는
+     * 전이만 PlaceCountChangeSignal을 발행한다. createBulk만 예외적으로 신호가 아니라
+     * PlaceCountEventPublisher.publishNow를 루프 종료 후 직접 호출한다(3-3(가)).
+     */
+
+    @Test
+    void create는_초기_상태가_APPROVED이면_PlaceCountChangeSignal을_발행한다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        placeService.create(createRequest(), 1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new PlaceCountChangeSignal(10L));
+    }
+
+    @Test
+    void create는_초기_상태가_PENDING이면_이벤트를_발행하지_않는다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        placeService.create(createRequest(), 1L);
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void create는_중복_예외가_나면_이벤트를_발행하지_않는다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> placeService.create(createRequest(), 1L)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void approve는_PENDING에서_APPROVED로_바뀌면_PlaceCountChangeSignal을_발행한다() {
+        // given
+        Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        placeService.approve(1L, 2L);
+
+        // then
+        verify(eventPublisher).publishEvent(new PlaceCountChangeSignal(10L));
+    }
+
+    @Test
+    void reject는_이벤트를_발행하지_않는다() {
+        // given
+        Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        placeService.reject(1L, 2L);
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void delete는_대상이_APPROVED였으면_PlaceCountChangeSignal을_발행한다() {
+        // given
+        Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L)
+            .kakaoPlaceId("26338954").status(PlaceStatus.APPROVED).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+
+        // when
+        placeService.delete(1L, 1L);
+
+        // then
+        verify(eventPublisher).publishEvent(new PlaceCountChangeSignal(10L));
+    }
+
+    @Test
+    void delete는_대상이_PENDING이면_이벤트를_발행하지_않는다() {
+        // given
+        Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+
+        // when
+        placeService.delete(1L, 1L);
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void delete는_대상이_REJECTED면_이벤트를_발행하지_않는다() {
+        // given
+        Place place = Place.builder().name("반려된 장소").mapId(10L).createdBy(1L).status(PlaceStatus.REJECTED).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+
+        // when
+        placeService.delete(1L, 1L);
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void update는_어떤_경우든_이벤트를_발행하지_않는다() {
+        // given
+        Place place = Place.builder().name("old").mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", null, null, null, null, null, null, null);
+
+        // when
+        placeService.update(1L, 1L, request);
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    private PlaceBulkCreateRequest.Item bulkItem(String name, String kakaoPlaceId) {
+        return new PlaceBulkCreateRequest.Item(name, "주소", "도로명주소",
+            BigDecimal.valueOf(37.5), BigDecimal.valueOf(127.0), "카페",
+            kakaoPlaceId, PlaceSourceType.KAKAO_SEARCH, null, null, null);
+    }
+
+    @Test
+    void createBulk는_APPROVED이고_생성건수가_있으면_루프_종료_후_publishNow를_한번만_호출한다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.APPROVED)))
+            .willReturn(100L, 101L);
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L,
+            List.of(bulkItem("장소1", "111"), bulkItem("장소2", "222")));
+
+        // when
+        placeService.createBulk(request, 1L);
+
+        // then
+        verify(placeCountEventPublisher, times(1)).publishNow(10L);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void createBulk는_PENDING이면_publishNow를_호출하지_않는다() {
+        // given
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.PENDING))).willReturn(100L);
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L, List.of(bulkItem("장소1", "111")));
+
+        // when
+        placeService.createBulk(request, 1L);
+
+        // then
+        verifyNoInteractions(placeCountEventPublisher);
+    }
+
+    @Test
+    void createBulk는_APPROVED여도_생성건수가_0이면_publishNow를_호출하지_않는다() {
+        // given: 모든 건이 중복이라 created == 0인 상황
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.APPROVED)))
+            .willThrow(new BusinessException(PlaceErrorCode.DUPLICATE_PLACE));
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L, List.of(bulkItem("장소1", "111")));
+
+        // when
+        placeService.createBulk(request, 1L);
+
+        // then
+        verifyNoInteractions(placeCountEventPublisher);
     }
 }

@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.entity.PlaceSourceType;
+import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -43,6 +44,10 @@ class PlaceServiceConcurrencyTest {
 
     @MockitoBean
     private MapClient mapClient;
+
+    // 이 테스트의 관심사는 유니크 제약 동시성이지 이벤트 발행이 아니다. 컨텍스트 기동에만 필요하다.
+    @MockitoBean
+    private PlaceCountEventPublisher placeCountEventPublisher;
 
     private PlaceCreateRequest createRequest() {
         return new PlaceCreateRequest(

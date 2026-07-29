@@ -21,6 +21,11 @@ spring:
       # 외부 HTTP 호출(map-service, 카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
       connect-timeout: 2s
       read-timeout: 3s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
 
 management:
   endpoints:
@@ -30,6 +35,10 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    # 브로커가 잠깐 죽어도 place-service는 정상 동작한다(카운트 발행만 지연) — health에 반영하지 않는다.
+    rabbit:
+      enabled: false
 
 kakao:
   local:
