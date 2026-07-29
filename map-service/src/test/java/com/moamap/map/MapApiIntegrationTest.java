@@ -13,6 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moamap.map.entity.MapEntity;
+import com.moamap.map.entity.MapType;
+import com.moamap.map.repository.MapEntityRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +39,9 @@ class MapApiIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private MapEntityRepository mapEntityRepository;
 
     @Test
     @DisplayName("공개 지도를 생성하면 생성자가 OWNER로 참여되고 memberCount는 1이다")
@@ -131,6 +137,34 @@ class MapApiIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].type").value("COMMUNITY"))
             .andExpect(jsonPath("$.data.content[0].joined").value(true));
+    }
+
+    @Test
+    @DisplayName("공식 지도 목록은 OFFICIAL 타입만 반환하고, 인증 헤더 없이도 조회된다")
+    void officialMapListReturnsOfficialTypeOnly() throws Exception {
+        createMap(OWNER, "커뮤니티 지도", "PUBLIC");
+        mapEntityRepository.save(
+            MapEntity.create("화장실 위치", "공공데이터 기반 공중화장실 위치", null, MapType.OFFICIAL, OWNER, null, null)
+        );
+
+        mockMvc.perform(get("/api/v1/maps/official"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(1))
+            .andExpect(jsonPath("$.data.content[0].type").value("OFFICIAL"))
+            .andExpect(jsonPath("$.data.content[0].name").value("화장실 위치"));
+    }
+
+    @Test
+    @DisplayName("공식 지도도 커뮤니티와 동일한 join 엔드포인트로 참여할 수 있다")
+    void joinOfficialMap() throws Exception {
+        MapEntity official = mapEntityRepository.save(
+            MapEntity.create("화장실 위치", "공공데이터 기반 공중화장실 위치", null, MapType.OFFICIAL, OWNER, null, null)
+        );
+
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", official.getId()).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.joined").value(true))
+            .andExpect(jsonPath("$.data.myRole").value("MEMBER"));
     }
 
     @Test

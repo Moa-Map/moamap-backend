@@ -65,6 +65,15 @@ public class MapController {
         return ApiResponse.success(PageResponse.from(mapService.getCommunityMaps(tag, sort, pageable, userId)));
     }
 
+    @Operation(summary = "공식 지도 목록", description = "공공데이터 기반 공식(OFFICIAL) 지도 목록을 조회한다. 로그인 없이 볼 수 있다.")
+    @GetMapping("/official")
+    public ApiResponse<PageResponse<MapSummaryResponse>> getOfficialMaps(
+        @PageableDefault(size = 20) Pageable pageable,
+        @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
+    ) {
+        return ApiResponse.success(PageResponse.from(mapService.getOfficialMaps(pageable, userId)));
+    }
+
     @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다.")
     @GetMapping("/me")
     public ApiResponse<PageResponse<MapSummaryResponse>> getMyMaps(
@@ -104,7 +113,7 @@ public class MapController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "커뮤니티 지도 참여", description = "공개 지도에 바로 참여한다.")
+    @Operation(summary = "커뮤니티/공식 지도 참여", description = "공개(COMMUNITY) 또는 공식(OFFICIAL) 지도에 바로 참여한다.")
     @PostMapping("/{mapId}/join")
     public ApiResponse<MapDetailResponse> joinCommunity(
         @PathVariable Long mapId,

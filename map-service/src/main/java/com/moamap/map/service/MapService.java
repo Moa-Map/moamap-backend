@@ -73,6 +73,12 @@ public class MapService {
         return toSummaryPage(maps, requesterId);
     }
 
+    public Page<MapSummaryResponse> getOfficialMaps(Pageable pageable, Long requesterId) {
+        Pageable sorted = withSort(pageable, MapSort.LATEST);
+        Page<MapEntity> maps = mapRepository.findByType(MapType.OFFICIAL, sorted);
+        return toSummaryPage(maps, requesterId);
+    }
+
     public Page<MapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
         Pageable sorted = withSort(pageable, MapSort.LATEST);
         Page<MapEntity> maps = mapRepository.findJoinedByType(requesterId, type, sorted);
@@ -125,7 +131,7 @@ public class MapService {
     @Transactional
     public MapDetailResponse joinCommunity(Long mapId, Long userId) {
         MapEntity map = getMapOrThrow(mapId);
-        if (map.getType() != MapType.COMMUNITY) {
+        if (map.getType() == MapType.PRIVATE) {
             throw new BusinessException(MapErrorCode.NOT_COMMUNITY_MAP);
         }
         addMember(map, userId);
