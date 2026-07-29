@@ -4,6 +4,7 @@ import com.moamap.common.response.ApiResponse;
 import com.moamap.map.dto.JoinByInviteCodeRequest;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
+import com.moamap.map.dto.MapMemberListResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
 import com.moamap.map.dto.MapMemberRoleUpdateRequest;
 import com.moamap.map.dto.MapMemberRoleUpdateResponse;
@@ -139,6 +140,19 @@ public class MapController {
     ) {
         mapService.leave(mapId, userId);
         return ApiResponse.success();
+    }
+
+    @Operation(
+        summary = "지도 멤버 목록 조회",
+        description = "지도에 참여 중인 멤버를 역할 순(방장 → 관리자 → 멤버)으로 조회한다. 해당 지도의 멤버만 조회할 수 있다. "
+            + "닉네임과 프로필 이미지는 user-service에서 가져오며, 조회에 실패하면 해당 값만 비운 채 목록을 반환한다."
+    )
+    @GetMapping("/{mapId}/members")
+    public ApiResponse<MapMemberListResponse> getMembers(
+        @PathVariable Long mapId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
+    ) {
+        return ApiResponse.success(mapService.getMembers(mapId, userId));
     }
 
     @Operation(summary = "멤버 역할 조회", description = "지도 유형과 해당 사용자의 역할을 반환한다. (place-service 승인 판단용)")

@@ -25,6 +25,12 @@ spring:
       mode: always
       data-locations: classpath:db/init.sql
 
+  http:
+    client:
+      # 외부·내부 HTTP 호출 타임아웃. 상대가 멈췄을 때 요청 스레드가 오래 붙잡히지 않도록 상한을 둔다.
+      connect-timeout: 2s
+      read-timeout: 3s
+
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -69,6 +75,11 @@ storage:
   public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
   access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
   secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+
+services:
+  user:
+    # 멤버 목록에 닉네임/프로필 이미지를 채우기 위한 user-service 내부 호출 주소.
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
 
 map:
   personal-map:

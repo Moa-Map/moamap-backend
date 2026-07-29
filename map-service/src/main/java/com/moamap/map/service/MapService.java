@@ -1,12 +1,16 @@
 package com.moamap.map.service;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
+import com.moamap.map.dto.MapMemberListResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
+import com.moamap.map.dto.MapMemberSummaryResponse;
 import com.moamap.map.dto.MapMemberRoleUpdateRequest;
 import com.moamap.map.dto.MapMemberRoleUpdateResponse;
 import com.moamap.map.dto.MapSort;
@@ -19,6 +23,8 @@ import com.moamap.map.entity.MapType;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
+import com.moamap.map.user.UserClient;
+import com.moamap.map.user.dto.UserProfileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,6 +46,7 @@ public class MapService {
     private final MapEntityRepository mapRepository;
     private final MapMemberRepository mapMemberRepository;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final UserClient userClient;
 
     @Transactional
     public MapDetailResponse create(MapCreateRequest request, Long ownerId) {
@@ -159,6 +166,29 @@ public class MapService {
     }
 
     /**
+     * 지도에 참여 중인 멤버 전체를 역할 순(방장 → 관리자 → 멤버)으로 조회한다.
+     *
+     * 닉네임과 프로필 이미지는 user-service에서 한 번에 받아와 채운다. 멤버가 몇 명이든 호출은 1회다.
+     * 조회에 실패하면 해당 값만 비운 채 목록을 그대로 내려보낸다 — 표시용 정보 때문에 화면 전체가 막히면 안 된다.
+     */
+    public MapMemberListResponse getMembers(Long mapId, Long requesterId) {
+        // 없는 지도면 404가 먼저 나가야 한다.
+        getMapOrThrow(mapId);
+        requireMember(mapId, requesterId);
+
+        List<MapMember> members = mapMemberRepository.findByMapId(mapId);
+        Map<Long, UserProfileResponse> profiles = userClient.findProfiles(
+            members.stream().map(MapMember::getUserId).toList());
+
+        List<MapMemberSummaryResponse> summaries = members.stream()
+            // MapRole은 OWNER, ADMIN, MEMBER 순으로 선언돼 있어 enum 순서가 곧 화면 노출 순서다.
+            .sorted(Comparator.comparing(MapMember::getRole))
+            .map(member -> MapMemberSummaryResponse.of(member, profiles.get(member.getUserId())))
+            .toList();
+        return MapMemberListResponse.of(summaries);
+    }
+
+    /**
      * 멤버 역할 조회. 미참여 시 role=NONE으로 응답한다. (place-service 승인 판단용)
      */
     public MapMemberRoleResponse getMemberRole(Long mapId, Long userId) {
@@ -237,6 +267,12 @@ public class MapService {
         return mapMemberRepository.findByMapIdAndUserId(mapId, userId)
             .map(MapMember::getRole)
             .orElse(MapRole.NONE);
+    }
+
+    private void requireMember(Long mapId, Long requesterId) {
+        if (roleOf(mapId, requesterId) == MapRole.NONE) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_MEMBER);
+        }
     }
 
     private void requireManagePermission(MapRole role) {
