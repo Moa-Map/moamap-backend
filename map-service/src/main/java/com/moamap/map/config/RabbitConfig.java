@@ -25,6 +25,11 @@ public class RabbitConfig {
     private static final String QUEUE = "map-service.place-count";
     private static final String DLQ = "map-service.place-count.dlq";
 
+    private static final String USER_EXCHANGE = "user.events";
+    private static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
+    private static final String USER_REGISTERED_QUEUE = "map-service.user-registered";
+    private static final String USER_REGISTERED_DLQ = "map-service.user-registered.dlq";
+
     @Bean
     public TopicExchange placeEventsExchange() {
         return new TopicExchange(EXCHANGE, true, false);
@@ -46,6 +51,32 @@ public class RabbitConfig {
     @Bean
     public Binding placeCountBinding(Queue placeCountQueue, TopicExchange placeEventsExchange) {
         return BindingBuilder.bind(placeCountQueue).to(placeEventsExchange).with(ROUTING_KEY);
+    }
+
+    /**
+     * 가입 이벤트 구독. 발행자(user-service)는 익스체인지만 선언하고 큐는 소비자가 관리한다.
+     */
+    @Bean
+    public TopicExchange userEventsExchange() {
+        return new TopicExchange(USER_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue userRegisteredQueue() {
+        return QueueBuilder.durable(USER_REGISTERED_QUEUE)
+            .withArgument("x-dead-letter-exchange", "")
+            .withArgument("x-dead-letter-routing-key", USER_REGISTERED_DLQ)
+            .build();
+    }
+
+    @Bean
+    public Queue userRegisteredDeadLetterQueue() {
+        return QueueBuilder.durable(USER_REGISTERED_DLQ).build();
+    }
+
+    @Bean
+    public Binding userRegisteredBinding(Queue userRegisteredQueue, TopicExchange userEventsExchange) {
+        return BindingBuilder.bind(userRegisteredQueue).to(userEventsExchange).with(USER_REGISTERED_ROUTING_KEY);
     }
 
     @Bean

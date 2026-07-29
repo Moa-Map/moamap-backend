@@ -25,6 +25,8 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
 
     boolean existsByInviteCode(String inviteCode);
 
+    boolean existsByOwnerIdAndPersonalIsTrue(Long ownerId);
+
     // 엔티티를 로드해 setter를 쓰지 않고 벌크 UPDATE로 카운트 컬럼만 갱신한다.
     // 리스너가 지도 수정/멤버 가입과 동시에 실행돼도 다른 필드를 되돌릴 위험이 없다(청사진 3-3(나)).
     @Modifying(clearAutomatically = true)
