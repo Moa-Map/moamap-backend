@@ -15,6 +15,7 @@ import com.moamap.user.auth.jwt.JwtProperties;
 import com.moamap.user.auth.jwt.JwtProvider;
 import com.moamap.user.auth.oauth.OAuthClient;
 import com.moamap.user.auth.oauth.OAuthUserInfo;
+import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.refreshtoken.RefreshTokenStore;
 import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.entity.User;
@@ -35,6 +36,7 @@ class AuthServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenStore refreshTokenStore;
     @Mock private JwtProvider jwtProvider;
+    @Mock private OutboxRecorder outboxRecorder;
 
     private AuthService authService;
 
@@ -42,7 +44,8 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 oAuthClient, userRepository, refreshTokenStore, jwtProvider,
-                new JwtProperties("secret-key-min-32-bytes-long-for-test!!", 30, 14));
+                new JwtProperties("secret-key-min-32-bytes-long-for-test!!", 30, 14),
+                outboxRecorder);
     }
 
     @Test

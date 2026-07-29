@@ -12,6 +12,8 @@ import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.PlaceCountChangeSignal;
+import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -21,7 +23,9 @@ import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,6 +42,8 @@ public class PlaceService {
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
     private final PlaceBulkRegistrar placeBulkRegistrar;
+    private final ApplicationEventPublisher eventPublisher;
+    private final PlaceCountEventPublisher placeCountEventPublisher;
 
     @Transactional
     public PlaceResponse create(PlaceCreateRequest request, Long userId) {
@@ -67,14 +73,19 @@ public class PlaceService {
             .build();
         // checkDuplicate는 흔한 경우를 빠르게 막기 위한 사전 체크일 뿐이고,
         // 동시 요청 race condition은 uk_places_map_kakao_place 유니크 제약으로 막는다.
+        Place saved;
         try {
-            return PlaceResponse.from(placeRepository.saveAndFlush(place));
+            saved = placeRepository.saveAndFlush(place);
         } catch (DataIntegrityViolationException e) {
             if (isDuplicatePlaceConstraintViolation(e)) {
                 throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
             }
             throw e;
         }
+        if (status == PlaceStatus.APPROVED) {
+            eventPublisher.publishEvent(new PlaceCountChangeSignal(request.mapId()));
+        }
+        return PlaceResponse.from(saved);
     }
 
     /**
@@ -121,6 +132,11 @@ public class PlaceService {
                 log.warn("일괄 등록 중 예상치 못한 실패: index={}, name={}", index, item.name(), e);
                 results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), "등록에 실패했습니다."));
             }
+        }
+        // 바깥 트랜잭션이 없고(NOT_SUPPORTED) 건별 REQUIRES_NEW로 이미 커밋된 상태이므로,
+        // 신호가 아니라 publishNow를 여기서 직접 1회만 호출한다(청사진 3-1(가), 3-3(가)).
+        if (status == PlaceStatus.APPROVED && created > 0) {
+            placeCountEventPublisher.publishNow(request.mapId());
         }
         return new PlaceBulkCreateResponse(
             request.places().size(), created, request.places().size() - created, results);
@@ -170,9 +186,20 @@ public class PlaceService {
     }
 
     public PageResponse<PlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
-        requireReviewer(mapId, userId);
-        return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable)
-            .map(PlaceResponse::from));
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
+        MapMemberRole role = memberInfo.role();
+        // role == null은 역직렬화가 어긋난 비정상 상황이라 fail-closed로 차단한다.
+        Page<Place> pendingPlaces = switch (role != null ? role : MapMemberRole.NONE) {
+            case OWNER, ADMIN ->
+                placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable);
+            case MEMBER ->
+                placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, userId, pageable);
+            case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        };
+        return PageResponse.from(pendingPlaces.map(PlaceResponse::from));
     }
 
     @Transactional
@@ -188,7 +215,11 @@ public class PlaceService {
     public void delete(Long id, Long userId) {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
-        place.delete();
+        boolean wasApproved = place.getStatus() == PlaceStatus.APPROVED;
+        place.delete(userId);
+        if (wasApproved) {
+            eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
+        }
     }
 
     @Transactional
@@ -197,6 +228,7 @@ public class PlaceService {
         requireReviewer(place.getMapId(), userId);
         checkPending(place);
         place.approve(userId);
+        eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
         return PlaceResponse.from(place);
     }
 

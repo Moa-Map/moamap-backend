@@ -17,6 +17,9 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     Page<Place> findByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status, Pageable pageable);
 
+    Page<Place> findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(
+        Long mapId, PlaceStatus status, Long createdBy, Pageable pageable);
+
     boolean existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(Long mapId, String kakaoPlaceId);
 
     /**
@@ -27,4 +30,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     @Query("update Place p set p.avgRating = :avgRating, p.commentCount = :commentCount where p.id = :placeId")
     void updateReviewSummary(@Param("placeId") Long placeId, @Param("avgRating") BigDecimal avgRating,
             @Param("commentCount") int commentCount);
+
+    /** 목록 노출 대상(APPROVED·미삭제)의 현재 절대 개수. 이벤트 발행 시점에 조회한다(청사진 2-2, 3-3(가)). */
+    long countByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status);
 }

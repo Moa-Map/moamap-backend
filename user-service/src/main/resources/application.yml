@@ -20,6 +20,14 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
+    # 브로커가 메시지를 받았는지 확인받는다. 발행 실패를 즉시 알아채 다음 주기에 다시 시도할 수 있다.
+    publisher-confirm-type: correlated
+
   http:
     client:
       # 외부 HTTP 호출(카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
@@ -54,3 +62,19 @@ kakao:
 # 개발용 카카오 로그인 콜백 활성화 플래그. 운영에서는 반드시 false(기본값)로 두어 엔드포인트 자체가 뜨지 않게 한다.
 dev-login:
   enabled: ${DEV_LOGIN_ENABLED:false}
+
+storage:
+  # NHN Cloud Object Storage(S3 호환) 연동. 자격증명은 절대 커밋 금지 — 환경변수로 주입.
+  # endpoint가 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:}
+  region: ${OBJECT_STORAGE_REGION:kr-standard}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+  public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+
+outbox:
+  # 보관함을 훑는 주기. 가입 직후 지도가 만들어지기까지의 지연이 이 값에 좌우된다.
+  poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
+  # 발행이 끝난 기록을 남겨두는 기간(일). 지나면 정리 배치가 지운다.
+  retention-days: ${OUTBOX_RETENTION_DAYS:7}

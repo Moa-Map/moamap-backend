@@ -15,7 +15,9 @@ public record MapSummaryResponse(
     MapType type,
     List<String> tags,
     int memberCount,
-    boolean joined
+    boolean joined,
+    int placeCount,
+    boolean personal
 ) {
 
     public static MapSummaryResponse of(MapEntity map, boolean joined) {
@@ -27,7 +29,9 @@ public record MapSummaryResponse(
             map.getType(),
             List.copyOf(map.getTags()),
             map.getMemberCount(),
-            joined
+            joined,
+            map.getPlaceCount(),
+            map.isPersonal()
         );
     }
 }

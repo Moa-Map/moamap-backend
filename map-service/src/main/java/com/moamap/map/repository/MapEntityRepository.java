@@ -8,6 +8,7 @@ import com.moamap.map.entity.MapType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -52,4 +53,11 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
      */
     @Query("select distinct m from MapEntity m left join fetch m.tags where m.id in :ids")
     List<MapEntity> findAllWithTagsByIdIn(@Param("ids") Collection<Long> ids);
+    boolean existsByOwnerIdAndPersonalIsTrue(Long ownerId);
+
+    // 엔티티를 로드해 setter를 쓰지 않고 벌크 UPDATE로 카운트 컬럼만 갱신한다.
+    // 리스너가 지도 수정/멤버 가입과 동시에 실행돼도 다른 필드를 되돌릴 위험이 없다(청사진 3-3(나)).
+    @Modifying(clearAutomatically = true)
+    @Query("update MapEntity m set m.placeCount = :placeCount where m.id = :mapId")
+    int updatePlaceCount(@Param("mapId") Long mapId, @Param("placeCount") long placeCount);
 }

@@ -4,7 +4,10 @@ import com.moamap.common.response.ApiResponse;
 import com.moamap.map.dto.JoinByInviteCodeRequest;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
+import com.moamap.map.dto.MapMemberListResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
+import com.moamap.map.dto.MapMemberRoleUpdateRequest;
+import com.moamap.map.dto.MapMemberRoleUpdateResponse;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,6 +64,15 @@ public class MapController {
         @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
     ) {
         return ApiResponse.success(PageResponse.from(mapService.getCommunityMaps(tag, sort, pageable, userId)));
+    }
+
+    @Operation(summary = "공식 지도 목록", description = "공공데이터 기반 공식(OFFICIAL) 지도 목록을 조회한다. 로그인 없이 볼 수 있다.")
+    @GetMapping("/official")
+    public ApiResponse<PageResponse<MapSummaryResponse>> getOfficialMaps(
+        @PageableDefault(size = 20) Pageable pageable,
+        @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
+    ) {
+        return ApiResponse.success(PageResponse.from(mapService.getOfficialMaps(pageable, userId)));
     }
 
     @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다.")
@@ -101,7 +114,7 @@ public class MapController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "커뮤니티 지도 참여", description = "공개 지도에 바로 참여한다.")
+    @Operation(summary = "커뮤니티/공식 지도 참여", description = "공개(COMMUNITY) 또는 공식(OFFICIAL) 지도에 바로 참여한다.")
     @PostMapping("/{mapId}/join")
     public ApiResponse<MapDetailResponse> joinCommunity(
         @PathVariable Long mapId,
@@ -129,6 +142,19 @@ public class MapController {
         return ApiResponse.success();
     }
 
+    @Operation(
+        summary = "지도 멤버 목록 조회",
+        description = "지도에 참여 중인 멤버를 역할 순(방장 → 관리자 → 멤버)으로 조회한다. 해당 지도의 멤버만 조회할 수 있다. "
+            + "닉네임과 프로필 이미지는 user-service에서 가져오며, 조회에 실패하면 해당 값만 비운 채 목록을 반환한다."
+    )
+    @GetMapping("/{mapId}/members")
+    public ApiResponse<MapMemberListResponse> getMembers(
+        @PathVariable Long mapId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
+    ) {
+        return ApiResponse.success(mapService.getMembers(mapId, userId));
+    }
+
     @Operation(summary = "멤버 역할 조회", description = "지도 유형과 해당 사용자의 역할을 반환한다. (place-service 승인 판단용)")
     @GetMapping("/{mapId}/members/{userId}")
     public ApiResponse<MapMemberRoleResponse> getMemberRole(
@@ -136,5 +162,16 @@ public class MapController {
         @PathVariable Long userId
     ) {
         return ApiResponse.success(mapService.getMemberRole(mapId, userId));
+    }
+
+    @Operation(summary = "멤버 역할 변경", description = "지도 소유자(OWNER)가 멤버의 역할을 ADMIN 또는 MEMBER로 변경한다.")
+    @PutMapping("/{mapId}/members/{userId}/role")
+    public ApiResponse<MapMemberRoleUpdateResponse> changeMemberRole(
+        @PathVariable Long mapId,
+        @PathVariable Long userId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long requesterId,
+        @Valid @RequestBody MapMemberRoleUpdateRequest request
+    ) {
+        return ApiResponse.success(mapService.changeMemberRole(mapId, requesterId, userId, request));
     }
 }
