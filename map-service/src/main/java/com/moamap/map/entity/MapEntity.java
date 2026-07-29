@@ -65,6 +65,13 @@ public class MapEntity extends BaseTimeEntity {
     @Column(name = "place_count", nullable = false, columnDefinition = "integer not null default 0")
     private int placeCount;
 
+    /**
+     * 가입 시 자동으로 만들어지는 "나만의 지도" 여부. 혼자 쓰는 지도라 초대 코드를 발급하지 않고 삭제할 수 없다.
+     * 타입은 PRIVATE 그대로 둔다 — MapType에 값을 더하면 이 enum을 미러링하는 place-service가 역직렬화에 실패한다.
+     */
+    @Column(name = "personal", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean personal;
+
     @ElementCollection
     @CollectionTable(name = "map_tag", joinColumns = @JoinColumn(name = "map_id"))
     @Column(name = "tag", length = 30)
@@ -85,6 +92,15 @@ public class MapEntity extends BaseTimeEntity {
     public static MapEntity create(String name, String description, String imageUrl, MapType type,
                                    Long ownerId, List<String> tags, String inviteCode) {
         return new MapEntity(name, description, imageUrl, type, ownerId, tags, inviteCode);
+    }
+
+    /**
+     * 가입 시 만들어주는 나만의 지도. 혼자 쓰는 지도라 초대 코드를 발급하지 않는다.
+     */
+    public static MapEntity createPersonal(Long ownerId, String name) {
+        MapEntity map = new MapEntity(name, null, null, MapType.PRIVATE, ownerId, List.of(), null);
+        map.personal = true;
+        return map;
     }
 
     public void update(String name, String description, String imageUrl, List<String> tags) {

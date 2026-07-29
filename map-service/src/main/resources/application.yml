@@ -82,6 +82,9 @@ services:
     base-url: ${USER_SERVICE_URL:http://localhost:8081}
 
 map:
+  personal-map:
+    # 가입 시 만들어지는 지도 이름. 문구를 바꿀 때 재배포하지 않아도 되도록 설정으로 뺀다.
+    name: ${PERSONAL_MAP_NAME:나만의 지도}
   congestion:
     # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
     sync-interval-ms: ${CONGESTION_SYNC_INTERVAL_MS:300000}

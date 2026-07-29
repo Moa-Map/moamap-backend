@@ -25,7 +25,8 @@ public enum MapErrorCode implements ErrorCode {
     STORAGE_NOT_CONFIGURED("MAP_012", "이미지 업로드를 사용할 수 없습니다.", 503),
     TARGET_NOT_MAP_MEMBER("MAP_013", "대상 사용자가 해당 지도의 멤버가 아닙니다.", 404),
     CANNOT_CHANGE_OWNER_ROLE("MAP_014", "소유자의 역할은 변경할 수 없습니다.", 400),
-    INVALID_ROLE_ASSIGNMENT("MAP_015", "부여할 수 없는 역할입니다. ADMIN 또는 MEMBER만 지정할 수 있습니다.", 400);
+    INVALID_ROLE_ASSIGNMENT("MAP_015", "부여할 수 없는 역할입니다. ADMIN 또는 MEMBER만 지정할 수 있습니다.", 400),
+    CANNOT_DELETE_PERSONAL_MAP("MAP_016", "나만의 지도는 삭제할 수 없습니다.", 400);
 
     private final String code;
     private final String message;
