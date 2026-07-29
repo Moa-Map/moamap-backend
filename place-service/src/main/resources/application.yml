@@ -56,6 +56,9 @@ services:
   map:
     # 지도 유형/멤버 역할 조회용 map-service 내부 호출 주소.
     base-url: ${MAP_SERVICE_URL:http://localhost:8083}
+  user:
+    # 활동내역 로그 표시용 닉네임/프로필 이미지 조회용 user-service 내부 호출 주소.
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
 
 storage:
   # NHN Cloud Object Storage(S3 호환) 연동. 자격증명은 절대 커밋 금지 — 환경변수로 주입.

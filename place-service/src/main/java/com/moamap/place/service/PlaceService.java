@@ -204,7 +204,7 @@ public class PlaceService {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
         boolean wasApproved = place.getStatus() == PlaceStatus.APPROVED;
-        place.delete();
+        place.delete(userId);
         if (wasApproved) {
             eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
         }

@@ -58,7 +58,7 @@ class PlaceRepositoryTest {
         entityManager.clear();
         Place managed = placeRepository.findByIdAndDeletedAtIsNull(original.getId()).orElseThrow();
 
-        managed.delete();
+        managed.delete(1L);
         placeRepository.saveAndFlush(managed);
         entityManager.clear();
 
@@ -67,6 +67,20 @@ class PlaceRepositoryTest {
         // 유니크 제약이 kakaoPlaceId=null끼리는 충돌시키지 않으므로, 같은 kakaoPlaceId로 재등록이 가능하다.
         assertThatCode(() -> placeRepository.saveAndFlush(placeBuilder().build()))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void delete는_deletedBy를_실제_DB에도_반영한다() {
+        Place original = placeRepository.saveAndFlush(placeBuilder().build());
+        entityManager.clear();
+        Place managed = placeRepository.findByIdAndDeletedAtIsNull(original.getId()).orElseThrow();
+
+        managed.delete(7L);
+        placeRepository.saveAndFlush(managed);
+        entityManager.clear();
+
+        Place found = placeRepository.findById(original.getId()).orElseThrow();
+        assertThat(found.getDeletedBy()).isEqualTo(7L);
     }
 
     @Test
@@ -163,7 +177,7 @@ class PlaceRepositoryTest {
         placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("R1").status(PlaceStatus.REJECTED).build());
         Place softDeleted = placeRepository.saveAndFlush(
             placeBuilder().kakaoPlaceId("D1").status(PlaceStatus.APPROVED).build());
-        softDeleted.delete();
+        softDeleted.delete(1L);
         placeRepository.saveAndFlush(softDeleted);
         entityManager.clear();
 

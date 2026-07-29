@@ -27,7 +27,8 @@ public enum PlaceErrorCode implements ErrorCode {
     FILE_SIZE_EXCEEDED("PLACE_014", "파일 크기가 허용치를 초과했습니다.", 400),
     UNSUPPORTED_SHARE_LINK("PLACE_015", "지원하지 않는 공유 링크입니다. 네이버지도·카카오맵·구글맵의 리스트 공유 링크를 넣어주세요.", 400),
     SHARE_LINK_EXTRACTION_FAILED("PLACE_016", "공유 링크에서 장소 목록을 가져오지 못했습니다. 공개된 리스트인지 확인해 주세요.", 502),
-    SHARE_LIST_STRUCTURE_CHANGED("PLACE_017", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502);
+    SHARE_LIST_STRUCTURE_CHANGED("PLACE_017", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502),
+    OFFICIAL_MAP_NO_ACTIVITY_LOG("PLACE_018", "공식 지도는 활동 내역을 제공하지 않습니다.", 403);
 
     private final String code;
     private final String message;

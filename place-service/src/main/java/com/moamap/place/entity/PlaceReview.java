@@ -10,6 +10,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -19,7 +20,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "place_reviews")
+@Table(name = "place_reviews",
+    indexes = @Index(name = "idx_place_reviews_place_created", columnList = "place_id, created_at"))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
