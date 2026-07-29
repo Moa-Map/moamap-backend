@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -219,6 +220,149 @@ class MapApiIntegrationTest {
                 .content(createBody("헤더없음", "PUBLIC", List.of())))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.error.code").value("COMMON_005"));
+    }
+
+    @Test
+    @DisplayName("OWNER가 MEMBER를 ADMIN으로 승격하면 200이고, 이후 역할 조회에도 ADMIN이 반영된다")
+    void ownerPromotesMemberToAdmin() throws Exception {
+        long mapId = createMap(OWNER, "역할 변경 지도", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.role").value("ADMIN"));
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}/members/{userId}", mapId, OTHER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.role").value("ADMIN"));
+    }
+
+    @Test
+    @DisplayName("같은 role을 두 번 요청해도 멱등하게 둘 다 200이다")
+    void changeRoleIsIdempotent() throws Exception {
+        long mapId = createMap(OWNER, "멱등 테스트 지도", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.role").value("ADMIN"));
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.role").value("ADMIN"));
+    }
+
+    @Test
+    @DisplayName("OWNER 자신을 대상으로 역할 변경을 요청하면 400 CANNOT_CHANGE_OWNER_ROLE이다")
+    void cannotChangeOwnerRole() throws Exception {
+        long mapId = createMap(OWNER, "소유자 보호 지도", "PUBLIC");
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OWNER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("MEMBER")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("MAP_014"));
+    }
+
+    @Test
+    @DisplayName("멤버가 아닌 사용자를 대상으로 역할 변경을 요청하면 404 TARGET_NOT_MAP_MEMBER이다")
+    void targetNotMapMember() throws Exception {
+        long mapId = createMap(OWNER, "비멤버 대상 지도", "PUBLIC");
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error.code").value("MAP_013"));
+    }
+
+    @Test
+    @DisplayName("OWNER가 아닌 요청자가 역할 변경을 시도하면 403 NOT_MAP_OWNER이다")
+    void nonOwnerCannotChangeRole() throws Exception {
+        long mapId = createMap(OWNER, "권한 없는 요청자 지도", "PUBLIC");
+        long thirdUser = 3L;
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, thirdUser))
+            .andExpect(status().isOk());
+
+        // MEMBER가 다른 MEMBER의 역할 변경을 시도
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, thirdUser)
+                .header(USER_HEADER, OTHER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("MAP_004"));
+    }
+
+    @Test
+    @DisplayName("승격된 ADMIN도 역할 변경을 시도하면 403 NOT_MAP_OWNER이다")
+    void adminCannotChangeRole() throws Exception {
+        long mapId = createMap(OWNER, "관리자 요청자 지도", "PUBLIC");
+        long thirdUser = 3L;
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, thirdUser))
+            .andExpect(status().isOk());
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, thirdUser)
+                .header(USER_HEADER, OTHER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("ADMIN")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("MAP_004"));
+    }
+
+    @Test
+    @DisplayName("role에 OWNER를 요청하면 400 INVALID_ROLE_ASSIGNMENT이다")
+    void invalidRoleAssignmentOwner() throws Exception {
+        long mapId = createMap(OWNER, "잘못된 역할 지도1", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("OWNER")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("MAP_015"));
+    }
+
+    @Test
+    @DisplayName("role에 NONE을 요청하면 400 INVALID_ROLE_ASSIGNMENT이다")
+    void invalidRoleAssignmentNone() throws Exception {
+        long mapId = createMap(OWNER, "잘못된 역할 지도2", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/v1/maps/{mapId}/members/{userId}/role", mapId, OTHER)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(roleBody("NONE")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("MAP_015"));
+    }
+
+    private String roleBody(String role) throws Exception {
+        return objectMapper.writeValueAsString(Map.of("role", role));
     }
 
     private long createMap(long userId, String name, String visibility) throws Exception {

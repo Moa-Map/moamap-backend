@@ -5,6 +5,8 @@ import com.moamap.map.dto.JoinByInviteCodeRequest;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
+import com.moamap.map.dto.MapMemberRoleUpdateRequest;
+import com.moamap.map.dto.MapMemberRoleUpdateResponse;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -136,5 +139,16 @@ public class MapController {
         @PathVariable Long userId
     ) {
         return ApiResponse.success(mapService.getMemberRole(mapId, userId));
+    }
+
+    @Operation(summary = "멤버 역할 변경", description = "지도 소유자(OWNER)가 멤버의 역할을 ADMIN 또는 MEMBER로 변경한다.")
+    @PutMapping("/{mapId}/members/{userId}/role")
+    public ApiResponse<MapMemberRoleUpdateResponse> changeMemberRole(
+        @PathVariable Long mapId,
+        @PathVariable Long userId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long requesterId,
+        @Valid @RequestBody MapMemberRoleUpdateRequest request
+    ) {
+        return ApiResponse.success(mapService.changeMemberRole(mapId, requesterId, userId, request));
     }
 }

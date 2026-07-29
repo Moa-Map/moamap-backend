@@ -7,6 +7,8 @@ import com.moamap.common.exception.BusinessException;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
+import com.moamap.map.dto.MapMemberRoleUpdateRequest;
+import com.moamap.map.dto.MapMemberRoleUpdateResponse;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
@@ -130,6 +132,32 @@ public class MapService {
     public MapMemberRoleResponse getMemberRole(Long mapId, Long userId) {
         MapEntity map = getMapOrThrow(mapId);
         return MapMemberRoleResponse.of(map.getType(), roleOf(mapId, userId));
+    }
+
+    @Transactional
+    public MapMemberRoleUpdateResponse changeMemberRole(
+        Long mapId, Long requesterId, Long targetUserId, MapMemberRoleUpdateRequest request
+    ) {
+        MapRole requestedRole = request.role();
+        if (requestedRole != MapRole.ADMIN && requestedRole != MapRole.MEMBER) {
+            throw new BusinessException(MapErrorCode.INVALID_ROLE_ASSIGNMENT);
+        }
+
+        MapEntity map = getMapOrThrow(mapId);
+        if (!map.isOwnedBy(requesterId)) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_OWNER);
+        }
+
+        MapMember target = mapMemberRepository.findByMapIdAndUserId(mapId, targetUserId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.TARGET_NOT_MAP_MEMBER));
+        if (target.getRole() == MapRole.OWNER) {
+            throw new BusinessException(MapErrorCode.CANNOT_CHANGE_OWNER_ROLE);
+        }
+
+        if (target.getRole() != requestedRole) {
+            target.changeRole(requestedRole);
+        }
+        return MapMemberRoleUpdateResponse.of(mapId, targetUserId, requestedRole);
     }
 
     private void addMember(MapEntity map, Long userId) {
