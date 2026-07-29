@@ -192,6 +192,26 @@ class MapApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("지도 상세 응답에 placeCount가 노출된다")
+    void mapDetailIncludesPlaceCount() throws Exception {
+        long mapId = createMap(OWNER, "장소 개수 상세 테스트", "PUBLIC");
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.placeCount").value(0));
+    }
+
+    @Test
+    @DisplayName("지도 목록 응답에 placeCount가 노출된다")
+    void mapListIncludesPlaceCount() throws Exception {
+        createMap(OWNER, "장소 개수 목록 테스트", "PUBLIC");
+
+        mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].placeCount").value(0));
+    }
+
+    @Test
     @DisplayName("인증 헤더(X-User-Id)가 없으면 401이다")
     void createWithoutUserHeaderUnauthorized() throws Exception {
         mockMvc.perform(post("/api/v1/maps")

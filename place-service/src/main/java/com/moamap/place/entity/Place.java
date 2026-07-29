@@ -13,6 +13,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
@@ -27,7 +28,8 @@ import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "places",
-    uniqueConstraints = @UniqueConstraint(name = "uk_places_map_kakao_place", columnNames = {"map_id", "kakao_place_id"}))
+    uniqueConstraints = @UniqueConstraint(name = "uk_places_map_kakao_place", columnNames = {"map_id", "kakao_place_id"}),
+    indexes = @Index(name = "idx_places_map_status_created", columnList = "map_id, status, created_at"))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -112,6 +114,9 @@ public class Place {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "deleted_by")
+    private Long deletedBy;
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -168,8 +173,9 @@ public class Place {
         this.processedAt = LocalDateTime.now();
     }
 
-    public void delete() {
+    public void delete(Long deletedBy) {
         this.deletedAt = LocalDateTime.now();
+        this.deletedBy = deletedBy;
         // uk_places_map_kakao_place는 deleted_at을 구분하지 않는다.
         // kakaoPlaceId를 비워서 유니크 제약 대상에서 빼야, 같은 지도에 같은 장소를 다시 등록할 수 있다.
         this.kakaoPlaceId = null;
