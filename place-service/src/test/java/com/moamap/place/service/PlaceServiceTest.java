@@ -293,17 +293,75 @@ class PlaceServiceTest {
     }
 
     @Test
-    void findPendingByMapId는_방장_관리자가_아니면_BusinessException을_던진다() {
+    void findPendingByMapId는_관리자가_요청하면_지도_전체_PENDING_목록을_반환한다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING, pageable)).willReturn(
+            new PageImpl<>(List.of(
+                Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
+            ), pageable, 1)
+        );
+
+        // when
+        PageResponse<PlaceResponse> result = placeService.findPendingByMapId(10L, 2L, pageable);
+
+        // then
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).name()).isEqualTo("대기중인 장소");
+        verify(placeRepository, never())
+            .findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(any(), any(), any(), any());
+    }
+
+    @Test
+    void findPendingByMapId는_일반_멤버가_요청하면_본인이_등록한_PENDING만_반환한다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
         given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(10L, PlaceStatus.PENDING, 3L, pageable))
+            .willReturn(new PageImpl<>(List.of(
+                Place.builder().name("본인이 등록한 대기중인 장소").mapId(10L).createdBy(3L).status(PlaceStatus.PENDING).build()
+            ), pageable, 1));
+
+        // when
+        PageResponse<PlaceResponse> result = placeService.findPendingByMapId(10L, 3L, pageable);
+
+        // then
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).name()).isEqualTo("본인이 등록한 대기중인 장소");
+        verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any(), any());
+    }
+
+    @Test
+    void findPendingByMapId는_지도_멤버가_아니면_NOT_MAP_MEMBER_BusinessException을_던진다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
 
         // when & then
         assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
+            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
         verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any(), any());
+        verify(placeRepository, never())
+            .findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(any(), any(), any(), any());
+    }
+
+    @Test
+    void findPendingByMapId는_role이_null이면_fail_closed로_NOT_MAP_MEMBER_BusinessException을_던진다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, null));
+
+        // when & then
+        assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L, pageable))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
+        verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any(), any());
+        verify(placeRepository, never())
+            .findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(any(), any(), any(), any());
     }
 
     @Test

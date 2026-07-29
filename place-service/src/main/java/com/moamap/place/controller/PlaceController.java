@@ -115,7 +115,7 @@ public class PlaceController {
     @GetMapping("/pending")
     @Operation(
         summary = "승인 대기 장소 목록 조회",
-        description = "특정 지도의 PENDING 상태 장소 목록을 조회한다. 해당 지도의 OWNER/ADMIN만 호출할 수 있다."
+        description = "특정 지도의 PENDING 상태 장소 목록을 조회한다. OWNER/ADMIN은 지도 전체 목록을, MEMBER는 본인이 등록한 신청 건만 조회한다. 해당 지도의 멤버가 아니면 403."
     )
     public ApiResponse<PageResponse<PlaceResponse>> getPending(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")

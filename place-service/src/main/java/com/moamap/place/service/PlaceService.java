@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -185,9 +186,20 @@ public class PlaceService {
     }
 
     public PageResponse<PlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
-        requireReviewer(mapId, userId);
-        return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable)
-            .map(PlaceResponse::from));
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
+        MapMemberRole role = memberInfo.role();
+        // role == null은 역직렬화가 어긋난 비정상 상황이라 fail-closed로 차단한다.
+        Page<Place> pendingPlaces = switch (role != null ? role : MapMemberRole.NONE) {
+            case OWNER, ADMIN ->
+                placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable);
+            case MEMBER ->
+                placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, userId, pageable);
+            case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        };
+        return PageResponse.from(pendingPlaces.map(PlaceResponse::from));
     }
 
     @Transactional
