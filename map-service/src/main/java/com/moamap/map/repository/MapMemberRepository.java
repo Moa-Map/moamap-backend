@@ -17,6 +17,7 @@ public interface MapMemberRepository extends JpaRepository<MapMember, Long> {
 
     List<MapMember> findByUserIdAndMapIdIn(Long userId, Collection<Long> mapIds);
 
+    List<MapMember> findByUserId(Long userId);
     List<MapMember> findByMapId(Long mapId);
 
     @Modifying
