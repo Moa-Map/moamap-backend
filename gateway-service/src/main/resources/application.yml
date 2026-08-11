@@ -29,6 +29,7 @@ management:
   endpoints:
     web:
       exposure:
+        # prometheus는 열지 않는다 — 8080이 LoadBalancer로 공인 IP에 물려 있어 지표가 공개된다.
         include: health, info
   endpoint:
     health:
