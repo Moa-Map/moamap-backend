@@ -35,6 +35,11 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      # API별 p95를 재려면 버킷이 필요하다. Micrometer 기본값은 count/sum만 내보낸다.
+      percentiles-histogram:
+        http.server.requests: true
   health:
     # 브로커가 잠깐 죽어도 place-service는 정상 동작한다(카운트 발행만 지연) — health에 반영하지 않는다.
     rabbit:

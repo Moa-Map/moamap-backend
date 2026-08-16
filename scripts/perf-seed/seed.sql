@@ -11,6 +11,11 @@
 \set reviews      300000
 \set tags_per_map 3
 \set members_per_map 6
+-- 시나리오 2·3용 "장소가 몰린 지도". id는 k6가 지목할 수 있게 고정한다.
+\set hot_map 900001
+\set personal_map 900002
+\set hot_places 6000
+\set personal_places 6000
 
 BEGIN;
 
@@ -99,6 +104,47 @@ SELECT (i % :places) + 1,
        '성능 테스트용 리뷰 본문 ' || i,
        now() - (random() * 200 * interval '1 day'), now()
 FROM generate_series(1, :reviews) i;
+
+-- 6-1) 측정 시나리오용 "장소가 몰린 지도" 두 개.
+--      위 5)는 장소 6만 개를 지도 7천 개에 흩뿌려서 지도당 8.5개밖에 안 된다.
+--      "장소가 많을 때 느려진다"를 재려면 한 지도에 몰아넣은 표본이 따로 필요하다.
+--      id를 고정값으로 박는 이유: k6 스크립트가 이 지도를 지목해서 때려야 하기 때문.
+INSERT INTO map_service.map_entity
+    (id, name, description, type, owner_id, member_count, place_count, personal, created_at, updated_at)
+VALUES
+    (:hot_map, '장소 많은 커뮤니티 지도', '시나리오 2 측정용', 'COMMUNITY', 1, 1, 0, false,
+     now() - interval '200 days', now()),
+    -- 가입 시 자동 생성되는 "나만의 지도"에 해당. owner당 1개만 허용된다(uk_map_personal_owner).
+    (:personal_map, '나만의 지도', '시나리오 3 측정용', 'PRIVATE', 1, 1, 0, true,
+     now() - interval '200 days', now());
+
+INSERT INTO map_service.map_tag (map_id, tag)
+VALUES (:hot_map, '맛집'), (:hot_map, '카페'), (:hot_map, '데이트');
+
+INSERT INTO map_service.map_member (map_id, user_id, role, created_at, updated_at)
+VALUES (:hot_map, 1, 'OWNER', now() - interval '200 days', now()),
+       (:personal_map, 1, 'OWNER', now() - interval '200 days', now());
+
+-- 커뮤니티 쪽은 여러 사람이 등록한 모양새(created_by를 흩는다), 개인 쪽은 전부 본인이 등록.
+INSERT INTO place_service.places
+    (name, address, road_address, category, lat, lng, map_id, created_by, status, source_type,
+     kakao_place_id, comment_count, created_at, updated_at, processed_at, processed_by)
+SELECT '몰린장소 ' || i, '서울시 테스트구 몰린동 ' || i, '서울시 테스트구 몰린로 ' || i, '음식점',
+       37.4 + (random() * 0.2), 126.9 + (random() * 0.2),
+       :hot_map, (i % :users) + 1, 'APPROVED', 'KAKAO_SEARCH',
+       'hot-' || i, 0,
+       now() - (random() * 200 * interval '1 day'), now(), now(), 1
+FROM generate_series(1, :hot_places) i;
+
+INSERT INTO place_service.places
+    (name, address, road_address, category, lat, lng, map_id, created_by, status, source_type,
+     kakao_place_id, comment_count, created_at, updated_at, processed_at, processed_by)
+SELECT '내장소 ' || i, '서울시 테스트구 개인동 ' || i, '서울시 테스트구 개인로 ' || i, '음식점',
+       37.4 + (random() * 0.2), 126.9 + (random() * 0.2),
+       :personal_map, 1, 'APPROVED', 'KAKAO_SEARCH',
+       'personal-' || i, 0,
+       now() - (random() * 200 * interval '1 day'), now(), now(), 1
+FROM generate_series(1, :personal_places) i;
 
 -- 7) 비정규화 카운트 맞추기. 실제 API가 이 값으로 정렬·표시하기 때문에 현실과 어긋나면 측정이 왜곡된다.
 UPDATE map_service.map_entity m

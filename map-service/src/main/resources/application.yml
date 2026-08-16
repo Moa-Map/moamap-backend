@@ -19,6 +19,9 @@ spring:
     properties:
       hibernate:
         default_schema: map_service
+        # 지연 로딩 컬렉션(map_entity.tags 등)을 건별로 읽지 않고 IN 절로 묶어 읽는다.
+        # 목록 API가 페이지 건수만큼 태그 쿼리를 날리던 N+1을 막는다.
+#        default_batch_fetch_size: 100
   sql:
     init:
       # postgres 같은 외부 DB는 기본적으로 자동 실행 안 됨 — 켜준다.
@@ -54,6 +57,11 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      # API별 p95를 재려면 버킷이 필요하다. Micrometer 기본값은 count/sum만 내보낸다.
+      percentiles-histogram:
+        http.server.requests: true
   health:
     # 브로커가 잠깐 죽어도 map-service는 정상 동작한다(카운트 갱신만 지연) — health에 반영하지 않는다.
     rabbit:

@@ -42,6 +42,11 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      # API별 p95를 재려면 버킷이 필요하다. Micrometer 기본값은 count/sum만 내보낸다.
+      percentiles-histogram:
+        http.server.requests: true
 
 jwt:
   # dev 기본 시크릿. 운영은 반드시 환경변수로 교체.
