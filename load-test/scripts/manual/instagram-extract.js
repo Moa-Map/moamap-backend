@@ -1,4 +1,15 @@
-// 인스타그램 릴스 등록 흐름 부하 테스트.
+// 인스타그램 릴스 등록 흐름 테스트. ⚠️ 수동 실행 전용 — 자동 부하 스위트(S1/S2/S5)에 넣지 말 것.
+//
+// ─── 왜 manual/ 에 있나 ───────────────────────────────────────────────────────
+//   extract 모드는 Gemini + 카카오 로컬 API를 실제로 호출한다. 호출당 과금·쿼터라
+//   부하 테스트로 수만 번 부르면 요금과 쿼터가 그대로 나간다(README §2 제외 목록).
+//   register/race 모드는 외부 호출이 없지만, race 는 부하 측정이 아니라
+//   유니크 제약이 뚫리는지 보는 정합성 테스트라 베이스라인 수치에 섞으면 안 된다.
+//
+//   게이트웨이를 거치지 않는 direct 전용이다(X-User-Id 헤더). 그래서 lib/auth.js 를 쓰지 않는다.
+//
+// ─── 원본 ────────────────────────────────────────────────────────────────────
+//   chore/성능수치화 브랜치의 scripts/k6/instagram-extract-test.js
 //
 // ─── 실제 사용자 흐름 (이걸 알아야 아래 시나리오가 읽힌다) ────────────────────
 //   1) 사용자가 릴스 URL/설명글을 붙여넣는다
@@ -16,16 +27,16 @@
 //   extract  : 1)번만. 외부 API(Gemini·카카오) 구간이 동시요청을 얼마나 받아내는지.
 //              ⚠️ 실제 쿼터를 태운다. Gemini 무료 티어는 몇 VU만 돼도 429 → 503(PLACE_009)으로 떨어진다.
 //   register : 2)번만. 매번 다른 kakaoPlaceId로 등록해서 정상 쓰기 경로의 처리량을 본다.
-//              전제: 1번 유저가 900001 지도의 OWNER (scripts/perf-seed/seed.sql). 그래서 즉시 APPROVED로 저장된다.
+//              전제: 1번 유저가 900001 지도의 OWNER (load-test/seed/seed.sql). 그래서 즉시 APPROVED로 저장된다.
 //   race     : 2)번을 "여러 VU가 같은 장소를 동시에" 등록. 같은 지도+같은 kakaoPlaceId는 유니크 제약
 //              (uk_places_map_kakao_place)으로 막혀야 한다. 기대 결과는 1건만 201, 나머지는 409.
 //              500이 섞여 나오면 제약 위반이 그대로 새어나온 것이고, 201이 여러 건이면 중복이 뚫린 것이다.
 //
 // ─── 실행 ────────────────────────────────────────────────────────────────────
-//   k6 run -e ONLY=register scripts/k6/instagram-extract-test.js
-//   k6 run -e ONLY=race     scripts/k6/instagram-extract-test.js
-//   k6 run -e ONLY=extract  scripts/k6/instagram-extract-test.js   # 외부 쿼터 소진 주의
-//   k6 run scripts/k6/instagram-extract-test.js                    # 기본값 = register
+//   k6 run -e ONLY=register load-test/scripts/manual/instagram-extract.js
+//   k6 run -e ONLY=race     load-test/scripts/manual/instagram-extract.js
+//   k6 run -e ONLY=extract  load-test/scripts/manual/instagram-extract.js  # 외부 쿼터 소진 주의
+//   k6 run load-test/scripts/manual/instagram-extract.js                   # 기본값 = register
 //   VUS / DURATION 으로 동시성·시간 조절 (기본 10VU 30초)
 //
 //   register·race는 DB에 실제 행을 남긴다. 재실행 전에 정리:
@@ -33,14 +44,16 @@
 import http from 'k6/http';
 import { check } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
+import { SEED } from '../lib/config.js';
 
 const PLACE = __ENV.PLACE_URL || 'http://localhost:8082';
 const VUS = Number(__ENV.VUS || 10);
 const DURATION = __ENV.DURATION || '30s';
 
 // seed.sql 과 맞춰야 하는 값. 어긋나면 전부 403(멤버 아님)이 나서 측정이 무의미해진다.
-const MAP_ID = 900001; // COMMUNITY 지도
-const OWNER_ID = 1; // 위 지도의 OWNER → 등록 시 즉시 APPROVED
+// 값은 lib/config.js 의 SEED 한 곳에서만 관리한다.
+const MAP_ID = SEED.hotMapId; // COMMUNITY 지도
+const OWNER_ID = SEED.personalOwnerId; // 위 지도의 OWNER → 등록 시 즉시 APPROVED
 
 const DESCRIPTIONS = [
   '성수동 카페 어니언 다녀왔어요 🥐 빵이 진짜 맛있음',

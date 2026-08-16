@@ -1,0 +1,35 @@
+# 부하 측정 전용 오버레이. 평소 개발에는 필요 없으므로 docker-compose.yml 에 넣지 않는다.
+#
+# 실행 (반드시 레포 루트에서):
+#   docker compose -f docker-compose.yml -f load-test/compose.loadtest.yml up -d
+#
+# 상대 경로는 첫 번째 compose 파일이 있는 디렉터리(= 레포 루트) 기준으로 풀린다.
+# 그래서 아래 volume 경로는 이 파일 위치가 아니라 루트 기준이다.
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./load-test/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - moamap-prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      # 로컬 전용이라 로그인 없이 바로 본다.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      # 호스트 3000은 다른 앱이 쓸 수 있어 3001로 뺀다.
+      - "3001:3000"
+    volumes:
+      - ./load-test/grafana/provisioning:/etc/grafana/provisioning
+      - moamap-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  moamap-prometheus-data:
+  moamap-grafana-data:

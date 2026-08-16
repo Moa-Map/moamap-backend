@@ -1,7 +1,36 @@
 # k6 부하 테스트 — 성능 베이스라인 (#85)
 
-> **상태: 초안 (작업 중)** — 팀원 리뷰·수정 환영합니다.
-> 스크립트는 아직 실행 검증 전이며, 부하량 수치는 측정 후 확정합니다.
+> **상태: 통합 완료, 실행 검증 전** — 팀원 리뷰·수정 환영합니다.
+> `chore/성능수치화`(측정 환경·시드·Prometheus)와 `chore/#85`(설계·시나리오)를 한 트리로 합쳤습니다.
+> 부하량 수치는 측정 후 확정합니다.
+
+## 디렉터리
+
+부하 테스트에 관한 건 전부 `load-test/` 안에 있습니다. 밖에 흩어두지 않습니다.
+
+```
+load-test/
+├── README.md                  이 문서
+├── .env.loadtest.example      환경변수 양식 (.env.loadtest 는 gitignore)
+├── compose.loadtest.yml       Prometheus + Grafana (부하 측정 전용 오버레이)
+├── prometheus/prometheus.yml  스크랩 설정
+├── grafana/provisioning/      데이터소스 자동 등록
+├── seed/seed.sql              대량 시드 (재실행 안전)
+└── scripts/
+    ├── lib/
+    │   ├── config.js          경로·시드 규모·멤버십 산식·부하 모양
+    │   ├── auth.js            JWT 서명(gateway) / X-User-Id(direct)
+    │   └── checks.js          응답 검증 (상태코드 + 데이터 유무)
+    ├── scenarios/             자동 스위트
+    │   ├── s1-home.js
+    │   ├── s2-map-detail.js
+    │   └── s5-mixed.js
+    └── manual/                수동 전용 (과금·정합성)
+        └── instagram-extract.js
+```
+
+**단일 출처 규칙**: 시드 규모와 고정 id는 `seed/seed.sql`의 `\set`과 `lib/config.js`의 `SEED`
+**두 곳에만** 있고 서로 일치해야 합니다. 시나리오 스크립트에 숫자를 직접 박지 않습니다.
 
 ---
 
@@ -135,6 +164,24 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 → 개선해도 "처리량 그대로" 착시      → 개선분이 응답시간에 그대로 드러남
 ```
 
+### 측정 경로는 두 개 — 회차마다 둘 다 잽니다 (`TARGET`)
+
+```
+TARGET=gateway   k6 ──Bearer JWT──→ gateway:8080 ──X-User-Id──→ map / place / user
+TARGET=direct    k6 ──X-User-Id───────────────────→ map:8083 / place:8082
+```
+
+| | `gateway` (기본) | `direct` |
+|---|---|---|
+| 인증 | JWT를 k6가 직접 HS256 서명 | `X-User-Id` 헤더 |
+| 재는 것 | 사용자가 겪는 **end-to-end** | **서비스 자체** (프록시 노이즈 제외) |
+| 쓰임 | "우리 서비스 p95"라고 말할 수 있는 공식 수치 | 병목 사냥 |
+
+하나를 고르는 게 아닙니다. **두 수치의 차이가 곧 게이트웨이 비용**이라 둘 다 재면 정보가 늘어납니다.
+
+> 게이트웨이는 클라이언트가 보낸 `X-User-Id`를 무조건 버립니다. 그래서 `direct`는 게이트웨이를
+> 안 거칠 때만 성립하고, 헤더를 위조해 게이트웨이를 우회할 수는 없습니다.
+
 ### 회차 규칙
 
 - **회차 사이 서비스 재기동** — 앞 테스트의 힙·캐시 상태가 다음 회차를 오염시키면 비교가 깨집니다
@@ -149,17 +196,38 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 
 | # | 시나리오 | 호출 흐름 | 측정 의도 | 상태 |
 |---|---|---|---|---|
-| **S2** | 지도 상세 진입 | `GET /maps/{id}` → `GET /places?mapId=` → `GET /maps/{id}/members` | **서비스 간 홉 3종 전부 통과** | 초안 작성 |
-| **S5** | 혼합 | 읽기 7 : 쓰기 3 | 읽기·쓰기 경합 | 초안 작성 |
-| S1 | 홈 진입 | `GET /maps/official` + `GET /maps/recommendations` | tags N+1 · CPU 스코어링 | 예정 |
+| **S1** | 홈 진입 | `GET /maps?sort=POPULAR` + `/maps/official` + `/maps/recommendations` | tags N+1 · **페이지 깊이** · CPU 스코어링 | 작성됨 |
+| **S2** | 지도 상세 진입 | `GET /maps/{id}` → `GET /places?mapId=` + `GET /maps/{id}/members` | **서비스 간 홉 3종 전부 통과** · 페이지 깊이 | 작성됨 |
+| **S5** | 혼합 | 읽기 7 : 쓰기 3 | 읽기·쓰기 경합 | 작성됨 |
 | S3 | 멤버 목록 단독 | `GET /maps/{id}/members` | user-service fan-out 격리 | 예정 |
-| S4 | 장소 등록 | `POST /places` | 쓰기 + 홉 비용 | 예정 |
+| S4 | 장소 등록 단독 | `POST /places` | 쓰기 + 홉 비용 | 예정 |
+| — | 인스타 추출 / 중복 등록 경합 | `manual/instagram-extract.js` | **수동 전용** (과금·정합성) | 작성됨 |
 
-**S2를 먼저 만든 이유**: 서비스 간 홉 3종(map→user, place→map)을 전부 지나는 유일한 경로라 병목이 가장 잘 드러납니다.
-**S5를 같이 만든 이유**: 읽기 전용으로만 재면 락·커넥션 경쟁이 안 보입니다.
+**S2가 대표 시나리오인 이유**: 서비스 간 홉 3종(place→map, map→user)을 전부 지나는 유일한 경로라 병목이 가장 잘 드러납니다.
+**S5를 같이 두는 이유**: 읽기 전용으로만 재면 락·커넥션 경쟁이 안 보입니다.
 
-> S1/S3/S4를 처음부터 다 만들지 않은 이유: 첫 실행에서는 시드·토큰·포트 문제가 **반드시** 터집니다.
-> 스크립트가 2개일 때 잡는 게 5개일 때보다 훨씬 빠릅니다. 돌아가는 걸 확인하고 붙입니다.
+> S3/S4를 아직 안 만든 이유: 첫 실행에서는 시드·토큰·포트 문제가 **반드시** 터집니다.
+> 스크립트가 적을 때 잡는 게 빠릅니다. 돌아가는 걸 확인하고 붙입니다.
+
+### 얕은 페이지 / 깊은 페이지를 나눠 잽니다
+
+offset 페이지네이션은 뒤로 갈수록 DB가 앞의 행을 전부 읽고 버립니다. 섞어서 재면 그 비용이 평균에 묻힙니다.
+그래서 S1(지도 목록)과 S2(장소 목록)는 **얕은 페이지(0~4)와 깊은 페이지를 50:50**으로 보고, 태그를 나눠 붙입니다.
+
+```
+GET /maps?sort=POPULAR (shallow)     ← 사용자가 실제로 많이 보는 구간
+GET /maps?sort=POPULAR (deep)        ← offset 비용이 드러나는 구간
+```
+
+깊은 페이지가 의미를 가지려면 데이터가 몰려 있어야 합니다. 그래서 시드가 **장소를 몰아넣은 지도**를 따로 심습니다(§6).
+
+### 멤버십을 맞춰서 호출합니다 ⚠️
+
+조회·등록 모두 "그 지도의 멤버냐"를 검사합니다(place-service → map-service `getMemberInfo`).
+`userId`와 `mapId`를 각각 독립적으로 랜덤 추출하면 **거의 전부 403**이 나서 인가 실패 경로만 재게 됩니다.
+
+`seed.sql`의 멤버십 산식이 결정적이라 `lib/config.js`의 `memberOf(mapId)`가 그대로 재현합니다.
+**mapId를 먼저 뽑고, 그 지도의 실제 멤버를 뽑습니다.** 시드 산식을 바꾸면 `memberOf()`도 같이 바꿔야 합니다.
 
 ### 시나리오 × 테스트 조합
 
@@ -173,6 +241,9 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 | S4 장소 등록 | | ✅ | | | |
 | **S5 혼합** | | ✅ | ✅ | ✅ | ✅ |
 
+여기에 `TARGET=gateway|direct` 두 경로가 곱해집니다. 평상(baseline)만 양쪽 다 재고,
+나머지는 `direct` 하나로 충분합니다 — 무너지는 지점을 찾는 게 목적이라 프록시 구간은 노이즈입니다.
+
 ---
 
 ## 6. 시드 데이터 — 이게 없으면 측정 자체가 무의미
@@ -180,33 +251,64 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 **빈 DB에 부하를 걸면 모든 쿼리가 10행짜리 테이블을 읽어서 전부 1ms로 나옵니다.**
 그 상태로 인덱스를 추가하면 개선폭이 0으로 보입니다.
 
+**`load-test/seed/seed.sql`** — 재실행 안전(대상 테이블 `TRUNCATE` 후 재적재)하고, 끝에 `ANALYZE`까지 돕니다.
+
+```bash
+docker compose exec -T postgres psql -U moamap -d moamap -f - < load-test/seed/seed.sql
+```
+
 | 테이블 | 건수 | 이유 |
 |---|---|---|
 | `users` | 5,000 | 토큰 풀 + 프로필 벌크 조회 대상 |
-| `map_entity` | 500 (official 20 / community 300 / private 180) | 목록 페이징이 의미를 가지려면 |
-| `map_tag` | ~1,500 | **가설 ②(tags N+1)를 드러내는 핵심 데이터** |
-| `map_member` | 30,000 | 지도당 평균 60명 → 멤버 목록 API 부하 |
-| `place` | 50,000 | 지도당 100개 → 장소 목록 페이징 |
-| `place_review` | 100,000 | 평점 집계 경로 |
+| `map_entity` | 7,020 (community ~5,000 / private ~2,000 / **official 20**) | 목록 페이징이 의미를 가지려면 |
+| `map_tag` | ~21,000 | **가설 ②(tags N+1)를 드러내는 핵심 데이터** |
+| `map_member` | ~49,000 | 지도당 OWNER 1 + 멤버 6 |
+| `place` | 60,000 + **몰린 지도 12,000** | 장소 목록 페이징 |
+| `place_review` | 300,000 | 평점 집계 경로 |
 
-### 시드 작성 시 주의점
+### "장소가 몰린 지도"를 따로 심습니다 ⭐
 
-- **적재 후 반드시 `ANALYZE`** — 대량 INSERT 직후엔 통계가 없어 옵티마이저가 엉뚱한 실행 계획을 고릅니다. 그 상태로 측정하면 병목 분석이 전부 틀립니다
-- **랜덤 시드 고정** — `setseed()`로 매번 같은 데이터가 나오게 합니다 (재현성)
+장소 6만 개를 지도 7천 개에 흩뿌리면 **지도당 8.5개**입니다. 페이지 1장으로 끝나서
+"장소가 많을 때 느려진다"를 잴 수 없습니다. 그래서 표본 두 개를 따로 만듭니다.
+
+| id | 유형 | 장소 | 멤버 | 쓰임 |
+|---|---|---|---|---|
+| `900001` | COMMUNITY | 6,000 | 60 | **S2 대상.** 깊은 페이지 + 멤버 목록 fan-out |
+| `900002` | PRIVATE(personal) | 6,000 | 1 (소유자) | 개인 지도 경로 비교 |
+
+id를 고정값으로 박는 이유: **k6가 이 지도를 지목해서 때려야 하기 때문**입니다.
+`lib/config.js`의 `SEED.hotMapId` / `SEED.personalMapId`와 짝입니다.
+
+### 시드에 심어둔 함정들
+
+의도적으로 섞은 값들입니다. 없으면 놓치는 비용이 생깁니다.
+
+- **소프트 삭제된 장소 50건에 1건** — 삭제 필터 누락이 드러나게
+- **PENDING 장소 20건에 1건** — 상태 필터 경로
+- **비정규화 카운트(`member_count`, `place_count`, `avg_rating`) 사후 정합** — 실제 API가 이 값으로 정렬·표시하므로 현실과 어긋나면 측정이 왜곡됩니다
+- **OFFICIAL 지도 20개** — 없으면 `GET /maps/official`이 빈 페이지를 주는데, 빈 응답은 항상 빠르므로 "공식 지도 목록이 빠르다"는 잘못된 수치가 나옵니다
+
+### 그 밖의 주의점
+
+- **적재 후 반드시 `ANALYZE`** — 대량 INSERT 직후엔 통계가 없어 옵티마이저가 엉뚱한 실행 계획을 고릅니다. 그 상태로 측정하면 병목 분석이 전부 틀립니다 (스크립트 끝에 포함)
 - **스키마 분리 구조라 FK가 없습니다** — 서비스 간 참조 정합성은 시드가 직접 맞춰야 합니다
-- **개인정보 금지** — 실제 사용자 데이터를 절대 넣지 않습니다. 전부 합성 값(`user1`, `테스트지도1`)
+- **아직 `setseed()`를 안 씁니다** — 행 수와 id는 결정적이지만 좌표·시각·평점은 매 적재마다 달라집니다.
+  before/after 사이에 시드를 다시 적재한다면 `setseed()`를 넣어야 완전히 같은 데이터가 됩니다 (미구현)
+- **개인정보 금지** — 실제 사용자 데이터를 절대 넣지 않습니다. 전부 합성 값(`perf1`, `테스트 지도 1`)
+- **S5는 쓰기를 섞으므로 행이 늘어납니다** — 회차 사이에 정리하거나 시드를 재적재하세요
+  ```sql
+  DELETE FROM place_service.places WHERE kakao_place_id LIKE 'loadtest-%';
+  ```
 
 ### 순서 의존성 ⚠️
 
 `ddl-auto: update`라 **테이블이 앱 기동으로 생성**됩니다.
 
 ```
-서비스 기동 (스키마 생성)  →  시드 적재  →  ANALYZE  →  부하 테스트
+서비스 기동 (스키마 생성)  →  시드 적재 (+ANALYZE)  →  부하 테스트
 ```
 
 시드를 먼저 넣으려 하면 테이블이 없어서 실패합니다.
-
-> 실제 시드 SQL은 스키마 확인 후 작성합니다 (`seed/` 디렉터리, 예정).
 
 ---
 
@@ -215,10 +317,27 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 부하 테스트의 값어치는 여기서 갈립니다. 이게 없으면 "느립니다"로 끝납니다.
 
 ```
-[1층] k6                    →  증상: p95, 에러율, 처리량
-[2층] Actuator              →  앱 내부: 커넥션 풀, 스레드, 힙, GC
-[3층] pg_stat_statements    →  DB: 어떤 쿼리가 몇 번, 총 몇 ms
+[1층] k6                    →  증상: p95, 에러율, 처리량            ✅ 구성됨
+[2층] Prometheus + Grafana  →  앱 내부: 커넥션 풀, 스레드, 힙, GC    ✅ 구성됨
+[3층] pg_stat_statements    →  DB: 어떤 쿼리가 몇 번, 총 몇 ms      ⬜ 미구성
 ```
+
+### 2층 — Prometheus + Grafana
+
+```bash
+docker compose -f docker-compose.yml -f load-test/compose.loadtest.yml up -d
+# Prometheus  http://localhost:9090
+# Grafana     http://localhost:3001   (로컬 전용이라 로그인 없음)
+```
+
+- 서비스는 `bootRun`으로 호스트에서 돌기 때문에 컨테이너에서 `host.docker.internal:8081~8084`로 스크랩합니다
+- 스크랩 간격 **5초** — 기본 15초는 몇 분짜리 테스트엔 그래프가 너무 성깁니다
+- **게이트웨이(8080)는 의도적으로 제외**합니다. LoadBalancer로 공인 IP에 물려 있어 지표가 공개됩니다.
+  → 게이트웨이 구간 수치는 k6(`TARGET=gateway`) 쪽으로만 봅니다
+- `percentiles-histogram: http.server.requests: true` — 이게 없으면 Micrometer가 count/sum만 내보내
+  **서버 쪽 p95를 못 냅니다**. 4개 서비스에 켜뒀습니다
+- Grafana에 데이터소스는 자동 등록되지만 **대시보드 패널은 아직 없습니다.** 최소 4개는 만들어야 합니다:
+  `hikaricp_connections_pending` / `http_server_requests` p95 by uri / `jvm_gc_pause_seconds` / `jvm_memory_used_bytes`
 
 ### 증상 → 원인 매핑표
 
@@ -233,10 +352,33 @@ VU 100명 고정 (closed)              초당 N건 고정 (open)
 | 요청수 대비 **쿼리수가 20배** | **N+1 (가설 ②)** | `pg_stat_statements`의 `calls` |
 | 시간이 갈수록 느려짐 | 누수 / 테이블 증가 | 힙 추세, `outbox_event` 행수 |
 
-### 수집 규칙
+### 3층 — pg_stat_statements (아직 미구성 ⬜)
 
-- 각 테스트 **시작 직전 `pg_stat_statements_reset()`**, 종료 직후 TOP 20 덤프
+**가설 ②(N+1)는 쿼리 수를 봐야 확정됩니다.** k6도 Actuator도 그걸 못 봅니다.
+"요청 1건당 쿼리 몇 개"가 나와야 `21 → 2` 같은 숫자로 개선을 증명할 수 있습니다.
+
+```yaml
+# docker-compose.yml 의 postgres 에 추가 필요
+command: >
+  postgres -c shared_preload_libraries=pg_stat_statements
+           -c pg_stat_statements.track=all
+```
+
+수집 규칙:
+- 각 테스트 **시작 직전 `SELECT pg_stat_statements_reset();`**, 종료 직후 TOP 20 덤프
 - 그래야 그 회차만의 쿼리 프로파일이 나옵니다
+
+### N+1 실험 스위치
+
+`map-service/application.yml`에 **주석 처리된 채로** 들어 있습니다.
+
+```yaml
+# default_batch_fetch_size: 100
+```
+
+베이스라인을 뽑은 뒤 주석을 풀고 재기동 → 같은 조건으로 재측정하면
+`MapSummaryResponse.tags` 지연 로딩이 IN 절로 묶이면서 쿼리 수가 얼마나 줄어드는지 나옵니다.
+**이게 이번 측정의 첫 번째 검증 대상입니다.**
 
 ### 지속 테스트에서 특별히 볼 것 — `outbox_event`
 
@@ -266,27 +408,41 @@ brew install k6
 
 | 변수 | 설명 |
 |---|---|
+| `TARGET` | `gateway`(기본) / `direct` — 측정 경로 |
 | `BASE_URL` | 게이트웨이 주소 (기본 `http://localhost:8080`) |
-| `JWT_SECRET` | **테스트 전용 시크릿.** 운영 값 절대 사용 금지. 32바이트 이상 |
-| `SEED_USER_COUNT` | 시드된 유저 수 (토큰 풀 크기) |
-| `SEED_MAP_COUNT` | 시드된 지도 수 |
+| `MAP_URL` `PLACE_URL` `USER_URL` | `TARGET=direct` 일 때 서비스 주소 |
+| `JWT_SECRET` | **테스트 전용 시크릿.** 운영 값 절대 사용 금지. 32자 이상. `direct` 면 불필요 |
+| `SEED_*` | 시드 규모. `seed/seed.sql` 의 `\set` 과 일치시킵니다 |
 | `TARGET_RPS` | 목표 부하. **탐색 램프로 knee를 구한 뒤 채웁니다** |
 
 ### 실행
 
 ```bash
-# 1) 전체 스택 기동 (예정: docker-compose.loadtest.yml)
-# 2) 시드 적재 + ANALYZE (예정)
+# 0) 환경변수
+cp load-test/.env.loadtest.example load-test/.env.loadtest   # 값 채우기
+set -a && . load-test/.env.loadtest && set +a                 # k6는 .env를 안 읽습니다
 
-# 3) Smoke — 부하 측정이 아니라 스크립트 검증
-k6 run --vus 1 --duration 1m load-test/scripts/scenarios/s2-map-detail.js
+# 1) 인프라 + 관측 스택 (레포 루트에서)
+docker compose -f docker-compose.yml -f load-test/compose.loadtest.yml up -d
 
-# 4) 탐색 램프 → knee 확정
+# 2) 서비스 기동 — ddl-auto: update 라 여기서 테이블이 생깁니다
+./gradlew :user-service:bootRun :map-service:bootRun :place-service:bootRun :gateway-service:bootRun
+
+# 3) 시드 적재 (+ANALYZE 포함)
+docker compose exec -T postgres psql -U moamap -d moamap -f - < load-test/seed/seed.sql
+
+# 4) Smoke — 부하 측정이 아니라 스크립트 검증
+k6 run -e MODE=smoke load-test/scripts/scenarios/s2-map-detail.js
+
+# 5) 탐색 램프 → knee 확정
 k6 run -e MODE=probe load-test/scripts/scenarios/s2-map-detail.js
 
-# 5) 평상 부하 (baseline)
+# 6) 평상 부하 (baseline) — 두 경로 다
 k6 run -e MODE=load -e TARGET_RPS=<knee×0.5> load-test/scripts/scenarios/s2-map-detail.js
+k6 run -e MODE=load -e TARGET_RPS=<knee×0.5> -e TARGET=direct load-test/scripts/scenarios/s2-map-detail.js
 ```
+
+`MODE`는 `smoke | probe | load | stress | spike | soak`, 시나리오는 `s1-home` / `s2-map-detail` / `s5-mixed` 입니다.
 
 ### Smoke에서 반드시 확인할 것
 
@@ -338,13 +494,19 @@ load-test/results/
 ### 진행 상황
 
 - [x] 테스트 설계 (이 문서)
-- [x] k6 스크립트 초안 (S2, S5)
-- [ ] `docker-compose.loadtest.yml` + `application-loadtest.yml`
-- [ ] 시드 SQL
-- [ ] Smoke 검증
+- [x] k6 스크립트 (S1, S2, S5 + manual)
+- [x] 관측 스택 — Prometheus + Grafana + Micrometer 히스토그램
+- [x] 시드 SQL (몰린 지도·공식 지도·함정 데이터 포함)
+- [x] 두 브랜치 통합 (`chore/성능수치화` + `chore/#85`)
+- [ ] **Smoke 검증** ← 다음 할 일. 여기서 시드·토큰·403 문제가 터집니다
+- [ ] Grafana 대시보드 패널
+- [ ] `pg_stat_statements` 활성화 (쿼리 수 없이는 N+1 개선을 증명 못 합니다)
 - [ ] 탐색 램프 → knee 확정
-- [ ] 베이스라인 측정
+- [ ] 베이스라인 측정 (gateway / direct)
+- [ ] `default_batch_fetch_size` 켜고 재측정 → 첫 before/after
 - [ ] 결과 문서화
+- [ ] k6 `handleSummary`로 결과 JSON 자동 저장 (회차 13번을 손으로 옮길 수 없습니다)
+- [ ] S3, S4 시나리오
 
 ---
 
@@ -358,8 +520,8 @@ load-test/results/
 | **`.env.loadtest`** | gitignore 대상. 커밋하지 마세요 |
 | **결과 파일** | `Authorization` 헤더나 토큰이 포함되지 않았는지 확인 후 커밋 |
 | **시드 데이터** | 실제 사용자 정보 금지. 전부 합성 값 |
-| **Actuator** | `loadtest` 프로파일에서만 메트릭을 엽니다. **운영/dev 설정은 변경하지 않습니다** |
-| **과금** | §2의 제외 엔드포인트를 시나리오에 추가하지 마세요 |
+| **Actuator** | `prometheus` 엔드포인트는 8081~8084에만 엽니다. **게이트웨이(8080)는 공인 IP에 물려 있어 제외** |
+| **과금** | §2의 제외 엔드포인트를 자동 스위트(S1/S2/S5)에 넣지 마세요. `manual/`은 수동 실행 전용입니다 |
 
 ---
 

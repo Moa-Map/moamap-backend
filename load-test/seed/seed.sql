@@ -2,8 +2,15 @@
 -- 데이터가 적으면 N+1도 인덱스 누락도 응답시간에 안 나타나기 때문에, before/after를 재려면 이게 선행돼야 한다.
 -- scripts/demo-seed/ 와는 목적이 다르다(그쪽은 발표 화면용 소량·현실적 데이터).
 --
--- 실행: docker compose exec -T postgres psql -U moamap -d moamap -f - < scripts/perf-seed/seed.sql
+-- 실행: docker compose exec -T postgres psql -U moamap -d moamap -f - < load-test/seed/seed.sql
 -- 재실행 안전: 대상 테이블을 TRUNCATE하고 다시 넣는다. 로컬 전용 — 운영 DB에 절대 돌리지 말 것.
+--
+-- ⚠️ 아래 규모와 고정 id는 load-test/scripts/lib/config.js 의 SEED 와 반드시 일치해야 한다.
+--    한쪽만 바꾸면 없는 id를 조회해 404·빈 응답만 재게 되는데, 그건 항상 빠르므로
+--    "성능이 좋다"로 착각하게 된다.
+--
+-- 기동 순서: ddl-auto: update 라 테이블이 앱 기동으로 생성된다.
+--   서비스 기동(스키마 생성) → 이 스크립트 → 부하 테스트
 
 \set users        5000
 \set maps         7000
@@ -11,11 +18,16 @@
 \set reviews      300000
 \set tags_per_map 3
 \set members_per_map 6
--- 시나리오 2·3용 "장소가 몰린 지도". id는 k6가 지목할 수 있게 고정한다.
+-- S2·S3용 "장소가 몰린 지도". id는 k6가 지목할 수 있게 고정한다.
 \set hot_map 900001
 \set personal_map 900002
 \set hot_places 6000
 \set personal_places 6000
+-- 몰린 지도의 멤버 수. OWNER 1명뿐이면 GET /maps/{id}/members 의 user-service 프로필
+-- 벌크 조회(findProfiles)가 1건짜리라 홉 비용이 안 드러난다.
+\set hot_members 60
+-- S1의 GET /maps/official 용. 위 :maps 는 COMMUNITY/PRIVATE만 만들어서 공식 지도가 0건이 된다.
+\set official_maps 20
 
 BEGIN;
 
@@ -125,6 +137,16 @@ INSERT INTO map_service.map_member (map_id, user_id, role, created_at, updated_a
 VALUES (:hot_map, 1, 'OWNER', now() - interval '200 days', now()),
        (:personal_map, 1, 'OWNER', now() - interval '200 days', now());
 
+-- 몰린 지도의 일반 멤버. user_id 산식은 config.js 의 memberOf(hotMapId) 와 같아야 한다
+-- (k6가 "이 지도의 진짜 멤버"로 호출해야 403이 안 난다).
+INSERT INTO map_service.map_member (map_id, user_id, role, created_at, updated_at)
+SELECT :hot_map, ((k * 37) % :users) + 1,
+       CASE WHEN k = 1 THEN 'ADMIN' ELSE 'MEMBER' END,
+       now() - interval '190 days', now()
+FROM generate_series(1, :hot_members) k
+WHERE ((k * 37) % :users) + 1 <> 1
+ON CONFLICT (map_id, user_id) DO NOTHING;
+
 -- 커뮤니티 쪽은 여러 사람이 등록한 모양새(created_by를 흩는다), 개인 쪽은 전부 본인이 등록.
 INSERT INTO place_service.places
     (name, address, road_address, category, lat, lng, map_id, created_by, status, source_type,
@@ -145,6 +167,26 @@ SELECT '내장소 ' || i, '서울시 테스트구 개인동 ' || i, '서울시 �
        'personal-' || i, 0,
        now() - (random() * 200 * interval '1 day'), now(), now(), 1
 FROM generate_series(1, :personal_places) i;
+
+-- 6-2) 공식 지도. 위 2)는 COMMUNITY/PRIVATE만 만들기 때문에 GET /maps/official 이 빈 페이지를 준다.
+--      빈 응답은 항상 빠르므로 그대로 두면 "공식 지도 목록이 빠르다"는 잘못된 수치가 나온다.
+--      id는 시퀀스에 맡긴다(7001~) — k6는 이 지도를 id로 지목하지 않고 목록으로만 부른다.
+INSERT INTO map_service.map_entity
+    (name, description, type, owner_id, member_count, place_count, personal, created_at, updated_at)
+SELECT '공식 지도 ' || i, '성능 측정용 공식 지도 ' || i, 'OFFICIAL', 1, 0, 0, false,
+       now() - (random() * 400 * interval '1 day'), now()
+FROM generate_series(1, :official_maps) i;
+
+-- 공식 지도에도 태그를 단다. 목록 API의 tags 지연 로딩(N+1)은 지도 유형과 무관하게 걸린다.
+INSERT INTO map_service.map_tag (map_id, tag)
+SELECT m.id, v.tag
+FROM map_service.map_entity m
+CROSS JOIN LATERAL generate_series(1, :tags_per_map) k
+JOIN LATERAL (
+    SELECT (ARRAY['맛집','카페','산책','야경','전시','공연','가족','데이트','드라이브','전통'])
+           [((m.id * 3 + k * 7) % 10) + 1] AS tag
+) v ON true
+WHERE m.type = 'OFFICIAL';
 
 -- 7) 비정규화 카운트 맞추기. 실제 API가 이 값으로 정렬·표시하기 때문에 현실과 어긋나면 측정이 왜곡된다.
 UPDATE map_service.map_entity m

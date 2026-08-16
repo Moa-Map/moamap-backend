@@ -33,33 +33,9 @@ services:
     volumes:
       - moamap-rabbitmq-data:/var/lib/rabbitmq
 
-  # 아래 둘은 로컬 성능 측정 전용. 배포 환경과 무관하다.
-  prometheus:
-    image: prom/prometheus:v3.5.0
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - moamap-prometheus-data:/prometheus
-
-  grafana:
-    image: grafana/grafana:12.1.0
-    environment:
-      # 로컬 전용이라 로그인 없이 바로 본다.
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
-    ports:
-      # 호스트 3000은 다른 앱이 쓸 수 있어 3001로 뺀다.
-      - "3001:3000"
-    volumes:
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning
-      - moamap-grafana-data:/var/lib/grafana
-    depends_on:
-      - prometheus
+# Prometheus/Grafana는 부하 측정 전용이라 여기 두지 않는다 — 평소 개발에는 필요 없는 컨테이너다.
+# 필요할 때만 오버레이로 얹는다: docker compose -f docker-compose.yml -f load-test/compose.loadtest.yml up -d
 
 volumes:
   moamap-pgdata:
   moamap-rabbitmq-data:
-  moamap-prometheus-data:
-  moamap-grafana-data:
