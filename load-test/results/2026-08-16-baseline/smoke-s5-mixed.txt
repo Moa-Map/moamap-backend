@@ -1,0 +1,42 @@
+  █ TOTAL RESULTS 
+
+    checks_total.......: 97      1.597765/s
+    checks_succeeded...: 100.00% 97 out of 97
+    checks_failed......: 0.00%   0 out of 97
+
+    ✓ 공식 지도 목록: 200
+    ✓ 공식 지도 목록: 응답에 데이터 있음
+    ✓ 지도 상세: 200
+    ✓ 지도 상세: 응답에 데이터 있음
+    ✓ 장소 목록: 200
+    ✓ 장소 목록: 응답에 데이터 있음
+    ✓ 장소 등록: 2xx
+    ✓ 추천 지도: 200
+    ✓ 추천 지도: 응답에 데이터 있음
+
+    HTTP
+    http_req_duration......................: avg=44.91ms min=10.73ms med=37.79ms max=190.05ms p(90)=72.24ms p(95)=76.45ms 
+      { expected_response:true }...........: avg=44.91ms min=10.73ms med=37.79ms max=190.05ms p(90)=72.24ms p(95)=76.45ms 
+      { name:GET /maps/:id }...............: avg=20.49ms min=10.73ms med=21.51ms max=27.75ms  p(90)=24.74ms p(95)=26.24ms 
+      { name:GET /maps/official }..........: avg=55.79ms min=25.37ms med=65.76ms max=66.27ms  p(90)=66.23ms p(95)=66.25ms 
+      { name:GET /maps/recommendations }...: avg=65.49ms min=39.41ms med=69.38ms max=83.6ms   p(90)=76.03ms p(95)=79.82ms 
+      { name:GET /places?mapId }...........: avg=32.15ms min=19.95ms med=30.67ms max=51.66ms  p(90)=37.43ms p(95)=42.66ms 
+      { name:POST /places }................: avg=55.33ms min=15.98ms med=46.74ms max=190.05ms p(90)=77.59ms p(95)=146.51ms
+    http_req_failed........................: 0.00%  0 out of 58
+    http_reqs..............................: 58     0.955364/s
+
+    EXECUTION
+    dropped_iterations.....................: 0      0/s
+    iteration_duration.....................: avg=1.04s   min=1.01s   med=1.03s   max=1.19s    p(90)=1.07s   p(95)=1.07s   
+    iterations.............................: 58     0.955364/s
+    vus....................................: 1      min=1       max=1
+    vus_max................................: 1      min=1       max=1
+
+    NETWORK
+    data_received..........................: 138 kB 2.3 kB/s
+    data_sent..............................: 25 kB  406 B/s
+
+
+
+
+s5_mixed ✓ [ 100% ] 1 VUs  1m0s

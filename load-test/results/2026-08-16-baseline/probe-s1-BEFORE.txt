@@ -1,0 +1,39 @@
+  █ TOTAL RESULTS 
+
+    checks_total.......: 152574  501.186755/s
+    checks_succeeded...: 100.00% 152574 out of 152574
+    checks_failed......: 0.00%   0 out of 152574
+
+    ✓ 커뮤니티 지도 목록: 200
+    ✓ 커뮤니티 지도 목록: 응답에 데이터 있음
+    ✓ 공식 지도 목록: 200
+    ✓ 공식 지도 목록: 응답에 데이터 있음
+    ✓ 추천 지도: 200
+    ✓ 추천 지도: 응답에 데이터 있음
+
+    HTTP
+    http_req_duration.............................: avg=1.34s min=14.13ms med=324.35ms max=4.74s p(90)=3.3s  p(95)=3.43s
+      { expected_response:true }..................: avg=1.34s min=14.13ms med=324.35ms max=4.74s p(90)=3.3s  p(95)=3.43s
+      { name:GET /maps?sort=POPULAR (deep) }......: avg=1.37s min=17.52ms med=363.97ms max=4.74s p(90)=3.33s p(95)=3.43s
+      { name:GET /maps?sort=POPULAR (shallow) }...: avg=1.32s min=16.42ms med=229.91ms max=4.52s p(90)=3.3s  p(95)=3.43s
+      { name:GET /maps/official }.................: avg=1.34s min=14.65ms med=330.56ms max=4.51s p(90)=3.31s p(95)=3.43s
+      { name:GET /maps/recommendations }..........: avg=1.33s min=14.13ms med=310.55ms max=4.51s p(90)=3.28s p(95)=3.41s
+    http_req_failed...............................: 0.00%  0 out of 76287
+    http_reqs.....................................: 76287  250.593378/s
+
+    EXECUTION
+    dropped_iterations............................: 4720   15.504617/s
+    iteration_duration............................: avg=2.37s min=1.01s   med=1.34s    max=5.74s p(90)=4.36s p(95)=4.48s
+    iterations....................................: 25429  83.531126/s
+    vus...........................................: 60     min=1          max=500
+    vus_max.......................................: 500    min=50         max=500
+
+    NETWORK
+    data_received.................................: 311 MB 1.0 MB/s
+    data_sent.....................................: 23 MB  77 kB/s
+
+
+
+
+s1_home ✓ [ 100% ] 000/500 VUs  5m0s  200.00 iters/s
+time="2026-08-16T15:55:23+09:00" level=error msg="thresholds on metrics 'dropped_iterations, http_req_duration' have been crossed"
