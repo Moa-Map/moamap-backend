@@ -55,6 +55,9 @@ subprojects {
 	plugins.withId('org.springframework.boot') {
 		dependencies {
 			developmentOnly 'me.paulschwarz:springboot3-dotenv'
+
+			// Actuator 지표를 Prometheus 포맷(/actuator/prometheus)으로 노출한다.
+			runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 		}
 
 		tasks.named('bootRun') {

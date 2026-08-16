@@ -1,0 +1,16 @@
+# 로컬 성능 측정용 스크랩 설정.
+# 서비스는 bootRun으로 호스트에서 돌기 때문에 컨테이너에서는 host.docker.internal로 접근한다.
+global:
+  # 부하 테스트가 몇 분 단위라 기본 15s로는 그래프가 너무 성기다.
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: moamap
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # gateway-service(8080)는 지표를 노출하지 않는다 — 공인 IP에 물려 있어서 의도적으로 제외.
+      - targets:
+          - host.docker.internal:8081
+          - host.docker.internal:8082
+          - host.docker.internal:8083
+          - host.docker.internal:8084

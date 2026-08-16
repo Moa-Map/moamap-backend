@@ -1,9 +1,9 @@
 # 로컬 개발용 PostgreSQL. `docker compose up -d`로 기동.
+# container_name은 지정하지 않는다 — 워크트리를 여러 개 쓰면 이름이 충돌한다.
 # DB는 하나(moamap), 서비스별로 스키마를 나눠 쓴다.
 services:
   postgres:
     image: postgres:16
-    container_name: moamap-postgres
     environment:
       POSTGRES_DB: moamap
       POSTGRES_USER: moamap
@@ -18,14 +18,12 @@ services:
   # 리프레시 토큰 저장용 Redis. TTL로 만료 토큰을 자동 삭제한다.
   redis:
     image: redis:7
-    container_name: moamap-redis
     ports:
       - "6379:6379"
 
   # place-service ↔ map-service 이벤트 브로커 (place count 동기화 등에 사용).
   rabbitmq:
     image: rabbitmq:3.13-management
-    container_name: moamap-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: moamap
       RABBITMQ_DEFAULT_PASS: moamap
@@ -35,6 +33,33 @@ services:
     volumes:
       - moamap-rabbitmq-data:/var/lib/rabbitmq
 
+  # 아래 둘은 로컬 성능 측정 전용. 배포 환경과 무관하다.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - moamap-prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      # 로컬 전용이라 로그인 없이 바로 본다.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      # 호스트 3000은 다른 앱이 쓸 수 있어 3001로 뺀다.
+      - "3001:3000"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - moamap-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   moamap-pgdata:
   moamap-rabbitmq-data:
+  moamap-prometheus-data:
+  moamap-grafana-data:
