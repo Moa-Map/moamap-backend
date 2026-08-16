@@ -23,6 +23,8 @@ replay_pid*
 .env
 .env.*
 !.env.example
+# 부하 테스트 환경변수는 예시만 공유한다(.env.loadtest 실제 값은 위 규칙으로 계속 무시됨).
+!load-test/.env.loadtest.example
 *.pem
 *.key
 application-local.yml
