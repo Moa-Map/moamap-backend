@@ -39,10 +39,10 @@ patches:
 # #46 머지로 base의 image가 이미 실제 NCR 경로라 newName은 불필요, newTag만 갱신.
 images:
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/gateway-service
-    newTag: d72558b33cfc14a567e0586694fb431f6ec374bf
+    newTag: 2f825f3563131fddf2d3e09d3ce15cba7b7d8e13
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/user-service
-    newTag: d72558b33cfc14a567e0586694fb431f6ec374bf
+    newTag: 2f825f3563131fddf2d3e09d3ce15cba7b7d8e13
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/map-service
-    newTag: d72558b33cfc14a567e0586694fb431f6ec374bf
+    newTag: 2f825f3563131fddf2d3e09d3ce15cba7b7d8e13
   - name: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/place-service
-    newTag: d72558b33cfc14a567e0586694fb431f6ec374bf
+    newTag: 2f825f3563131fddf2d3e09d3ce15cba7b7d8e13
