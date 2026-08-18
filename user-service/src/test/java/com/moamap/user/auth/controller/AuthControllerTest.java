@@ -28,7 +28,7 @@ class AuthControllerTest {
     @Test
     void 카카오_로그인_성공시_토큰을_반환한다() throws Exception {
         given(authService.login("kakao-token"))
-                .willReturn(new TokenResponse("access", "refresh", "Bearer", 1800, 1209600, true));
+                .willReturn(new TokenResponse(42L, "access", "refresh", "Bearer", 1800, 1209600, true));
 
         mockMvc.perform(post("/api/v1/auth/kakao/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -39,7 +39,8 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.data.expiresIn").value(1800))
                 .andExpect(jsonPath("$.data.refreshTokenExpiresIn").value(1209600))
-                .andExpect(jsonPath("$.data.isNewUser").value(true));
+                .andExpect(jsonPath("$.data.isNewUser").value(true))
+                .andExpect(jsonPath("$.data.userId").value(42));
     }
 
     @Test
