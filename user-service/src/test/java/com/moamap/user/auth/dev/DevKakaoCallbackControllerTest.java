@@ -30,7 +30,7 @@ class DevKakaoCallbackControllerTest {
     void 콜백은_code를_교환해_로그인하고_JWT를_반환한다() throws Exception {
         given(exchanger.exchange("auth-code")).willReturn("kakao-access-token");
         given(authService.login("kakao-access-token"))
-                .willReturn(new TokenResponse("access", "refresh", "Bearer", 1800, 1209600, true));
+                .willReturn(new TokenResponse(42L, "access", "refresh", "Bearer", 1800, 1209600, true));
 
         mockMvc.perform(get("/api/v1/auth/test/kakao/callback").param("code", "auth-code"))
                 .andExpect(status().isOk())

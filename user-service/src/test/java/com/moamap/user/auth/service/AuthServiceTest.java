@@ -64,6 +64,7 @@ class AuthServiceTest {
 
         TokenResponse response = authService.login("kakao-token");
 
+        assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.accessToken()).isEqualTo("access-jwt");
         assertThat(response.refreshToken()).isNotBlank();
         assertThat(response.tokenType()).isEqualTo("Bearer");
@@ -86,6 +87,7 @@ class AuthServiceTest {
 
         TokenResponse response = authService.login("kakao-token");
 
+        assertThat(response.userId()).isEqualTo(7L);
         assertThat(response.accessToken()).isEqualTo("access-jwt");
         assertThat(response.isNewUser()).isFalse();
         verify(userRepository, never()).save(any(User.class));
@@ -102,6 +104,7 @@ class AuthServiceTest {
 
         TokenResponse response = authService.refresh("old-refresh");
 
+        assertThat(response.userId()).isEqualTo(5L);
         assertThat(response.accessToken()).isEqualTo("new-access");
         assertThat(response.refreshToken()).isNotEqualTo("old-refresh");
         verify(refreshTokenStore).delete("old-refresh");

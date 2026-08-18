@@ -87,7 +87,7 @@ public class AuthService {
         Duration ttl = Duration.ofDays(jwtProperties.refreshTokenExpirationDays());
         refreshTokenStore.save(refreshToken, user.getId(), ttl);
         return new TokenResponse(
-                accessToken, refreshToken, "Bearer",
+                user.getId(), accessToken, refreshToken, "Bearer",
                 jwtProvider.getAccessTokenExpiresInSeconds(), ttl.getSeconds(), newUser);
     }
 }
