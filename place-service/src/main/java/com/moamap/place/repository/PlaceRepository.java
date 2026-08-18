@@ -1,6 +1,8 @@
 package com.moamap.place.repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceStatus;
@@ -33,4 +35,17 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     /** 목록 노출 대상(APPROVED·미삭제)의 현재 절대 개수. 이벤트 발행 시점에 조회한다(청사진 2-2, 3-3(가)). */
     long countByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status);
+
+    /**
+     * 지도 안에서 멤버별로 등록한 장소 수를 한 번에 센다. 멤버가 몇 명이든 쿼리 1회다.
+     *
+     * countByMapIdAndStatusAndDeletedAtIsNull와 같은 APPROVED·미삭제 기준이라,
+     * 멤버별 합이 지도 총 장소 수를 넘지 않는다.
+     */
+    @Query("select p.createdBy as createdBy, count(p) as placeCount from Place p "
+        + "where p.mapId = :mapId and p.status = com.moamap.place.entity.PlaceStatus.APPROVED "
+        + "and p.deletedAt is null and p.createdBy in :userIds "
+        + "group by p.createdBy")
+    List<PlaceCountByCreator> countApprovedByCreator(
+        @Param("mapId") Long mapId, @Param("userIds") Collection<Long> userIds);
 }

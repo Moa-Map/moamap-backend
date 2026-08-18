@@ -1,7 +1,10 @@
 package com.moamap.place.service;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -183,6 +186,22 @@ public class PlaceService {
     public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Pageable pageable) {
         return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable)
             .map(PlaceResponse::from));
+    }
+
+    /**
+     * 지도 멤버별 등록 장소 수. 멤버 관리 화면의 "등록한 장소 수"에 쓰인다.
+     *
+     * GROUP BY 결과에는 등록 이력이 있는 멤버만 나오므로, 요청받은 멤버 전원이 키로 존재하도록 0을 채운다.
+     */
+    public Map<Long, Long> countApprovedByCreator(Long mapId, Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> counts = new LinkedHashMap<>();
+        userIds.forEach(userId -> counts.put(userId, 0L));
+        placeRepository.countApprovedByCreator(mapId, userIds)
+            .forEach(row -> counts.put(row.getCreatedBy(), row.getPlaceCount()));
+        return counts;
     }
 
     public PageResponse<PlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {

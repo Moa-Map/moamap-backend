@@ -2,6 +2,8 @@ package com.moamap.place.controller;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.place.dto.PageResponse;
@@ -177,6 +179,19 @@ class PlaceControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].id").value(1));
         verify(placeService).findPendingByMapId(eq(10L), eq(2L), any());
+    }
+
+    @Test
+    void counts는_mapId와_userIds를_그대로_서비스에_전달한다() throws Exception {
+        given(placeService.countApprovedByCreator(10L, List.of(1L, 2L, 3L)))
+            .willReturn(Map.of(1L, 12L, 2L, 0L, 3L, 5L));
+
+        mockMvc.perform(get("/api/v1/places/counts").param("mapId", "10").param("userIds", "1,2,3"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.1").value(12))
+            .andExpect(jsonPath("$.data.2").value(0))
+            .andExpect(jsonPath("$.data.3").value(5));
+        verify(placeService).countApprovedByCreator(10L, List.of(1L, 2L, 3L));
     }
 
     @Test

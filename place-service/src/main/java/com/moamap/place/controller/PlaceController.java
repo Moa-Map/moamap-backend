@@ -1,6 +1,7 @@
 package com.moamap.place.controller;
 
 import java.util.List;
+import java.util.Map;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PhotoUploadUrlRequest;
@@ -110,6 +111,22 @@ public class PlaceController {
         @PageableDefault(size = 20) Pageable pageable
     ) {
         return ApiResponse.success(placeService.findAllByMapId(mapId, pageable));
+    }
+
+    @GetMapping("/counts")
+    @Operation(
+        summary = "멤버별 등록 장소 수 조회 (서비스 간 호출)",
+        description = "지도 안에서 각 멤버가 등록한 APPROVED·미삭제 장소 수를 한 번에 반환한다. "
+            + "map-service가 멤버 목록을 구성할 때 호출한다. 요청자 검증은 map-service가 이미 마쳤으므로 "
+            + "여기서는 다시 확인하지 않는다. 등록 이력이 없는 멤버도 0으로 채워 응답한다."
+    )
+    public ApiResponse<Map<Long, Long>> counts(
+        @Parameter(description = "조회할 지도 ID", required = true, example = "10")
+        @RequestParam Long mapId,
+        @Parameter(description = "집계할 멤버 ID 목록", required = true, example = "1,2,3")
+        @RequestParam List<Long> userIds
+    ) {
+        return ApiResponse.success(placeService.countApprovedByCreator(mapId, userIds));
     }
 
     @GetMapping("/pending")
