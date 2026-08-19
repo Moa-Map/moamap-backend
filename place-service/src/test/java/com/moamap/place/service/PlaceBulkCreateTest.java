@@ -23,11 +23,14 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -57,6 +60,9 @@ class PlaceBulkCreateTest {
     @MockitoBean
     private MapClient mapClient;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     // createBulk는 이 발행기를 루프 종료 후 직접 호출한다(청사진 3-3(가)). 이 테스트 스위트는
     // 부분 성공/커밋 자체가 관심사라 발행 여부는 PlaceServiceTest에서 다루고, 여기서는 컨텍스트가
     // 뜨는 데 필요한 협력자만 mock으로 채운다.
@@ -80,7 +86,74 @@ class PlaceBulkCreateTest {
     private PlaceBulkCreateRequest.Item item(String name, String kakaoPlaceId) {
         return new PlaceBulkCreateRequest.Item(name, "서울 동작구 상도동", "서울 동작구 상도로 369",
             new BigDecimal("37.495853"), new BigDecimal("126.957818"), "음식점 > 분식",
-            kakaoPlaceId, PlaceSourceType.NAVER_MAP, "https://naver.me/xAbC1234", "메모", List.of());
+            kakaoPlaceId, PlaceSourceType.NAVER_MAP, "https://naver.me/xAbC1234", "메모", List.of(), List.of());
+    }
+
+    private PlaceBulkCreateRequest.Item itemWithPhotos(String name, String kakaoPlaceId, List<String> photoUrls) {
+        return new PlaceBulkCreateRequest.Item(name, "서울 동작구 상도동", "서울 동작구 상도로 369",
+            new BigDecimal("37.495853"), new BigDecimal("126.957818"), "음식점 > 분식",
+            kakaoPlaceId, PlaceSourceType.NAVER_MAP, "https://naver.me/xAbC1234", "메모", List.of(), photoUrls);
+    }
+
+    /*
+     * 이 스위트는 REQUIRES_NEW 커밋을 확인하려고 테스트 트랜잭션을 끈 상태(NOT_SUPPORTED)라,
+     * 지연 로딩인 @ElementCollection을 그냥 읽으면 LazyInitializationException이 난다.
+     * 사진 검증은 세션 안에서 읽어야 한다.
+     */
+    private <T> T inTransaction(java.util.function.Supplier<T> work) {
+        return new TransactionTemplate(transactionManager).execute(status -> work.get());
+    }
+
+    /*
+     * photoUrls는 tags와 달리 "인덱스 0 = 대표 사진" 계약이 있어(청사진 5장) 받은 순서가
+     * 그대로 저장돼야 한다. 단건 등록과 같은 결과가 나오는지 실제 커밋까지 태워 확인한다.
+     */
+
+    @Test
+    void createBulk는_사진을_받은_순서_그대로_저장한다() {
+        List<String> photos = List.of(
+            "https://cdn.moamap.com/places/10/rep.jpg",
+            "https://cdn.moamap.com/places/10/2.jpg",
+            "https://cdn.moamap.com/places/10/3.jpg");
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID,
+            List.of(itemWithPhotos("청년다방", "111", photos)));
+
+        placeService.createBulk(request, USER_ID);
+
+        List<String> savedPhotos = inTransaction(
+            () -> List.copyOf(placeRepository.findAll().get(0).getPhotoUrls()));
+        assertThat(savedPhotos).containsExactlyElementsOf(photos);
+    }
+
+    @Test
+    void createBulk는_사진을_안_보내면_빈_리스트로_저장한다() {
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID,
+            List.of(itemWithPhotos("청년다방", "111", null)));
+
+        placeService.createBulk(request, USER_ID);
+
+        List<String> savedPhotos = inTransaction(
+            () -> List.copyOf(placeRepository.findAll().get(0).getPhotoUrls()));
+        assertThat(savedPhotos).isEmpty();
+    }
+
+    @Test
+    void createBulk는_건별로_다른_사진을_각자에게_저장한다() {
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID, List.of(
+            itemWithPhotos("청년다방", "111", List.of("https://cdn.moamap.com/places/10/a.jpg")),
+            itemWithPhotos("숭실대학교", "222", List.of(
+                "https://cdn.moamap.com/places/10/b.jpg", "https://cdn.moamap.com/places/10/c.jpg"))));
+
+        placeService.createBulk(request, USER_ID);
+
+        assertThat(inTransaction(() -> placeRepository.findAll().stream()
+                .map(p -> java.util.Map.entry(p.getKakaoPlaceId(), List.copyOf(p.getPhotoUrls())))
+                .toList()))
+            .extracting(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue)
+            .containsExactlyInAnyOrder(
+                tuple("111", List.of("https://cdn.moamap.com/places/10/a.jpg")),
+                tuple("222", List.of(
+                    "https://cdn.moamap.com/places/10/b.jpg", "https://cdn.moamap.com/places/10/c.jpg")));
     }
 
     @Test

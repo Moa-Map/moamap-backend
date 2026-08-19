@@ -789,7 +789,7 @@ class PlaceServiceTest {
     private PlaceBulkCreateRequest.Item bulkItem(String name, String kakaoPlaceId) {
         return new PlaceBulkCreateRequest.Item(name, "주소", "도로명주소",
             BigDecimal.valueOf(37.5), BigDecimal.valueOf(127.0), "카페",
-            kakaoPlaceId, PlaceSourceType.KAKAO_SEARCH, null, null, null);
+            kakaoPlaceId, PlaceSourceType.KAKAO_SEARCH, null, null, null, null);
     }
 
     @Test
