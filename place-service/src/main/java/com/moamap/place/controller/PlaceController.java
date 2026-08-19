@@ -82,6 +82,7 @@ public class PlaceController {
             여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
             전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
             지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            사진(photoUrls)도 단건 등록과 동일하게 항목별 최대 5장까지 담을 수 있다. 발급 방법은 사진 업로드 URL 발급 API를 참고한다.
             """
     )
     public ApiResponse<PlaceBulkCreateResponse> createBulk(
