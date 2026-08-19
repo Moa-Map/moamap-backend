@@ -13,6 +13,7 @@ import com.moamap.map.entity.MapType;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
+import com.moamap.map.place.PlaceClient;
 import com.moamap.map.user.UserClient;
 import com.moamap.map.user.dto.UserProfileResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +25,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -51,6 +54,9 @@ class MapMemberListTest {
 
     @MockitoBean
     private UserClient userClient;
+
+    @MockitoBean
+    private PlaceClient placeClient;
 
     private Long mapId;
 
@@ -122,6 +128,37 @@ class MapMemberListTest {
     }
 
     @Test
+    void 멤버별_등록_장소_수를_채워서_돌려준다() {
+        givenProfiles(Map.of());
+        givenPlaceCounts(Map.of(OWNER_ID, 12L, ADMIN_ID, 0L, MEMBER_ID, 5L));
+
+        MapMemberListResponse response = mapService.getMembers(mapId, OWNER_ID);
+
+        assertThat(response.members())
+            .extracting(MapMemberSummaryResponse::userId, MapMemberSummaryResponse::placeCount)
+            .containsExactly(tuple(OWNER_ID, 12L), tuple(ADMIN_ID, 0L), tuple(MEMBER_ID, 5L));
+    }
+
+    /*
+     * 장소 수를 못 받아온 것과 "0개 등록"은 다르다. 0으로 채우면 화면에 틀린 숫자가 그대로 보이므로,
+     * 닉네임과 같은 규칙으로 null을 남겨 모른다는 사실을 그대로 전달한다.
+     */
+
+    @Test
+    void 장소_수_조회에_실패해도_멤버_목록은_그대로_돌려준다() {
+        givenProfiles(Map.of());
+        givenPlaceCounts(Map.of());
+
+        MapMemberListResponse response = mapService.getMembers(mapId, OWNER_ID);
+
+        assertThat(response.members()).hasSize(3);
+        assertThat(response.members()).allSatisfy(member -> {
+            assertThat(member.role()).isNotNull();
+            assertThat(member.placeCount()).isNull();
+        });
+    }
+
+    @Test
     void 멤버라면_방장이_아니어도_조회할_수_있다() {
         givenProfiles(Map.of());
 
@@ -144,5 +181,9 @@ class MapMemberListTest {
 
     private void givenProfiles(Map<Long, UserProfileResponse> profiles) {
         given(userClient.findProfiles(anyCollection())).willReturn(profiles);
+    }
+
+    private void givenPlaceCounts(Map<Long, Long> counts) {
+        given(placeClient.countByCreator(anyLong(), anyCollection())).willReturn(counts);
     }
 }

@@ -10,6 +10,7 @@ import com.moamap.map.entity.MapType;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
+import com.moamap.map.place.PlaceClient;
 import com.moamap.map.user.UserClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ class PersonalMapCreationTest {
     // 나만의 지도 생성과는 무관하지만 MapService가 주입받는 협력자라 컨텍스트에 채워준다.
     @MockitoBean
     private UserClient userClient;
+
+    @MockitoBean
+    private PlaceClient placeClient;
 
     @Test
     void 나만의_지도를_만들면_소유자가_OWNER로_참여한다() {

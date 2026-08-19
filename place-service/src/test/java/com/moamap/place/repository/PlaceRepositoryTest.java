@@ -3,6 +3,7 @@ package com.moamap.place.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -220,6 +221,63 @@ class PlaceRepositoryTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getKakaoPlaceId()).isEqualTo("P1");
+    }
+
+    /*
+     * 멤버 관리 화면의 "등록한 장소 수"는 지도 총 장소 수(MapEntity.placeCount)와 같은 기준이어야
+     * 멤버별 합이 총합을 넘지 않는다. 즉 APPROVED·미삭제만 센다. GROUP BY가 status/deletedAt/mapId를
+     * 제대로 걸러내는지는 실제 쿼리를 태워야만 알 수 있다.
+     */
+
+    @Test
+    void 멤버별_장소_수는_APPROVED_미삭제만_센다() {
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A2").createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("P1").createdBy(1L)
+            .status(PlaceStatus.PENDING).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("R1").createdBy(1L)
+            .status(PlaceStatus.REJECTED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A3").createdBy(2L)
+            .status(PlaceStatus.APPROVED).build());
+
+        Place deleted = placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("D1").createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        deleted.delete(1L);
+        placeRepository.saveAndFlush(deleted);
+        entityManager.clear();
+
+        List<PlaceCountByCreator> counts = placeRepository.countApprovedByCreator(
+            10L, List.of(1L, 2L, 3L));
+
+        assertThat(counts).extracting(PlaceCountByCreator::getCreatedBy, PlaceCountByCreator::getPlaceCount)
+            .containsExactlyInAnyOrder(tuple(1L, 2L), tuple(2L, 1L));
+    }
+
+    @Test
+    void 멤버별_장소_수는_다른_지도의_장소를_세지_않는다() {
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").mapId(99L).createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        entityManager.clear();
+
+        List<PlaceCountByCreator> counts = placeRepository.countApprovedByCreator(10L, List.of(1L));
+
+        assertThat(counts).extracting(PlaceCountByCreator::getCreatedBy, PlaceCountByCreator::getPlaceCount)
+            .containsExactly(tuple(1L, 1L));
+    }
+
+    @Test
+    void 등록_이력이_없는_멤버는_집계_결과에_나오지_않는다() {
+        placeRepository.saveAndFlush(placeBuilder().kakaoPlaceId("A1").createdBy(1L)
+            .status(PlaceStatus.APPROVED).build());
+        entityManager.clear();
+
+        List<PlaceCountByCreator> counts = placeRepository.countApprovedByCreator(10L, List.of(1L, 42L));
+
+        assertThat(counts).extracting(PlaceCountByCreator::getCreatedBy).containsExactly(1L);
     }
 
     @Test

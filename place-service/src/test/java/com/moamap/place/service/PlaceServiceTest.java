@@ -3,6 +3,7 @@ package com.moamap.place.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import com.moamap.common.exception.BusinessException;
@@ -22,6 +23,7 @@ import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
+import com.moamap.place.repository.PlaceCountByCreator;
 import com.moamap.place.repository.PlaceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -819,6 +821,38 @@ class PlaceServiceTest {
 
         // then
         verifyNoInteractions(placeCountEventPublisher);
+    }
+
+    @Test
+    void 멤버별_장소_수는_등록_이력이_없는_멤버를_0으로_채운다() {
+        given(placeRepository.countApprovedByCreator(10L, List.of(1L, 2L, 3L)))
+            .willReturn(List.of(countOf(1L, 12L), countOf(3L, 5L)));
+
+        Map<Long, Long> counts = placeService.countApprovedByCreator(10L, List.of(1L, 2L, 3L));
+
+        assertThat(counts).containsExactlyInAnyOrderEntriesOf(Map.of(1L, 12L, 2L, 0L, 3L, 5L));
+    }
+
+    @Test
+    void 멤버가_없으면_집계를_조회하지_않는다() {
+        Map<Long, Long> counts = placeService.countApprovedByCreator(10L, List.of());
+
+        assertThat(counts).isEmpty();
+        verifyNoInteractions(placeRepository);
+    }
+
+    private PlaceCountByCreator countOf(Long createdBy, long placeCount) {
+        return new PlaceCountByCreator() {
+            @Override
+            public Long getCreatedBy() {
+                return createdBy;
+            }
+
+            @Override
+            public long getPlaceCount() {
+                return placeCount;
+            }
+        };
     }
 
     @Test
