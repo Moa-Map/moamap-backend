@@ -46,6 +46,8 @@ public class PlaceBulkRegistrar {
             .sourceUrl(item.sourceUrl())
             .description(item.description())
             .tags(item.tags() == null ? new ArrayList<>() : new ArrayList<>(item.tags()))
+            // @OrderColumn 대상이라 받은 순서가 곧 저장 순서다("인덱스 0 = 대표 사진").
+            .photoUrls(item.photoUrls() == null ? new ArrayList<>() : new ArrayList<>(item.photoUrls()))
             .mapId(mapId)
             .createdBy(userId)
             .status(status)

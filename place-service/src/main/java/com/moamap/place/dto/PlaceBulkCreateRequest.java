@@ -33,7 +33,8 @@ public record PlaceBulkCreateRequest(
         @NotNull PlaceSourceType sourceType,
         String sourceUrl,
         String description,
-        List<@Size(max = 30) String> tags
+        List<@Size(max = 30) String> tags,
+        @Size(max = 5) List<@Size(max = 1000) String> photoUrls
     ) {
     }
 }

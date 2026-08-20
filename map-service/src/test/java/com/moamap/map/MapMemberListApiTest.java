@@ -2,6 +2,7 @@ package com.moamap.map;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moamap.map.place.PlaceClient;
 import com.moamap.map.user.UserClient;
 import com.moamap.map.user.dto.UserProfileResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -46,11 +48,16 @@ class MapMemberListApiTest {
     @MockitoBean
     private UserClient userClient;
 
+    // 목으로 바꾸지 않으면 실제 place-service로 붙으려다 실패하고 폴백을 타, 필드가 늘 null이 된다.
+    @MockitoBean
+    private PlaceClient placeClient;
+
     @Test
     @DisplayName("멤버 목록과 참여자 수를 함께 반환한다")
     void returnsMembers() throws Exception {
         given(userClient.findProfiles(anyCollection()))
             .willReturn(Map.of(OWNER, new UserProfileResponse(OWNER, "방장님", "https://img/o.jpg")));
+        given(placeClient.countByCreator(anyLong(), anyCollection())).willReturn(Map.of(OWNER, 7L));
         long mapId = createMap();
 
         mockMvc.perform(get("/api/v1/maps/{mapId}/members", mapId).header(USER_HEADER, OWNER))
@@ -61,7 +68,8 @@ class MapMemberListApiTest {
             .andExpect(jsonPath("$.data.members[0].userId").value(OWNER))
             .andExpect(jsonPath("$.data.members[0].nickname").value("방장님"))
             .andExpect(jsonPath("$.data.members[0].profileImageUrl").value("https://img/o.jpg"))
-            .andExpect(jsonPath("$.data.members[0].role").value("OWNER"));
+            .andExpect(jsonPath("$.data.members[0].role").value("OWNER"))
+            .andExpect(jsonPath("$.data.members[0].placeCount").value(7));
     }
 
     @Test

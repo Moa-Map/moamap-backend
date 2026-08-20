@@ -1,6 +1,7 @@
 package com.moamap.place.controller;
 
 import java.util.List;
+import java.util.Map;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PendingPlaceResponse;
@@ -82,6 +83,7 @@ public class PlaceController {
             여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
             전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
             지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            사진(photoUrls)도 단건 등록과 동일하게 항목별 최대 5장까지 담을 수 있다. 발급 방법은 사진 업로드 URL 발급 API를 참고한다.
             """
     )
     public ApiResponse<PlaceBulkCreateResponse> createBulk(
@@ -111,6 +113,22 @@ public class PlaceController {
         @PageableDefault(size = 20) Pageable pageable
     ) {
         return ApiResponse.success(placeService.findAllByMapId(mapId, pageable));
+    }
+
+    @GetMapping("/counts")
+    @Operation(
+        summary = "멤버별 등록 장소 수 조회 (서비스 간 호출)",
+        description = "지도 안에서 각 멤버가 등록한 APPROVED·미삭제 장소 수를 한 번에 반환한다. "
+            + "map-service가 멤버 목록을 구성할 때 호출한다. 요청자 검증은 map-service가 이미 마쳤으므로 "
+            + "여기서는 다시 확인하지 않는다. 등록 이력이 없는 멤버도 0으로 채워 응답한다."
+    )
+    public ApiResponse<Map<Long, Long>> counts(
+        @Parameter(description = "조회할 지도 ID", required = true, example = "10")
+        @RequestParam Long mapId,
+        @Parameter(description = "집계할 멤버 ID 목록", required = true, example = "1,2,3")
+        @RequestParam List<Long> userIds
+    ) {
+        return ApiResponse.success(placeService.countApprovedByCreator(mapId, userIds));
     }
 
     @GetMapping("/pending")

@@ -80,6 +80,9 @@ services:
   user:
     # 멤버 목록에 닉네임/프로필 이미지를 채우기 위한 user-service 내부 호출 주소.
     base-url: ${USER_SERVICE_URL:http://localhost:8081}
+  place:
+    # 멤버 목록에 등록한 장소 수를 채우기 위한 place-service 내부 호출 주소.
+    base-url: ${PLACE_SERVICE_URL:http://localhost:8082}
 
 map:
   personal-map:
