@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
 import com.moamap.place.dto.PhotoUploadUrlRequest;
 import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.dto.PlaceBulkCreateRequest;
@@ -135,7 +136,7 @@ public class PlaceController {
         summary = "승인 대기 장소 목록 조회",
         description = "특정 지도의 PENDING 상태 장소 목록을 조회한다. OWNER/ADMIN은 지도 전체 목록을, MEMBER는 본인이 등록한 신청 건만 조회한다. 해당 지도의 멤버가 아니면 403."
     )
-    public ApiResponse<PageResponse<PlaceResponse>> getPending(
+    public ApiResponse<PageResponse<PendingPlaceResponse>> getPending(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")
         @RequestParam Long mapId,
         @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,

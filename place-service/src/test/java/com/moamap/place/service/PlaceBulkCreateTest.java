@@ -15,6 +15,7 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,10 @@ class PlaceBulkCreateTest {
 
     @MockitoBean
     private MapClient mapClient;
+
+    // createBulk는 UserClient를 호출하지 않는다. PlaceService 생성자 의존성을 채우기 위한 mock이다.
+    @MockitoBean
+    private UserClient userClient;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
