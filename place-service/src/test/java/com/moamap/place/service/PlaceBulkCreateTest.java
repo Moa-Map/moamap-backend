@@ -15,6 +15,7 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,10 @@ class PlaceBulkCreateTest {
 
     @MockitoBean
     private MapClient mapClient;
+
+    // createBulk는 UserClient를 호출하지 않는다. PlaceService 생성자 의존성을 채우기 위한 mock이다.
+    @MockitoBean
+    private UserClient userClient;
 
     // createBulk는 이 발행기를 루프 종료 후 직접 호출한다(청사진 3-3(가)). 이 테스트 스위트는
     // 부분 성공/커밋 자체가 관심사라 발행 여부는 PlaceServiceTest에서 다루고, 여기서는 컨텍스트가

@@ -5,6 +5,7 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
 import com.moamap.place.dto.PhotoUploadUrlRequest;
 import com.moamap.place.dto.PhotoUploadUrlResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
@@ -169,13 +170,17 @@ class PlaceControllerTest {
     @Test
     void getPending은_요청자_헤더와_mapId를_그대로_서비스에_전달한다() throws Exception {
         // given
-        PageResponse<PlaceResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
+        PendingPlaceResponse pendingPlace = new PendingPlaceResponse(
+            1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", null, List.of(), "닉네임", null, null
+        );
+        PageResponse<PendingPlaceResponse> page = new PageResponse<>(List.of(pendingPlace), 0, 20, 1, 1, true);
         given(placeService.findPendingByMapId(eq(10L), eq(2L), any())).willReturn(page);
 
         // when & then
         mockMvc.perform(get("/api/v1/places/pending").param("mapId", "10").header("X-User-Id", 2L))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.content[0].id").value(1));
+            .andExpect(jsonPath("$.data.content[0].id").value(1))
+            .andExpect(jsonPath("$.data.content[0].createdByNickname").value("닉네임"));
         verify(placeService).findPendingByMapId(eq(10L), eq(2L), any());
     }
 

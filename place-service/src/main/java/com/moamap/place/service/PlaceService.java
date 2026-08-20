@@ -1,10 +1,14 @@
 package com.moamap.place.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
 import com.moamap.place.dto.PlaceBulkCreateRequest;
 import com.moamap.place.dto.PlaceBulkCreateResponse;
 import com.moamap.place.dto.PlaceCreateRequest;
@@ -20,6 +24,8 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserClient;
+import com.moamap.place.user.dto.UserProfileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
@@ -41,6 +47,7 @@ public class PlaceService {
 
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
+    private final UserClient userClient;
     private final PlaceBulkRegistrar placeBulkRegistrar;
     private final ApplicationEventPublisher eventPublisher;
     private final PlaceCountEventPublisher placeCountEventPublisher;
@@ -185,7 +192,7 @@ public class PlaceService {
             .map(PlaceResponse::from));
     }
 
-    public PageResponse<PlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
+    public PageResponse<PendingPlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
         if (userId == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
         }
@@ -199,7 +206,39 @@ public class PlaceService {
                 placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, userId, pageable);
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
-        return PageResponse.from(pendingPlaces.map(PlaceResponse::from));
+        return PageResponse.from(enrichWithCreatorProfiles(pendingPlaces));
+    }
+
+    // UserClient는 표시용 부가정보라 실패해도 조회 전체를 죽이면 안 된다. PlaceActivityService와 동일하게
+    // 등록자 수만큼만 모아 페이지당 최대 1회만 호출해 N+1을 피한다.
+    private Page<PendingPlaceResponse> enrichWithCreatorProfiles(Page<Place> pendingPlaces) {
+        Set<Long> creatorIds = new LinkedHashSet<>();
+        for (Place place : pendingPlaces.getContent()) {
+            if (place.getCreatedBy() != null) {
+                creatorIds.add(place.getCreatedBy());
+            }
+        }
+        Map<Long, UserProfileResponse> profiles;
+        if (creatorIds.isEmpty()) {
+            profiles = Map.of();
+        } else {
+            try {
+                profiles = userClient.findProfiles(creatorIds);
+            } catch (RuntimeException e) {
+                // UserClient는 원칙적으로 예외를 던지지 않지만 방어적으로 한 번 더 막는다.
+                log.warn("user-service 프로필 조회 중 예외가 발생해 닉네임 없이 진행합니다.", e);
+                profiles = Map.of();
+            }
+        }
+        Map<Long, UserProfileResponse> resolvedProfiles = profiles == null ? Map.of() : profiles;
+        return pendingPlaces.map(place -> {
+            UserProfileResponse profile = place.getCreatedBy() == null ? null : resolvedProfiles.get(place.getCreatedBy());
+            return PendingPlaceResponse.of(
+                place,
+                profile == null ? null : profile.nickname(),
+                profile == null ? null : profile.profileImageUrl()
+            );
+        });
     }
 
     @Transactional
