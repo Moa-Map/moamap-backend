@@ -26,7 +26,11 @@ public enum MapErrorCode implements ErrorCode {
     TARGET_NOT_MAP_MEMBER("MAP_013", "대상 사용자가 해당 지도의 멤버가 아닙니다.", 404),
     CANNOT_CHANGE_OWNER_ROLE("MAP_014", "소유자의 역할은 변경할 수 없습니다.", 400),
     INVALID_ROLE_ASSIGNMENT("MAP_015", "부여할 수 없는 역할입니다. ADMIN 또는 MEMBER만 지정할 수 있습니다.", 400),
-    CANNOT_DELETE_PERSONAL_MAP("MAP_016", "나만의 지도는 삭제할 수 없습니다.", 400);
+    CANNOT_DELETE_PERSONAL_MAP("MAP_016", "나만의 지도는 삭제할 수 없습니다.", 400),
+    MAP_POST_NOT_SUPPORTED("MAP_017", "이 지도에는 로그 탭이 없습니다.", 404),
+    MAP_POST_NOT_FOUND("MAP_018", "게시물을 찾을 수 없습니다.", 404),
+    MAP_POST_COMMENT_NOT_FOUND("MAP_019", "댓글을 찾을 수 없습니다.", 404),
+    DUPLICATE_PLACE_TAG("MAP_020", "같은 장소를 두 번 태그할 수 없습니다.", 400);
 
     private final String code;
     private final String message;
