@@ -57,6 +57,14 @@ public class PlaceComment {
     @Builder.Default
     private List<String> imageUrls = new ArrayList<>();
 
+    /**
+     * 누적 신고 수. 신고 행은 지워지지 않으므로 재계산 없이 증분만으로 정확하다.
+     * 관리자 조회에만 노출한다 — 일반 목록에 보이면 낙인 효과가 생기고 "나도 신고"를 부른다.
+     */
+    @Column(name = "report_count", nullable = false, columnDefinition = "integer not null default 0")
+    @Builder.Default
+    private Integer reportCount = 0;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -87,5 +95,9 @@ public class PlaceComment {
 
     public void delete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isWrittenBy(Long userId) {
+        return this.userId.equals(userId);
     }
 }

@@ -25,7 +25,7 @@ class PlaceCommentRepositoryTest {
     @Autowired
     private TestEntityManager entityManager;
 
-    private PlaceComment.PlaceCommentBuilder reviewBuilder() {
+    private PlaceComment.PlaceCommentBuilder commentBuilder() {
         return PlaceComment.builder()
             .placeId(1L)
             .userId(2L)
@@ -35,7 +35,7 @@ class PlaceCommentRepositoryTest {
     @Test
     void imageUrls를_저장하면_그대로_조회된다() {
         PlaceComment saved = placeCommentRepository.saveAndFlush(
-            reviewBuilder().imageUrls(new ArrayList<>(List.of("https://img/1.jpg"))).build());
+            commentBuilder().imageUrls(new ArrayList<>(List.of("https://img/1.jpg"))).build());
         entityManager.clear();
 
         PlaceComment found = placeCommentRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
@@ -46,7 +46,7 @@ class PlaceCommentRepositoryTest {
     @Test
     void update로_imageUrls를_교체하면_실제_DB에도_반영된다() {
         PlaceComment saved = placeCommentRepository.saveAndFlush(
-            reviewBuilder().imageUrls(new ArrayList<>(List.of("https://img/1.jpg", "https://img/2.jpg"))).build());
+            commentBuilder().imageUrls(new ArrayList<>(List.of("https://img/1.jpg", "https://img/2.jpg"))).build());
         entityManager.clear();
         PlaceComment managed = placeCommentRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
@@ -61,7 +61,7 @@ class PlaceCommentRepositoryTest {
     @Test
     void update에_null을_넘기면_기존_imageUrls가_유지된다() {
         PlaceComment saved = placeCommentRepository.saveAndFlush(
-            reviewBuilder().imageUrls(new ArrayList<>(List.of("https://img/유지.jpg"))).build());
+            commentBuilder().imageUrls(new ArrayList<>(List.of("https://img/유지.jpg"))).build());
         entityManager.clear();
         PlaceComment managed = placeCommentRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
