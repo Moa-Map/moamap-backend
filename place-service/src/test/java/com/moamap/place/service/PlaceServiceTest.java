@@ -5,10 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
 import com.moamap.place.dto.PlaceBulkCreateRequest;
 import com.moamap.place.dto.PlaceCreateRequest;
 import com.moamap.place.dto.PlaceResponse;
@@ -25,6 +27,8 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceCountByCreator;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserClient;
+import com.moamap.place.user.dto.UserProfileResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,6 +62,9 @@ class PlaceServiceTest {
 
     @Mock
     private MapClient mapClient;
+
+    @Mock
+    private UserClient userClient;
 
     @Mock
     private PlaceBulkRegistrar placeBulkRegistrar;
@@ -285,13 +292,18 @@ class PlaceServiceTest {
                 Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
             ), pageable, 1)
         );
+        given(userClient.findProfiles(Set.of(1L))).willReturn(
+            Map.of(1L, new UserProfileResponse(1L, "닉네임", "https://example.com/profile.png"))
+        );
 
         // when
-        PageResponse<PlaceResponse> result = placeService.findPendingByMapId(10L, 1L, pageable);
+        PageResponse<PendingPlaceResponse> result = placeService.findPendingByMapId(10L, 1L, pageable);
 
         // then
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).name()).isEqualTo("대기중인 장소");
+        assertThat(result.content().get(0).createdByNickname()).isEqualTo("닉네임");
+        assertThat(result.content().get(0).createdByProfileImageUrl()).isEqualTo("https://example.com/profile.png");
     }
 
     @Test
@@ -304,15 +316,37 @@ class PlaceServiceTest {
                 Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
             ), pageable, 1)
         );
+        given(userClient.findProfiles(Set.of(1L))).willReturn(Map.of());
 
         // when
-        PageResponse<PlaceResponse> result = placeService.findPendingByMapId(10L, 2L, pageable);
+        PageResponse<PendingPlaceResponse> result = placeService.findPendingByMapId(10L, 2L, pageable);
 
         // then
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).name()).isEqualTo("대기중인 장소");
         verify(placeRepository, never())
             .findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(any(), any(), any(), any());
+    }
+
+    @Test
+    void findPendingByMapId는_user_service_조회가_실패해도_닉네임_없이_목록을_반환한다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING, pageable)).willReturn(
+            new PageImpl<>(List.of(
+                Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
+            ), pageable, 1)
+        );
+        given(userClient.findProfiles(Set.of(1L))).willReturn(Map.of());
+
+        // when
+        PageResponse<PendingPlaceResponse> result = placeService.findPendingByMapId(10L, 1L, pageable);
+
+        // then
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).createdByNickname()).isNull();
+        assertThat(result.content().get(0).createdByProfileImageUrl()).isNull();
     }
 
     @Test
@@ -324,9 +358,10 @@ class PlaceServiceTest {
             .willReturn(new PageImpl<>(List.of(
                 Place.builder().name("본인이 등록한 대기중인 장소").mapId(10L).createdBy(3L).status(PlaceStatus.PENDING).build()
             ), pageable, 1));
+        given(userClient.findProfiles(Set.of(3L))).willReturn(Map.of());
 
         // when
-        PageResponse<PlaceResponse> result = placeService.findPendingByMapId(10L, 3L, pageable);
+        PageResponse<PendingPlaceResponse> result = placeService.findPendingByMapId(10L, 3L, pageable);
 
         // then
         assertThat(result.content()).hasSize(1);

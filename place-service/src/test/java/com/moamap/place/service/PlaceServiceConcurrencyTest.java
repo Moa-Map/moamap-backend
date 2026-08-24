@@ -18,6 +18,7 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -48,6 +49,10 @@ class PlaceServiceConcurrencyTest {
     // 이 테스트의 관심사는 유니크 제약 동시성이지 이벤트 발행이 아니다. 컨텍스트 기동에만 필요하다.
     @MockitoBean
     private PlaceCountEventPublisher placeCountEventPublisher;
+
+    // create()는 UserClient를 호출하지 않는다. PlaceService 생성자 의존성을 채우기 위한 mock이다.
+    @MockitoBean
+    private UserClient userClient;
 
     private PlaceCreateRequest createRequest() {
         return new PlaceCreateRequest(
