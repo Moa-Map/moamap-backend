@@ -1,6 +1,6 @@
 package com.moamap.place.dto;
 
-public record ReviewPhotoUploadUrlResponse(
+public record CommentPhotoUploadUrlResponse(
     String uploadUrl,
     String objectKey,
     String fileUrl,
