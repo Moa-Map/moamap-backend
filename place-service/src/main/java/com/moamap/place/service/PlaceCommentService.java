@@ -68,7 +68,7 @@ public class PlaceCommentService {
     @Transactional
     public void delete(Long placeId, Long commentId, Long userId) {
         PlaceComment comment = getCommentOrThrow(placeId, commentId);
-        checkCommentOwner(comment, userId);
+        checkDeletePermission(placeId, comment, userId);
         comment.delete();
         refreshPlaceCommentSummary(placeId);
     }
@@ -95,7 +95,27 @@ public class PlaceCommentService {
         if (userId == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        if (!comment.getUserId().equals(userId)) {
+        if (!comment.isWrittenBy(userId)) {
+            throw new BusinessException(PlaceErrorCode.NOT_COMMENT_OWNER);
+        }
+    }
+
+    /**
+     * 삭제는 작성자 본인뿐 아니라 지도의 방장·관리자도 할 수 있다 — 신고가 쌓인 댓글을 정리하는 수단이다.
+     * 수정은 여전히 본인만 가능하다. 남의 글 내용을 고치는 건 관리 행위가 아니다.
+     *
+     * 본인이면 map-service를 부르지 않는다. 삭제 대부분은 본인 삭제라, 굳이 서비스 간 왕복을 만들 이유가 없다.
+     */
+    private void checkDeletePermission(Long placeId, PlaceComment comment, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        if (comment.isWrittenBy(userId)) {
+            return;
+        }
+        Place place = getPlaceOrThrow(placeId);
+        MapMemberRole role = mapClient.getMemberInfo(place.getMapId(), userId).role();
+        if (role != MapMemberRole.OWNER && role != MapMemberRole.ADMIN) {
             throw new BusinessException(PlaceErrorCode.NOT_COMMENT_OWNER);
         }
     }

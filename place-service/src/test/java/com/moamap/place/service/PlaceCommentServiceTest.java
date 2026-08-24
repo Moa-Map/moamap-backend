@@ -223,10 +223,12 @@ class PlaceCommentServiceTest {
     }
 
     @Test
-    void delete는_본인_댓글이_아니면_BusinessException을_던진다() {
+    void delete는_본인_댓글이_아니고_관리_역할도_아니면_BusinessException을_던진다() {
         // given
         PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
 
         // when & then
         assertThatThrownBy(() -> placeCommentService.delete(1L, 5L, 3L))
@@ -234,5 +236,69 @@ class PlaceCommentServiceTest {
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.NOT_COMMENT_OWNER);
         assertThat(comment.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void delete는_남의_댓글이어도_지도_OWNER면_삭제할_수_있다() {
+        // given
+        PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
+        given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(0L);
+
+        // when
+        placeCommentService.delete(1L, 5L, 3L);
+
+        // then
+        assertThat(comment.getDeletedAt()).isNotNull();
+        verify(placeRepository).updateCommentSummary(1L, null, 0);
+    }
+
+    @Test
+    void delete는_남의_댓글이어도_지도_ADMIN이면_삭제할_수_있다() {
+        // given
+        PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
+        given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(0L);
+
+        // when
+        placeCommentService.delete(1L, 5L, 3L);
+
+        // then
+        assertThat(comment.getDeletedAt()).isNotNull();
+    }
+
+    /** 본인 삭제는 지도 왕복이 필요 없다. 서비스 간 호출을 아끼는 설계라 회귀하지 않게 고정한다. */
+    @Test
+    void delete는_본인_댓글이면_map_service를_호출하지_않는다() {
+        // given
+        PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
+        given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
+        given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(0L);
+
+        // when
+        placeCommentService.delete(1L, 5L, 2L);
+
+        // then
+        verifyNoInteractions(mapClient);
+    }
+
+    /** 수정 권한은 확장하지 않는다 — 남의 글 내용을 고치는 건 관리 행위가 아니다. */
+    @Test
+    void update는_지도_OWNER여도_작성자가_아니면_거부된다() {
+        // given
+        PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
+        given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
+        PlaceCommentUpdateRequest request = new PlaceCommentUpdateRequest(4, "관리자가 고친 내용", null);
+
+        // when & then
+        assertThatThrownBy(() -> placeCommentService.update(1L, 5L, 3L, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getErrorCode())
+            .isEqualTo(PlaceErrorCode.NOT_COMMENT_OWNER);
+        verifyNoInteractions(mapClient);
     }
 }

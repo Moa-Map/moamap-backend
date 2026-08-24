@@ -85,7 +85,7 @@ public class PlaceCommentController {
     }
 
     @DeleteMapping("/{commentId}")
-    @Operation(summary = "댓글 삭제", description = "본인이 작성한 댓글만 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
+    @Operation(summary = "댓글 삭제", description = "작성자 본인 또는 지도의 방장·관리자가 삭제할 수 있다. 실제로는 deletedAt만 채우는 소프트 삭제다.")
     public ApiResponse<Void> delete(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
         @Parameter(description = "댓글 ID", example = "1") @PathVariable Long commentId,
