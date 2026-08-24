@@ -86,6 +86,14 @@ public class Place {
     @Builder.Default
     private Integer commentCount = 0;
 
+    /**
+     * 하트를 누른 사람 수. place_likes를 매번 세지 않도록 비정규화해 둔다.
+     * 취소로 행이 지워지므로 증감이 아니라 재계산으로 채운다(PlaceLikeService 참고).
+     */
+    @Column(name = "like_count", nullable = false, columnDefinition = "integer not null default 0")
+    @Builder.Default
+    private Integer likeCount = 0;
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 

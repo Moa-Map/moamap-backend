@@ -25,6 +25,8 @@ public record PlaceResponse(
     PlaceStatus status,
     BigDecimal avgRating,
     Integer commentCount,
+    Integer likeCount,
+    boolean likedByMe,
     Long processedBy,
     LocalDateTime processedAt,
     LocalDateTime createdAt,
@@ -33,7 +35,11 @@ public record PlaceResponse(
     List<String> photoUrls
 ) {
 
-    public static PlaceResponse from(Place place) {
+    /**
+     * likedByMe는 "요청한 사람이 지금 하트를 눌러 둔 상태인지"다. 호출부가 반드시 실제 값을 넘긴다 —
+     * 기본값 false를 주는 팩터리를 따로 두면 조회 경로에서 조용히 틀린 값이 나간다.
+     */
+    public static PlaceResponse of(Place place, boolean likedByMe) {
         return new PlaceResponse(
             place.getId(),
             place.getName(),
@@ -51,6 +57,8 @@ public record PlaceResponse(
             place.getStatus(),
             place.getAvgRating(),
             place.getCommentCount(),
+            place.getLikeCount(),
+            likedByMe,
             place.getProcessedBy(),
             place.getProcessedAt(),
             place.getCreatedAt(),

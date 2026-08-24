@@ -94,24 +94,27 @@ public class PlaceController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "장소 단건 조회", description = "삭제되지 않은 장소를 id로 조회한다.")
+    @Operation(summary = "장소 단건 조회", description = "삭제되지 않은 장소를 id로 조회한다. likedByMe는 요청자가 지금 하트를 눌러 둔 상태인지다.")
     public ApiResponse<PlaceResponse> getById(
-        @Parameter(description = "장소 ID", example = "1") @PathVariable Long id
+        @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
+        @Parameter(hidden = true) @RequestHeader(value = "X-User-Id", required = false) Long userId
     ) {
-        return ApiResponse.success(placeService.findById(id));
+        return ApiResponse.success(placeService.findById(id, userId));
     }
 
     @GetMapping
     @Operation(
         summary = "지도별 장소 목록 조회",
-        description = "특정 지도에 속한, 삭제되지 않은 장소 중 APPROVED 상태만 조회한다. PENDING 상태는 별도의 승인 대기 목록 API에서 확인한다."
+        description = "특정 지도에 속한, 삭제되지 않은 장소 중 APPROVED 상태만 조회한다. PENDING 상태는 별도의 승인 대기 목록 API에서 확인한다. "
+            + "각 항목의 likeCount는 하트를 누른 사람 수, likedByMe는 요청자가 지금 눌러 둔 상태인지다."
     )
     public ApiResponse<PageResponse<PlaceResponse>> getAll(
         @Parameter(description = "조회할 지도 ID", required = true, example = "10")
         @RequestParam Long mapId,
+        @Parameter(hidden = true) @RequestHeader(value = "X-User-Id", required = false) Long userId,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ApiResponse.success(placeService.findAllByMapId(mapId, pageable));
+        return ApiResponse.success(placeService.findAllByMapId(mapId, userId, pageable));
     }
 
     @GetMapping("/counts")

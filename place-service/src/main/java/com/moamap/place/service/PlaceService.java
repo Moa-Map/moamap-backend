@@ -2,9 +2,11 @@ package com.moamap.place.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -22,6 +24,7 @@ import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
+import com.moamap.place.repository.PlaceLikeRepository;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +46,7 @@ public class PlaceService {
     private static final String DUPLICATE_PLACE_CONSTRAINT = "uk_places_map_kakao_place";
 
     private final PlaceRepository placeRepository;
+    private final PlaceLikeRepository placeLikeRepository;
     private final MapClient mapClient;
     private final PlaceBulkRegistrar placeBulkRegistrar;
     private final ApplicationEventPublisher eventPublisher;
@@ -88,7 +92,8 @@ public class PlaceService {
         if (status == PlaceStatus.APPROVED) {
             eventPublisher.publishEvent(new PlaceCountChangeSignal(request.mapId()));
         }
-        return PlaceResponse.from(saved);
+        // 방금 만들어진 장소라 하트가 있을 수 없다. 확인하러 갈 필요 없이 false가 사실이다.
+        return PlaceResponse.of(saved, false);
     }
 
     /**
@@ -179,13 +184,14 @@ public class PlaceService {
         }
     }
 
-    public PlaceResponse findById(Long id) {
-        return PlaceResponse.from(getOrThrow(id));
+    public PlaceResponse findById(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
-    public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Pageable pageable) {
-        return PageResponse.from(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable)
-            .map(PlaceResponse::from));
+    public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Long userId, Pageable pageable) {
+        return toPageResponse(
+            placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable), userId);
     }
 
     /**
@@ -218,7 +224,7 @@ public class PlaceService {
                 placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, userId, pageable);
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
-        return PageResponse.from(pendingPlaces.map(PlaceResponse::from));
+        return toPageResponse(pendingPlaces, userId);
     }
 
     @Transactional
@@ -227,7 +233,7 @@ public class PlaceService {
         checkModifyPermission(place, userId);
         place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
             request.category(), request.description(), request.tags());
-        return PlaceResponse.from(place);
+        return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
     @Transactional
@@ -248,7 +254,7 @@ public class PlaceService {
         checkPending(place);
         place.approve(userId);
         eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
-        return PlaceResponse.from(place);
+        return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
     @Transactional
@@ -257,12 +263,36 @@ public class PlaceService {
         requireReviewer(place.getMapId(), userId);
         checkPending(place);
         place.reject(userId);
-        return PlaceResponse.from(place);
+        return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
     private Place getOrThrow(Long id) {
         return placeRepository.findByIdAndDeletedAtIsNull(id)
             .orElseThrow(() -> new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
+    }
+
+    private PageResponse<PlaceResponse> toPageResponse(Page<Place> places, Long userId) {
+        Set<Long> likedPlaceIds = likedPlaceIds(userId, places.getContent());
+        return PageResponse.from(places.map(place -> PlaceResponse.of(place, likedPlaceIds.contains(place.getId()))));
+    }
+
+    /**
+     * 이 페이지에서 요청자가 하트를 눌러 둔 장소 id들. 페이지 건수와 무관하게 쿼리 1회다.
+     *
+     * 건별로 물으면 20건 페이지에 20쿼리가 붙는다(MapService.joinedMapIds와 같은 방식으로 피한다).
+     */
+    private Set<Long> likedPlaceIds(Long userId, List<Place> places) {
+        // Set.of()/Set.copyOf()가 만드는 불변 셋은 contains(null)에서 NPE를 낸다.
+        // 아직 id가 없는 엔티티가 섞여도 조회가 깨지지 않도록 HashSet을 쓴다(MapService.joinedMapIds와 동일).
+        if (userId == null || places.isEmpty()) {
+            return new HashSet<>();
+        }
+        List<Long> placeIds = places.stream().map(Place::getId).toList();
+        return new HashSet<>(placeLikeRepository.findLikedPlaceIds(userId, placeIds));
+    }
+
+    private boolean isLikedBy(Long placeId, Long userId) {
+        return userId != null && placeLikeRepository.existsByPlaceIdAndUserId(placeId, userId);
     }
 
     /**
