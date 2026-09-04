@@ -158,6 +158,52 @@ class MapApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("지도 검색은 커뮤니티·공식 지도를 인증 없이 찾고, 프라이빗 지도는 제외한다")
+    void searchReturnsPublicMapsOnly() throws Exception {
+        createMap(OWNER, "성수 카페 투어", "PUBLIC");
+        createMap(OWNER, "성수 비밀 모임", "PRIVATE");
+        mapEntityRepository.save(
+            MapEntity.create("공식 성수 지도", "공공데이터", null, MapType.OFFICIAL, OWNER, null, null)
+        );
+
+        mockMvc.perform(get("/api/v1/maps/search").param("keyword", "성수"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.content[*].type", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.not("PRIVATE"))))
+            .andExpect(jsonPath("$.data.content[*].joined", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.is(false))));
+    }
+
+    @Test
+    @DisplayName("검색 시 X-User-Id가 있으면 참여 여부(joined)가 채워진다")
+    void searchFillsJoinedForAuthenticatedUser() throws Exception {
+        createMap(OWNER, "성수 카페 투어", "PUBLIC");
+
+        mockMvc.perform(get("/api/v1/maps/search").param("keyword", "성수").header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].joined").value(true));
+    }
+
+    @Test
+    @DisplayName("검색어가 비어 있으면 400을 반환한다")
+    void searchRejectsBlankKeyword() throws Exception {
+        mockMvc.perform(get("/api/v1/maps/search").param("keyword", "  "))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("검색어의 LIKE 와일드카드는 이스케이프되어 전체 조회로 새지 않는다")
+    void searchEscapesWildcard() throws Exception {
+        createMap(OWNER, "성수 카페 투어", "PUBLIC");
+
+        mockMvc.perform(get("/api/v1/maps/search").param("keyword", "%"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(0));
+    }
+
+    @Test
     @DisplayName("공식 지도도 커뮤니티와 동일한 join 엔드포인트로 참여할 수 있다")
     void joinOfficialMap() throws Exception {
         MapEntity official = mapEntityRepository.save(

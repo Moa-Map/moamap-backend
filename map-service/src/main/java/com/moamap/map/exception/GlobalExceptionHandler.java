@@ -3,6 +3,7 @@ package com.moamap.map.exception;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.common.response.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -28,6 +29,17 @@ public class GlobalExceptionHandler {
         String message = e.getBindingResult().getFieldErrors().stream()
             .findFirst()
             .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
+            .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
+            .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, message));
+    }
+
+    /** @RequestParam·@PathVariable에 붙은 제약(@NotBlank 등) 위반. 없으면 handleUnexpected로 흘러 500이 된다. */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+            .findFirst()
+            .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
             .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
             .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, message));
