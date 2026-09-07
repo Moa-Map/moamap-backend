@@ -6,6 +6,7 @@
 | 이슈 | #105 |
 | 기준 커밋 | `develop` @ `5a2e871` |
 | 상태 | **설계 확정, 착수 전** |
+| 개정 | 2026-09-07 (1) 노드 구성 server 3 → 컨트롤플레인 1 + 데이터플레인 2 (2) 레지스트리 ghcr.io → ECR (3) DB 파드 → **RDS**(프라이빗 서브넷) (4) 비용 검토 끝에 ALB·NAT 미도입 — 노드는 퍼블릭, 진입점은 **EIP + traefik 내장 ACME** |
 | 목적 | 현재 NHN 인프라의 정확한 기록 + AWS k3s 마이그레이션 설계 + 결정 근거. 작업 전에 팀 전원이 읽는다. |
 
 ---
@@ -44,31 +45,47 @@
 | **EC2 + kubespray** | 노드 4~5대 필요 = **$120~** | 그대로 | 최대 (컨트롤플레인 내부까지) | **최대** (인증서 만료, 플레이북 업그레이드) | ❌ 부담·비용 |
 | **EC2 + k3s** | **$30~90** | 그대로 | 컨트롤플레인 내부 제외 전부 | 낮음 | ✅ |
 
+> **비용 전제 주의.** 아래 "$30~90"은 EC2+EBS만 센 값이다. RDS와 퍼블릭 IPv4 과금을 더한 실제 월 비용은 **~$117**이다 (3.11). ALB·NAT Gateway까지 붙인 안($175)도 검토했으나 비용 대비 이득이 맞지 않아 뺐다. 어느 쪽이든 EKS는 컨트롤플레인 $73이 그대로 얹히므로 비교의 결론은 바뀌지 않는다.
+
 **ECS Fargate의 함정**: "서버리스라 싸다"는 상태 저장 서비스에서 깨진다. Postgres·Redis·RabbitMQ를 Fargate에 올릴 수 없어 RDS·ElastiCache·AmazonMQ가 필요한데, AmazonMQ 최소 인스턴스만 월 $30 수준이다.
 
 **kubespray를 안 고른 이유**: k8s 경험의 95%는 컨트롤플레인 *위*에 있다(스케줄링·스토리지·Ingress·관측·장애 대응). kubespray가 더 주는 건 "apiserver를 별도 파드로 본다", "kubeadm 인증서를 직접 관리한다" 둘뿐이고, 그 대가로 노드당 ~2GB를 컨트롤플레인이 먹고 인증서 1년 만료 같은 운영 함정이 따라온다. 3~4대 예산에서 kubespray를 하면 컨트롤플레인 3대 + 워커 1대가 되어 워크로드 넣을 데가 없다. 컨트롤플레인 내부가 궁금하면 대회 후 스팟 3대로 하루 실습한다(수천 원).
 
-### 1.4 노드 수 결정
+### 1.4 노드 구성 결정
 
-**"마스터 1 + 워커 2"는 함정이다.** k3s에서 server 1대 + agent 2대는 비용은 3배인데 server가 죽으면 API·스케줄링이 전부 멈춘다(SPOF 그대로). k3s server 노드는 기본적으로 워크로드도 받으므로, 3대라면 **server 3대(embedded etcd, quorum 2/3)** 가 맞다. etcd는 홀수여야 하고 3이 HA 최소다. 2는 1보다 나쁘다(split brain).
+**컨트롤플레인 1대 + 데이터플레인 2대.** 컨트롤플레인은 taint를 걸어 워크로드를 받지 않는다.
 
-| 구성 | 컨트롤플레인 | 노드 1대 장애 시 | 월 비용 |
-|---|---|---|---|
-| server 1 | SQLite, SPOF | 전체 다운 | ~$30 (medium) / ~$61 (large) |
-| server 1 + agent 2 | SQLite, **SPOF** | server면 전체 다운 | ~$90 |
-| **server 3 (etcd)** | **HA** | 유지 | ~$90 (온디맨드) / ~$27 (스팟) |
+| 구성 | 컨트롤플레인 | 노드 1대 장애 시 | 워크로드 메모리 | 월 비용 |
+|---|---|---|---|---|
+| server 1 (워크로드 겸용) | SPOF | 전체 다운 | 4GB | ~$30 |
+| **CP 1(small, taint) + worker 2(medium)** | **SPOF** | 워커면 나머지 1대로 축소 / CP면 API 정지 | **8GB** | **~$75** |
+| server 3 (etcd HA) | HA | 유지 | 12GB | ~$90 |
 
-**단, 3대가 의미 있으려면 워크로드도 따라와야 한다.** 지금은 전부 `replicas: 1`이고 Postgres도 단일이라, 노드만 3대여도 앱 가용성은 안 오른다. 3대 구성은 EBS CSI(파드가 노드를 옮겨도 볼륨이 따라감) + stateless `replicas: 2` + anti-affinity와 세트다. 이걸 **4장 로드맵의 9번**으로 넣었다.
+etcd HA(server 3대)를 포기하고 이 구성을 고른 이유:
+
+1. **컨트롤플레인/데이터플레인 분리가 실제 k8s 클러스터의 표준 형태다.** 관리형(EKS·NKS)에서 컨트롤플레인이 안 보였던 이유가 여기서 눈에 보인다. taint/toleration, `kubectl describe node`의 taint 필드, "왜 이 노드엔 파드가 안 뜨지"를 직접 겪는다.
+2. **컨트롤플레인이 작아도 된다.** 워크로드를 안 받으므로 t4g.small(2vCPU/2GB)로 충분하다 — k3s server + embedded etcd가 ~700MB. 그만큼을 워커 쪽에 쓴다.
+3. **비용은 server 3대보다 싸고, 워크로드에 쓸 메모리는 8GB로 확보된다.**
+
+**포기한 것: 컨트롤플레인 HA.** 컨트롤플레인이 죽으면 API·스케줄링·ArgoCD sync가 멈춘다. 다만 **이미 떠 있는 파드와 traefik을 통한 서비스 트래픽은 계속 흐른다** (kubelet과 kube-proxy는 apiserver 없이도 기존 상태를 유지한다). dev/포트폴리오 클러스터에서 감당 가능한 손실이라 판단했다.
+
+- 복구 경로는 남겨둔다: 컨트롤플레인을 `--cluster-init`(embedded etcd)로 시작하므로, 나중에 server를 2대 더 붙이면 SQLite → etcd 전환 없이 그대로 HA가 된다.
+- etcd 스냅샷을 S3로 자동 업로드해서, 컨트롤플레인이 통째로 날아가도 새 인스턴스에서 `--cluster-reset-restore-path`로 복원한다 (4.5, 12단계).
+
+**워크로드가 2노드에 들어가는가.** JVM 4개 ~2GB + Redis/RabbitMQ ~0.5GB + k3s agent·OS ~0.6GB/노드 = ~3.7GB. **Postgres가 RDS로 빠져서** 8GB 중 절반이 남는다. 단 ArgoCD(~0.5GB)와 kube-prometheus-stack(~1.5GB)까지 얹으면 ~5.7GB라 여유가 크진 않다 — 9단계에서 Prometheus `retention`·리소스 limit을 좁게 잡는다. 부족하면 워커 타입을 올린다(재부팅).
 
 ### 1.5 최종 결정
 
 ```
-EC2 t4g.medium (2vCPU/4GB, Graviton) × 3
-k3s server 3대, embedded etcd HA, 전 노드 워크로드 수용
-단일 AZ (EBS가 AZ에 묶이므로)
-Elastic IP 1개 → traefik(내장 Ingress)가 80/443 수신
-EBS gp3 + EBS CSI 드라이버
-S3 (사진 + Terraform state), ghcr.io (이미지), 가비아 DNS (유지)
+public  서브넷 ×2 (2AZ)   노드 3대 — 공인 IP 보유, IGW로 직접 아웃바운드 (NAT 없음)
+  EC2 t4g.small  (2vCPU/2GB, Graviton) × 1   k3s server — taint로 워크로드 차단
+  EC2 t4g.medium (2vCPU/4GB, Graviton) × 2   k3s agent  — 앱 + Redis/RabbitMQ
+private 서브넷 ×2 (2AZ)   RDS PostgreSQL db.t4g.micro 전용 (인터넷 경로 없음)
+노드·RDS 인스턴스는 az-a 한 곳에만 (EBS/비용). 2AZ는 RDS 서브넷 그룹 요건
+SG 3개: node(자기참조만) / ingress(80·443, 워커에만) / rds(노드에서만 5432)
+  → 마스터는 인터넷에서 열린 포트가 0개. 22는 어디에도 없음 — 접속은 SSM
+EIP 1개 → worker-1, traefik이 TLS 종료(Let's Encrypt, traefik 내장 ACME)
+S3 (사진 + tfstate, 게이트웨이 엔드포인트), ECR (이미지), 가비아 DNS A 레코드
 ```
 
 ---
@@ -113,7 +130,7 @@ NHN Cloud KR1 ─────────────────────┼
 
 ### 2.2 IaC 범위 — Terraform이 관리하는 것과 아닌 것
 
-`infra/terraform/` (provider `nhn-cloud/nhncloud ~> 1.0`, OpenStack 기반)
+`infra/nhncloud/` (provider `nhn-cloud/nhncloud ~> 1.0`, OpenStack 기반. 2026-09-07 `infra/terraform/`에서 이동)
 
 **관리함 (2개)**
 
@@ -266,7 +283,7 @@ push → main          cd-prod.yml (prod 미배포라 실질 미사용)
 |---|---|---|
 | 1 | ArgoCD `moamap-dev` OutOfSync — 최신 코드 미배포 | 이전 전 sync 또는 이전 후 최신으로 배포 |
 | 2 | 파드가 node-0에 집중 — 2노드의 의미 없음 | 이전 시 anti-affinity로 해결 (4.1 10번) |
-| 3 | HTTPS 없음 | 이전 시 cert-manager (4.1 7번) |
+| 3 | HTTPS 없음 | 이전 시 traefik 내장 ACME + Let's Encrypt (4.1 7번) |
 | 4 | 모니터링·로그 수집 없음 | 이전 시 kube-prometheus-stack (4.1 9번) |
 | 5 | Terraform state 소재 불명 | **정리(4.4) 전 반드시 확인** |
 | 6 | 정적 오브젝트 스토리지 키를 Secret에 보관 | 이전 시 IAM Role로 대체 (3.8) |
@@ -281,36 +298,43 @@ push → main          cd-prod.yml (prod 미배포라 실질 미사용)
 
 ```
 가비아 DNS  moamap.co.kr  (유지, 비용 0)
-   ├─ dev-api.moamap.co.kr   A → Elastic IP
-   └─ api.moamap.co.kr       A → Elastic IP   (prod 시)
+   └─ dev-api.moamap.co.kr   A → EIP
                                    │
-AWS ap-northeast-2 (서울), 단일 AZ ──┼─────────────────────────────
+AWS ap-northeast-2 (서울) ──────────┼──────────────────────────────
   VPC 10.0.0.0/16
-   └ public subnet 10.0.1.0/24 + Internet Gateway   (NAT 없음 — 월 $35 절약)
-      Security Group: 80/443 ← 0.0.0.0/0, 22 ← 관리자 IP, 6443/2379-2380/10250 ← SG 내부
-                                   │
-      ┌────────────────────────────┴──────────────────────────────┐
-      │  EC2 t4g.medium ×3  (2vCPU/4GB, Graviton/arm64)            │
-      │                                                            │
-      │  node-1  k3s server --cluster-init   ◄── Elastic IP        │
-      │  node-2  k3s server --server node-1                        │
-      │  node-3  k3s server --server node-1                        │
-      │          embedded etcd, quorum 2/3, 전 노드 워크로드 수용   │
-      │                                                            │
-      │  traefik (k3s 내장)  :80/:443  ── Ingress + TLS 종료        │
-      │     └─► gateway-service (ClusterIP)                        │
-      │            ├─► user / map / place (ClusterIP)              │
-      │  cert-manager ── Let's Encrypt HTTP-01 자동 발급·갱신       │
-      │  ArgoCD ── 기존 Application 그대로                          │
-      │  kube-prometheus-stack ── Prometheus/Grafana/Alertmanager  │
-      │  postgres (StatefulSet, EBS PVC) / redis / rabbitmq        │
-      │                                                            │
-      │  EBS gp3: 루트 30GB ×3, 데이터 20GB (EBS CSI 동적 프로비저닝) │
-      └────────────────────────────────────────────────────────────┘
+   │
+   ├ public  10.0.1.0/24 (az-a) · 10.0.2.0/24 (az-c)      ← 인터넷 게이트웨이
+   │   ┌──────────────────────────────────────────────────────────┐
+   │   │  컨트롤플레인  master  t4g.small (2vCPU/2GB)  [az-a]     │
+   │   │    k3s server --cluster-init                             │
+   │   │    taint node-role.kubernetes.io/control-plane:NoSchedule │
+   │   │    SG: node 만 → 인터넷 인바운드 0개                      │
+   │   ├──────────────────────────────────────────────────────────┤
+   │   │  데이터플레인  worker-1, worker-2  t4g.medium  [az-a]     │
+   │   │    k3s agent.  SG: node + ingress(80/443)                │
+   │   │    worker-1 ◄── Elastic IP                               │
+   │   │                                                          │
+   │   │  traefik (k3s 내장)                                      │
+   │   │    :443 TLS 종료 — Let's Encrypt, traefik 내장 ACME      │
+   │   │    :80  HTTP-01 챌린지 + https 리다이렉트                │
+   │   │     └─► gateway-service (ClusterIP)                      │
+   │   │            ├─► user / map / place (ClusterIP)            │
+   │   │  redis / rabbitmq (파드)                                 │
+   │   │  ArgoCD ── 기존 Application 그대로                        │
+   │   │  kube-prometheus-stack ── Prometheus/Grafana/Alertmanager│
+   │   └──────────────────────────────────────────────────────────┘
+   │
+   └ private 10.0.11.0/24 (az-a) · 10.0.12.0/24 (az-c)   ← 인터넷 경로 없음
+       ┌──────────────────────────────────────────────────────────┐
+       │  RDS PostgreSQL  db.t4g.micro  [az-a]  단일 AZ           │
+       │    publicly_accessible=false, 노드 SG에서만 5432          │
+       │    자동 백업 7일, 스토리지 암호화                          │
+       └──────────────────────────────────────────────────────────┘
 
-  S3        사진 버킷 + Terraform state 버킷
-  ghcr.io   ghcr.io/moa-map/<svc>:<git-sha>  (퍼블릭 레포 → 무료)
-  IAM       인스턴스 프로파일 → S3 접근 (정적 키 제거)
+  S3        사진 버킷 + Terraform state 버킷 (게이트웨이 엔드포인트 — 무료)
+  ECR       <account>.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/<svc>:<git-sha>
+  IAM       인스턴스 프로파일 → S3·ECR·EBS·SSM (정적 키 제거)
+  SSM       Session Manager — 22 미개방, 베스천 없이 노드 접속·6443 포트포워딩
 ```
 
 ### 3.2 네트워크
@@ -318,35 +342,55 @@ AWS ap-northeast-2 (서울), 단일 AZ ──┼──────────�
 | 항목 | 설계 | 근거 |
 |---|---|---|
 | 리전 | ap-northeast-2 | 사용자·팀 위치 |
-| AZ | **단일 AZ** | EBS 볼륨은 AZ에 묶인다. 멀티 AZ면 파드가 볼륨 있는 AZ로만 스케줄되어 3노드 의미가 줄고, 크로스 AZ 전송 과금도 생긴다 |
-| 서브넷 | public 1개 | NAT Gateway(월 ~$35)를 피하려고 노드를 public에 두고 SG로 막는다 |
-| SG | 80/443 공개, 22는 관리자 IP, k3s 포트는 SG 자기참조 | 6443(API), 2379-2380(etcd), 10250(kubelet), 8472/udp(flannel VXLAN) |
-| 고정 IP | Elastic IP 1개 → node-1 | DNS 대상. node-1이 죽으면 EIP를 다른 노드로 옮긴다 (수동 또는 스크립트) |
+| AZ | **서브넷은 2AZ, 실제 배치는 1AZ** | RDS 서브넷 그룹이 2AZ를 강제한다. 하지만 EBS는 AZ에 묶이고 크로스 AZ 전송료가 붙으므로 노드·RDS 인스턴스는 az-a에만 둔다 |
+| 노드 위치 | **public 서브넷, 공인 IP 보유** | IGW로 직접 나간다. NAT Gateway(월 ~$44)를 쓰지 않기 위한 선택 |
+| RDS 위치 | **private 서브넷** | 아웃바운드가 필요 없어 NAT 없이도 성립한다. 서브넷 자체는 무료라 안 쓸 이유가 없다 |
+| 아웃바운드 | IGW 직결 (무료) | 앱이 카카오·Gemini·서울API를 호출해야 하는데, 노드가 퍼블릭이면 NAT가 필요 없다 |
+| SG | **3개로 분리** (아래) | |
+| 관리자 접속 | **22 미개방. SSM Session Manager** | 키페어도, 베스천도, 관리자 IP 관리도 없앤다. `kubectl`은 6443 포트포워딩 |
+| 고정 IP | Elastic IP 1개 → worker-1 | DNS A 레코드 대상 |
+
+**보안 그룹 3개**
+
+| SG | 붙는 대상 | 인바운드 |
+|---|---|---|
+| `node` | 전 노드 | **자기참조만** — 6443·2379-2380·10250·8472udp를 한 줄로 덮는다 |
+| `ingress` | **워커만** | 80·443 ← 0.0.0.0/0 |
+| `rds` | RDS | 5432 ← `node` SG |
+
+**마스터는 공인 IP가 있지만 인터넷에서 열린 포트가 0개다.** `node` SG만 붙어서 인바운드 규칙이 자기참조뿐이기 때문이다. 실질 노출은 워커의 80/443뿐이고, 그건 어차피 서비스해야 하는 포트다. 80을 닫지 않는 이유는 Let's Encrypt HTTP-01 챌린지가 그리로 오기 때문이다.
+
+**프라이빗 서브넷 + NAT를 안 쓴 대가.** SG 규칙을 잘못 넣으면 즉시 인터넷에 노출된다 — 프라이빗이었다면 라우팅이 막아줬을 2차 방어선이 없다. 그 방어선의 값이 월 $44(NAT Gateway) 또는 $8(NAT 인스턴스)이었고, 대회 예산에서 전자는 과했고 후자는 SPOF를 하나 더 만드는 일이라 접었다. **대신 SG를 3개로 쪼개 각 노드의 노출면을 최소화**하는 쪽으로 방어를 옮겼다. VPC를 `/16`으로 잡고 프라이빗 대역을 이미 만들어뒀으므로, 나중에 노드를 프라이빗으로 옮기는 건 NAT 추가 + 서브넷 변경으로 끝난다.
 
 ### 3.3 컴퓨트 · 노드 역할
 
-| 노드 | 역할 | 특이 배치 |
-|---|---|---|
-| node-1 | k3s server (init), EIP 보유 | traefik이 hostPort 80/443 |
-| node-2 | k3s server (join) | — |
-| node-3 | k3s server (join) | — |
+| 노드 | 타입 | 위치 | 역할 |
+|---|---|---|---|
+| master | t4g.small (2vCPU/2GB) | public az-a | k3s server (`--cluster-init`, embedded etcd). **taint `node-role.kubernetes.io/control-plane:NoSchedule`**. SG는 `node`만 → 인바운드 0 |
+| worker-1 | t4g.medium (2vCPU/4GB) | public az-a | k3s agent. **EIP 보유** — DNS가 가리키는 진입점 |
+| worker-2 | t4g.medium (2vCPU/4GB) | public az-a | k3s agent |
 
-- 인스턴스 타입 `t4g.medium` (arm64). x86(`t3.medium`) 대비 ~20% 저렴. **CI에서 arm64 이미지를 빌드해야 한다** (3.7).
-- 메모리 추정: JVM 4개 ~2GB + Postgres/Redis/RabbitMQ ~0.5GB + k3s(etcd 포함) ~0.8GB/노드 + OS ~0.3GB. 3노드 12GB에 넉넉히 들어간다.
-- 부족하면 인스턴스 타입 변경(재부팅)으로 대응. 처음부터 크게 잡지 않는다.
+- taint는 k3s 설치 시 `--node-taint`로 건다. 나중에 `kubectl taint`로 거는 것보다 확실하다(재부팅·재설치에도 유지).
+- 전부 **arm64(Graviton)**. x86(`t3`) 대비 ~20% 저렴. **CI에서 arm64 이미지를 빌드해야 한다** (3.7).
+- **키페어 없음, 22 미개방.** SSM Session Manager로 접속하고, `kubectl`은 6443 포트포워딩으로 쓴다. 6443은 SG에서 자기참조만 허용하므로 `--tls-san`도 필요 없다(포트포워딩은 127.0.0.1로 붙는다).
+- 메모리: 앱·Redis/RabbitMQ ~3.7GB, ArgoCD·모니터링까지 ~5.7GB / 8GB (1.4).
+- **Postgres는 RDS로 뺐다.** 클러스터 안에 남는 상태 저장 워크로드는 Redis(캐시라 유실 허용)와 RabbitMQ뿐이다.
 
-**스팟 옵션**: etcd HA라 스팟 1대 회수는 견딘다. `1 온디맨드(Postgres 고정) + 2 스팟` 조합이면 월 ~$48. 2대 동시 회수 시 quorum 상실 → `k3s server --cluster-reset`으로 복구 (4.5).
+**스팟은 절체 완료 후에.** 컨트롤플레인은 SPOF라 온디맨드 고정이다. Postgres가 RDS로 빠져서 워커 회수의 타격은 줄었지만(재스케줄로 흡수), 워커가 2대뿐이라 1대 회수 시 남은 1대에 전부 몰린다. 안정화 후 워커 1대만 스팟으로 실험한다.
 
 ### 3.4 k3s 구성
 
 ```bash
-# node-1
-curl -sfL https://get.k3s.io | sh -s - server --cluster-init \
-  --tls-san <EIP> --tls-san dev-api.moamap.co.kr \
-  --disable servicelb            # Elastic IP + traefik hostPort로 대체
-# node-2, node-3
-curl -sfL https://get.k3s.io | sh -s - server --server https://<node-1-private-ip>:6443 --token <token>
+# master (컨트롤플레인)
+curl -sfL https://get.k3s.io | K3S_TOKEN=<token> sh -s - server \
+  --cluster-init \
+  --node-taint node-role.kubernetes.io/control-plane=true:NoSchedule
+
+# worker-1, worker-2 (데이터플레인)
+curl -sfL https://get.k3s.io | K3S_TOKEN=<token> K3S_URL=https://<master-private-ip>:6443 sh -s - agent
 ```
+
+토큰은 Terraform이 `random_password`로 만들어 양쪽 user_data에 넣는다 — 수동 복사 단계가 없다. 대신 **토큰이 tfstate에 남으므로 state 버킷은 반드시 비공개·암호화**다.
 
 | 내장 컴포넌트 | 사용 여부 | 이유 |
 |---|---|---|
@@ -354,50 +398,76 @@ curl -sfL https://get.k3s.io | sh -s - server --server https://<node-1-private-i
 | flannel (VXLAN) | 사용 | 기본 NetworkPolicy는 됨. Cilium 불필요 |
 | CoreDNS | 사용 | |
 | **traefik** | **사용** | Ingress Controller. 별도 nginx 설치 불필요 |
-| ServiceLB (klipper) | **비활성** | 클라우드 LB가 없으니 hostPort 방식만 남는데, traefik이 이미 그 역할 |
+| ServiceLB (klipper) | **활성** | traefik 파드가 어느 워커에 있든 **모든 노드의 80/443**을 열어준다. EIP가 붙은 워커가 곧 진입점이 되고, traefik이 어디로 스케줄되든 상관없다. 설정 0줄 |
 | local-path-provisioner | 보조 | EBS CSI를 기본 StorageClass로. local-path는 임시용 |
 | metrics-server | 사용 | HPA·`kubectl top` |
 
-- 데이터스토어: embedded etcd. `--cluster-init`으로 시작해야 나중에 server를 붙일 수 있다 (SQLite로 시작하면 전환 단계가 하나 더 생긴다).
-- etcd 스냅샷: k3s 내장 (`--etcd-snapshot-schedule-cron`). S3 업로드 옵션 활성화.
+- 데이터스토어: embedded etcd. server가 1대뿐이라 SQLite로도 되지만, `--cluster-init`으로 시작해야 나중에 server를 붙여 HA로 갈 수 있다 (SQLite로 시작하면 전환 단계가 하나 더 생긴다).
+- etcd 스냅샷: k3s 내장 (`--etcd-snapshot-schedule-cron`) + S3 업로드 활성화. **컨트롤플레인이 SPOF이므로 이건 선택이 아니라 필수다.** 스냅샷만 있으면 새 인스턴스에서 `--cluster-reset-restore-path`로 복원된다.
 
 ### 3.5 스토리지
 
 | 항목 | 설계 |
 |---|---|
+| **DB** | **RDS PostgreSQL** `db.t4g.micro`, gp3 20GB(오토스케일 상한 50GB), 암호화, 자동 백업 7일, 단일 AZ |
 | CSI | **AWS EBS CSI Driver** (Helm). 노드 IAM Role에 EBS 권한 |
-| StorageClass | `gp3`, `reclaimPolicy: Retain` (NHN과 동일한 안전장치), `volumeBindingMode: WaitForFirstConsumer` |
-| Postgres PVC | 20Gi gp3. 파드가 노드를 옮겨도 볼륨이 따라간다 (같은 AZ 내) |
-| 백업 | EBS 스냅샷 (수동 또는 AWS Backup) + `pg_dump` → S3 |
+| StorageClass | `gp3`, `reclaimPolicy: Retain`, `volumeBindingMode: WaitForFirstConsumer` |
+| 클러스터 내 PVC | traefik `acme.json`(인증서), RabbitMQ(큐 영속화), Prometheus(메트릭 보존). **Postgres PVC는 없어졌다** |
+| 백업 | RDS 자동 스냅샷(7일) + 필요 시 `pg_dump` → S3. 사진은 S3 자체 |
 
-NHN의 `cinder-block` PVC와 개념이 같다. 차이는 CSI 드라이버를 **직접 설치**한다는 것뿐.
+Postgres를 RDS로 뺀 대가로 "PVC가 노드를 따라 이동한다"는 학습 소재가 줄었지만, RabbitMQ·Prometheus PVC로 동일한 것을 다룬다. 얻는 것은 자동 백업·PITR·패치와, **워커 노드 장애가 DB 다운으로 이어지지 않는다**는 점이다.
 
 ### 3.6 트래픽 진입 · TLS · DNS
 
 ```
-클라이언트 → dev-api.moamap.co.kr → EIP:443
-          → traefik (TLS 종료, Let's Encrypt 인증서)
-          → Ingress rule: host=dev-api.moamap.co.kr → gateway-service:8080 (ClusterIP)
+클라이언트 → dev-api.moamap.co.kr (A 레코드) → EIP:443
+          → traefik이 TLS 종료 (Let's Encrypt 인증서, traefik 내장 ACME가 발급·갱신)
+          → Ingress rule: host 매칭 → gateway-service:8080 (ClusterIP)
           → 이후는 현재와 동일
 ```
 
-- `gateway-service` Service: `LoadBalancer` → **`ClusterIP`** 로 변경.
-- Ingress 리소스는 `k8s/base/gateway-service/ingress.yaml`에 두고 host는 overlay에서 패치.
-- cert-manager `ClusterIssuer`: Let's Encrypt HTTP-01. 스테이징으로 먼저 검증 후 프로덕션 발급 (실패 시 발급 제한 있음).
-- ACME 계정 이메일은 `cluster-issuer.example.yaml`만 커밋, 실제 파일은 gitignore (개인 이메일 공개 방지).
-- 가비아 DNS 유지. Route53(월 $0.50)은 불필요.
-- Swagger·`DEV_LOGIN`은 traefik **Basic Auth** 미들웨어로 보호 (팀원은 URL+비번).
+- `gateway-service` Service: `LoadBalancer` → **`ClusterIP`**. 외부 노출은 traefik Ingress로 모은다.
+- **cert-manager를 설치하지 않는다.** Let's Encrypt를 쓰되 ACME 수행은 **traefik 내장 `certResolvers`** 가 한다. cert-manager는 파드 3개(controller/webhook/cainjector)와 CRD를 더 운영해야 하는데, k3s에 이미 들어 있는 traefik이 같은 일을 한다.
+
+```yaml
+# k8s/cluster/traefik-config.yaml — k3s가 읽어 내장 traefik에 반영
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata: { name: traefik, namespace: kube-system }
+spec:
+  valuesContent: |-
+    persistence: { enabled: true, size: 128Mi }   # acme.json 보관 (EBS PVC)
+    certResolvers:
+      le:
+        email: <team-email>
+        httpChallenge: { entryPoint: web }
+        storage: /data/acme.json
+```
+
+Ingress에 `traefik.ingress.kubernetes.io/router.tls.certresolver: le` 를 붙이면 발급되고, 갱신(60일 시점)도 traefik이 자동으로 한다.
+
+**제약 두 가지**
+
+- **traefik `replicas: 1` 고정.** `acme.json`을 여러 파드가 공유할 수 없다(분산 저장은 상용판 기능). 우리는 어차피 1이고, 파드가 다른 워커로 옮겨가도 EBS PVC가 따라간다(같은 AZ).
+- **80이 인터넷에서 traefik에 직접 닿아야 한다.** HTTP-01 챌린지 경로다. `ingress` SG가 80을 여는 이유이며, 노드가 퍼블릭이어야 성립하는 조건이기도 하다.
+
+- 발급 실패에는 rate limit(도메인당 주 50회, 실패 5회/시간)이 있다. **스테이징 issuer로 먼저 검증**한 뒤 프로덕션으로 바꾼다.
+- DNS는 **A 레코드 → EIP**. 가비아 그대로 쓴다(Route53 불필요).
+- Swagger·`DEV_LOGIN`은 traefik **Basic Auth** 미들웨어로 보호한다.
 
 ### 3.7 컨테이너 이미지 · CI/CD
 
 | 항목 | 변경 |
 |---|---|
-| 레지스트리 | NCR → **ghcr.io/moa-map/<svc>** (퍼블릭 레포는 무료, `GITHUB_TOKEN`으로 인증) |
+| 레지스트리 | NCR → **ECR** `<account>.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/<svc>` (서비스별 리포지토리 4개, Terraform으로 생성) |
 | 아키텍처 | amd64 → **arm64** (`docker buildx build --platform linux/arm64`) |
-| GitHub Secrets | `NCR_*` 제거. ghcr.io는 워크플로 `permissions: packages: write`로 충분 |
-| imagePullSecret | 퍼블릭 이미지면 불필요. 프라이빗으로 두면 `ghcr-cred` |
+| CI 인증 | `NCR_*` 제거. **GitHub OIDC → IAM Role AssumeRole** (`aws-actions/configure-aws-credentials`). 장수명 액세스 키를 GitHub에 두지 않는다 |
+| imagePullSecret | **불필요.** 노드 인스턴스 프로파일에 `AmazonEC2ContainerRegistryReadOnly`를 붙이면 containerd가 ECR에서 바로 pull한다 (k3s는 ECR credential helper 없이도 IMDS 자격증명으로 동작) |
+| 이미지 정리 | ECR **lifecycle policy** — 최근 10개만 유지. 커밋 SHA 태그가 무한 누적되는 걸 막는다 (NHN에서 겪은 문제) |
 | ArgoCD | 재설치 후 `k8s/argocd/*.yaml` 그대로 apply |
 | 파이프라인 구조 | **변경 없음** (build → push → newTag 커밋 → ArgoCD 수동 sync) |
+
+**ghcr.io 대신 ECR을 고른 이유**: 같은 리전 안이라 pull이 빠르고 데이터 전송료가 없다. 무엇보다 **인증이 IAM으로 통일된다** — 노드는 인스턴스 프로파일, CI는 OIDC라 어느 쪽에도 저장된 비밀이 없다(imagePullSecret도, GitHub Secret도). 비용은 프라이빗 500MB/월 무료 + 이후 $0.10/GB-월로, lifecycle policy를 걸면 월 $1 미만이다.
 
 ### 3.8 설정 · 시크릿
 
@@ -405,6 +475,7 @@ NHN의 `cinder-block` PVC와 개념이 같다. 차이는 CSI 드라이버를 **�
 |---|---|
 | ConfigMap | `PUBLIC_GATEWAY_URL`, `KAKAO_REDIRECT_URI`를 `https://dev-api.moamap.co.kr` 기반으로 |
 | 오브젝트 스토리지 | `OBJECT_STORAGE_ENDPOINT`를 S3로. **코드는 이미 AWS S3 SDK(`S3Presigner`)라 변경 없음** |
+| **DB 접속 정보** | `DB_HOST`를 RDS 엔드포인트로, `DB_PASSWORD`는 Terraform이 생성한 값(`terraform output -raw db_password`). 파드 이름(`postgres`)이 아니라 RDS 주소가 들어간다 |
 | **액세스 키 제거** | EC2 인스턴스 프로파일(IAM Role)로 S3 접근. 코드에서 static credentials → `DefaultCredentialsProvider`로 바꾸면 `OBJECT_STORAGE_ACCESS_KEY/SECRET_KEY`가 **없어진다** (별도 이슈) |
 | 그 외 시크릿 | `moamap-secrets` 재생성 (JWT, 카카오, Gemini, 서울 API, DB, RabbitMQ) |
 
@@ -423,39 +494,71 @@ NHN의 `cinder-block` PVC와 개념이 같다. 차이는 CSI 드라이버를 **�
 
 | NHN (As-Is) | AWS (To-Be) | 변경 성격 |
 |---|---|---|
-| NKS 관리형 클러스터 | EC2 ×3 + k3s embedded etcd | 직접 운영 |
-| 워커 `u2.c2m4` ×2 | `t4g.medium` ×3 | 노드 +1, 아키텍처 arm64 |
-| LoadBalancer + 공인 IP | Elastic IP + traefik hostPort | LB 비용 제거 |
-| `cinder-block` (Retain) | EBS CSI `gp3` (Retain) | 드라이버 직접 설치 |
-| NCR | ghcr.io | 무료화 |
-| Object Storage (S3 호환) | S3 | 엔드포인트만 변경 |
+| NKS 관리형 클러스터 | EC2 ×3 + k3s (server 1 + agent 2) | 직접 운영. 컨트롤플레인이 눈에 보인다 |
+| 워커 `u2.c2m4` ×2 | CP `t4g.small` ×1 + 워커 `t4g.medium` ×2 | 컨트롤플레인 분리, arm64 |
+| (컨트롤플레인 NHN 무료) | **CP도 우리 과금** (~$15/월) | 관리형에서 안 보이던 비용 |
+| 서브넷 1개 (SG 1개) | **public ×2(노드) + private ×2(RDS)** + **SG 3개 분리** | 마스터 인바운드 0, DB는 인터넷 경로 없음 |
+| LoadBalancer + 공인 IP | Elastic IP + traefik(ServiceLB) | 관리형 LB 비용 제거 |
+| Postgres StatefulSet + PVC | **RDS PostgreSQL** | 자동 백업·패치. 워커 장애 ≠ DB 장애 |
+| `cinder-block` (Retain) | EBS CSI `gp3` (Retain) — RabbitMQ·Prometheus용 | 드라이버 직접 설치 |
+| NCR + `ncr-cred` Secret | ECR + IAM 인스턴스 프로파일 | imagePullSecret 제거 |
+| Object Storage (S3 호환) | S3 (+ 게이트웨이 엔드포인트) | 엔드포인트만 변경 |
 | 정적 액세스 키 | IAM 인스턴스 프로파일 | 키 제거 |
-| 인터넷 게이트웨이 (수동) | IGW (Terraform) | IaC 범위 확대 |
+| SSH (keypair, 22 개방) | **SSM Session Manager** | 키·포트 제거 |
+| 인터넷 게이트웨이 (수동) | IGW·NAT·라우팅 (Terraform) | IaC 범위 확대 |
 | StorageClass (수동 apply) | Helm/Terraform | IaC 범위 확대 |
-| http | https (cert-manager) | 신규 |
+| http | https (Let's Encrypt, **traefik 내장 ACME**) | 신규. cert-manager 불필요 |
+| DNS A 레코드 | A 레코드 → EIP | 동일 |
 | 모니터링 없음 | kube-prometheus-stack | 신규 |
 | ArgoCD | ArgoCD | 동일 |
-| kustomize 매니페스트 | 동일 (Service 타입·Ingress 추가) | 최소 변경 |
+| kustomize 매니페스트 | 동일 (Service 타입·Ingress 추가, DB 호스트 변경) | 최소 변경 |
 | 가비아 DNS | 가비아 DNS | 동일 |
 
-### 3.11 비용 추정 (월, 온디맨드, 어림값)
+### 3.11 비용 추정 (월, 온디맨드, 서울 리전, 730시간)
 
-| 항목 | 금액 |
-|---|---|
-| EC2 t4g.medium ×3 | ~$90 |
-| EBS gp3 (30GB×3 + 20GB) | ~$9 |
-| Elastic IP (연결 중) | ~$4 |
-| S3 (수 GB) | ~$1 |
-| ghcr.io, 가비아 DNS | $0 |
-| **합계** | **~$105** |
+전부 어림값이다. 확정 전 AWS Pricing Calculator로 검증한다.
 
-| 절감 옵션 | 금액 |
-|---|---|
-| 1 온디맨드 + 2 스팟 | ~$60 |
-| 3 스팟 | ~$40 |
-| Savings Plan 1년 | 온디맨드 대비 -30% |
+| 분류 | 항목 | 단가 | 수량 | 월 |
+|---|---|---|---|---|
+| **컴퓨트** | | | | **$75.9** |
+| | EC2 t4g.small (컨트롤플레인) | $0.0208/h | 1대 | $15.2 |
+| | EC2 t4g.medium (데이터플레인) | $0.0416/h | 2대 | $60.7 |
+| **스토리지** | EBS gp3 | $0.0912/GB·월 | 95GB | **$8.7** |
+| | ├ master 루트 | | 20GB | $1.8 |
+| | ├ worker 루트 | | 30GB×2 | $5.5 |
+| | └ PVC (acme.json·RabbitMQ·Prometheus) | | 15GB | $1.4 |
+| **네트워킹** | | | | **$11.0** |
+| | **퍼블릭 IPv4** (노드 3대, EIP 포함) | $0.005/h | 3개 | $11.0 |
+| | IGW · S3 게이트웨이 엔드포인트 | 무료 | | $0 |
+| | 인터넷 아웃바운드 전송 | 월 100GB 무료 | | $0 |
+| **RDS** | | | | **$19.4** |
+| | db.t4g.micro (단일 AZ) | ~$0.023/h | 1대 | $16.8 |
+| | gp3 스토리지 | $0.131/GB·월 | 20GB | $2.6 |
+| | 자동 백업 | DB 크기까지 무료 | 20GB | $0 |
+| **기타** | S3 (사진 수 GB) | $0.025/GB·월 | | ~$1 |
+| | ECR (lifecycle 10개 유지) | $0.10/GB·월 | ~10GB | ~$1 |
+| | Let's Encrypt · 가비아 DNS | 무료 | | $0 |
+| **합계** | | | | **~$117** |
 
-비교: EKS는 컨트롤플레인만 $73 + 노드. NHN 현재 구성(노드 2 + LB + 볼륨)과는 비슷한 수준이고, 스팟 혼합 시 절반.
+**놓치기 쉬운 항목: 퍼블릭 IPv4.** 2024년 2월부터 모든 공인 IPv4가 시간당 $0.005 과금된다. 노드 3대면 월 $11로, RDS 스토리지보다 크다. 노드를 프라이빗으로 옮기면 이 $11은 사라지지만 NAT 비용($8~44)이 그보다 크거나 비슷해서, **이 규모에선 프라이빗이 비용상 이득이 아니다**.
+
+#### 검토했다 채택하지 않은 안
+
+| 안 | 월 | 왜 안 골랐나 |
+|---|---|---|
+| **ALB + ACM** 도입 | +$25 | ACM 자동 갱신(만료 사고 0)과 워커 장애 시 자동 페일오버를 얻지만, traefik 내장 ACME가 갱신을 대신하고 워커 장애는 EIP 수동 이동으로 감당 가능하다고 봤다. **가용성 요구가 올라가면 1순위 도입 대상** |
+| **프라이빗 서브넷 + NAT Gateway** | +$44 | 노드에 공인 IP가 없어져 SG 실수가 즉시 노출로 이어지지 않는다. 방어 한 겹에 월 $44는 대회 예산에서 과했다 |
+| 프라이빗 + **NAT 인스턴스**(t4g.nano) | +$8 | 같은 이득을 $8에 얻지만 SPOF와 직접 패치가 붙는다. 프라이빗으로 갈 거면 이쪽 |
+| **Cloudflare** 프록시/Tunnel 앞단 | -$0~3 | 무료 TLS·DDoS·오리진 은닉을 얻지만 DNS를 Cloudflare로 옮겨야 하고 진입 경로가 AWS 밖 의존이 된다 |
+| **cert-manager** | $0 | 비용이 아니라 운영 문제. 파드 3개 + CRD를 더 두는 대신 k3s에 이미 있는 traefik으로 해결했다 |
+| 워커 2대 **스팟** | -$36 | 절체 완료 전까지는 안 쓴다. 워커가 2대뿐이라 1대 회수 시 남은 1대에 전부 몰린다 |
+| **Savings Plans 1년** (EC2 -30%) | -$23 | 청구서의 35%(EBS·IPv4·RDS 스토리지·S3)는 약정 대상이 아니고, 무엇보다 **1년 락인**이다. 구성이 굳고 존속이 확실해진 뒤 베이스라인만 약정한다 |
+
+**예산이 더 줄어야 하면 순서는 스팟 → Savings Plans.** 반대로 여유가 생기면 ALB부터 도입한다.
+
+착수 전에 **AWS Budget 알림($100 / $150)** 을 걸고, **계정이 구 프리 티어(12개월) 대상인지 확인**한다 — 대상이면 RDS db.t4g.micro 750시간이 무료라 월 ~$17이 빠진다.
+
+비교: 같은 구성을 EKS로 하면 컨트롤플레인 $73이 그대로 얹혀 ~$190이다.
 
 ---
 
@@ -469,17 +572,17 @@ NHN의 `cinder-block` PVC와 개념이 같다. 차이는 CSI 드라이버를 **�
 |---|---|---|---|---|
 | 0 | NHN tfstate 소재 확인, AWS 계정·IAM 사용자(최소 권한)·키페어 | — | — | 없음 |
 | 1 | `infra/` 재구성 + AWS Terraform 뼈대 (`plan`까지) | `infra/aws/*.tf` | AWS 네트워킹, SG 설계 | 없음 |
-| 2 | `terraform apply` — VPC·SG·EC2×3·EIP·EBS | 인스턴스 3대 | — | **AWS 과금 시작** |
-| 3 | k3s HA 설치 (cluster-init → join ×2) | 클러스터 | **etcd quorum, 노드 조인, 토큰, kubeconfig** | |
-| 4 | EBS CSI 드라이버 + StorageClass | 동적 PV | **CSI, StorageClass, WaitForFirstConsumer, AZ 제약** | |
-| 5 | ghcr.io 전환 + CI arm64 빌드 | 워크플로 수정 | multi-arch 이미지 | |
+| 2 | `terraform apply` — VPC(public/private)·SG ×3·EC2×3·EIP·RDS·ECR·S3·IAM | 인프라 일체 | **서브넷 분리, SG 분리 설계, IGW 라우팅** | **AWS 과금 시작** |
+| 3 | k3s 설치 (server 1 + agent 2, CP taint) + SSM 접속 확인 | 클러스터 | **CP/DP 분리, taint·toleration, 노드 조인, SSM 포트포워딩 kubeconfig** | |
+| 4 | EBS CSI 드라이버 + StorageClass (RabbitMQ·Prometheus용) | 동적 PV | **CSI, StorageClass, WaitForFirstConsumer, AZ 제약** | |
+| 5 | ECR 전환 + GitHub OIDC + CI arm64 빌드 | 워크플로 수정 | **OIDC 페더레이션, multi-arch 이미지, lifecycle policy** | |
 | 6 | ArgoCD 설치 + Application apply + 매니페스트 배포 | 서비스 기동 | GitOps 재현 | |
-| 7 | Ingress(traefik) + cert-manager + Basic Auth | https | **Ingress, TLS 종료, ACME, 미들웨어** | |
-| 8 | 데이터 이전 (Postgres, 사진) + DNS 절체 | 서비스 전환 | 무중단 절체 | |
+| 7 | Ingress(traefik) + **내장 ACME로 Let's Encrypt 발급**(스테이징→프로덕션) + Basic Auth | https | **Ingress, TLS 종료, ACME HTTP-01, rate limit, 미들웨어** | |
+| 8 | 데이터 이전 (Postgres→**RDS**, 사진→S3) + DNS 절체(A → EIP) | 서비스 전환 | 무중단 절체 | |
 | 9 | kube-prometheus-stack + ServiceMonitor + 대시보드 | 관측 | **PromQL, 히스토그램, 알림** | |
 | 10 | stateless `replicas: 2` + podAntiAffinity + PDB | 가용성 | **스케줄링, 롤링 업데이트, PDB** | |
 | 11 | **NHN 정리** (4.4) | 이중과금 종료 | — | **NHN 과금 종료** |
-| 12 | 장애 훈련: `drain`, 노드 강제 종료, EIP 이동, etcd 스냅샷 복구 | 문서 | **DR, 운영** | |
+| 12 | 장애 훈련: 워커 `drain`·강제 종료 + **EIP 이동**, **컨트롤플레인 재생성 + etcd 스냅샷 복원**, RDS 스냅샷 복원 | 문서 | **DR, 운영** | |
 
 2~11 구간은 **양쪽 동시 과금**이다. 짧게 가져간다.
 
@@ -490,12 +593,16 @@ NHN의 `cinder-block` PVC와 개념이 같다. 차이는 CSI 드라이버를 **�
 ```bash
 # NHN 파드에서 덤프 → 로컬 경유 없이 S3로
 kubectl -n dev exec postgres-0 -- pg_dump -U moamap -Fc moamap > /dev/stdout | aws s3 cp - s3://<bucket>/migration/moamap.dump
-# AWS 파드에서 복원
-aws s3 cp s3://<bucket>/migration/moamap.dump - | kubectl -n dev exec -i postgres-0 -- pg_restore -U moamap -d moamap
+
+# 복원은 AWS 워커에서 RDS로 (RDS는 프라이빗 서브넷이라 VPC 안에서만 닿는다)
+kubectl -n dev run pgrestore --rm -it --restart=Never --image=postgres:16-alpine -- sh -c \
+  'aws s3 cp s3://<bucket>/migration/moamap.dump - | pg_restore -h <rds-endpoint> -U moamap -d moamap'
 ```
 
+- **RDS에는 `01-schemas.sql` 자동 실행이 없다.** 파드 Postgres의 initdb 훅으로 만들어지던 스키마를 복원 전에 직접 한 번 실행해야 한다.
+
 - **덤프에는 실제 사용자 정보(카카오 ID, 닉네임, 이메일)가 들어 있다.** 노트북에 남기지 않는다. S3 객체는 복원 확인 후 삭제. `.gitignore`에 `*.dump`, `*.sql.gz` 추가.
-- 스키마 초기화 SQL(`01-schemas.sql`)은 새 클러스터 최초 기동 시 자동 실행되므로, 복원 전에 스키마가 존재한다.
+- RDS 마스터 사용자·DB는 Terraform이 만든다. 애플리케이션 전용 계정을 따로 둘지는 별도 이슈.
 
 **사진 (Object Storage → S3)**
 
@@ -512,7 +619,7 @@ rclone sync nhn:<bucket> s3:<bucket>   # 또는 aws s3 sync (S3 호환 엔드포
 1. AWS 클러스터 완전 기동, 자체 확인 (EIP로 직접 호출)
 2. Postgres 최종 덤프 직전 NHN 쓰기 차단 (gateway replicas=0 또는 점검 응답)
 3. 덤프 → 복원 → 사진 sync → URL 치환
-4. 가비아 A 레코드 → EIP (TTL 600이라 10분 내 전파)
+4. 가비아 A 레코드를 **EIP로 변경** (TTL 600이라 10분 내 전파). 전파 후 Let's Encrypt 발급이 가능해진다 — HTTP-01은 도메인이 이 서버를 가리켜야 통과한다
 5. 카카오 개발자 콘솔 Redirect URI를 https 도메인으로 (기존 것 유지한 채 추가)
 6. 검증 후 NHN gateway 유지 (롤백 대비, 1~2일)
 7. 안정 확인 → 4.4 진행
@@ -543,8 +650,14 @@ cd infra/nhncloud && terraform destroy
 |---|---|
 | NHN tfstate 분실 | 콘솔 수동 정리 + 과금 대시보드로 잔존 확인 |
 | arm64 이미지 문제 | 5단계에서 `docker run --platform linux/arm64`로 로컬 검증. 문제 시 `t3.medium`(x86)으로 타입 변경 |
-| 스팟 2대 동시 회수 (quorum 상실) | 남은 노드에서 `k3s server --cluster-reset` → 재조인. 12단계 훈련 항목 |
-| node-1(EIP) 장애 | EIP를 다른 노드로 재연결. traefik은 DaemonSet이라 어느 노드든 수신 |
+| **컨트롤플레인 장애 (SPOF)** | 기존 파드·서비스 트래픽은 계속 흐른다. etcd 스냅샷(S3)에서 새 인스턴스로 `--cluster-reset-restore-path` 복원. 12단계 훈련 항목 |
+| 워커 1대 장애 | 남은 1대로 재스케줄되지만 **8GB → 4GB라 전부는 못 뜬다** — 모니터링부터 Pending. PriorityClass로 순서를 정해둔다 |
+| **worker-1(EIP) 장애** | **자동 페일오버가 없다.** EIP를 worker-2로 옮겨야 서비스가 돌아온다(association 수정 후 apply, 또는 콘솔). 12단계 훈련 항목이자 ALB를 안 쓴 대가 |
+| AZ 장애 | 노드·RDS가 전부 az-a라 전체 다운. 이 예산에서는 감수한다 |
+| RDS 장애 | 단일 AZ라 자동 페일오버 없음. 스냅샷 복원(수십 분) 또는 `multi_az=true`로 전환(요금 2배) |
+| **인증서 갱신 실패** | traefik이 60일 시점에 자동 갱신하지만 실패하면 90일째 만료된다. Prometheus로 **인증서 만료일 알림**을 걸어둔다(9단계). `acme.json` PVC 유실 시 재발급 — rate limit 주의 |
+| Let's Encrypt rate limit | 도메인당 주 50회, 실패 5회/시간. **스테이징 issuer로 먼저 검증**한 뒤 프로덕션으로 바꾼다 |
+| SG 오설정 | 노드가 퍼블릭이라 규칙 실수가 즉시 노출이다. `node`/`ingress` SG를 분리해 워커에만 80/443을 열고, 변경은 반드시 Terraform으로만 한다(콘솔 직접 수정 금지) |
 | Let's Encrypt 발급 제한 | 스테이징 issuer로 먼저 검증 |
 | 사진 URL 치환 누락 | 치환 전후 `SELECT count(*) WHERE photo_url LIKE '<old>%'` 로 0 확인 |
 | 이중 과금 장기화 | 2~11단계를 2주 내 완료 목표. 진행 막히면 NHN 먼저 축소(노드 1대로) |
@@ -562,20 +675,47 @@ CNCF 인증 배포판이라 API는 동일하다. 빠진 건 클라우드 프로�
 **Q. kubespray로 진짜 k8s를 세우지 왜 k3s인가?**
 kubespray가 더 보여주는 건 apiserver·scheduler가 별도 파드로 보이는 것과 kubeadm 인증서 관리다. 그 대가로 노드당 ~2GB를 컨트롤플레인이 먹고, 인증서 1년 만료·플레이북 업그레이드 실패 같은 운영 부담이 따라온다. 3~4대 예산에서 워크로드를 돌리면서 그걸 감당할 수 없었다. 스케줄링·스토리지·Ingress·관측·장애 대응은 둘이 동일하다.
 
-**Q. 왜 3대인가? 1대면 더 싸지 않나?**
-1대는 컨트롤플레인 SPOF이고 노드 장애·drain·롤링 업데이트를 실습할 수 없다. 3대는 etcd quorum(2/3)으로 HA가 성립하는 최소 홀수다. "마스터 1 + 워커 2"는 비용은 3배인데 SPOF가 그대로라 피했다.
+**Q. 왜 컨트롤플레인 1대인가? SPOF 아닌가?**
+맞다, SPOF다. etcd HA(server 3대)와 저울질했고 이쪽을 골랐다. 이유는 세 가지다. (1) 컨트롤플레인이 죽어도 **이미 떠 있는 파드와 서비스 트래픽은 계속 흐른다** — 멈추는 건 API·스케줄링·배포지, 사용자 요청이 아니다. dev 클러스터에서 감당 가능한 손실이다. (2) 컨트롤플레인/데이터플레인을 taint로 분리한 형태가 실제 클러스터의 표준이고, 관리형에서 안 보이던 부분이 여기서 보인다. (3) 컨트롤플레인을 워크로드에서 떼면 t4g.small로 충분해져서, 같은 예산으로 **워크로드 메모리를 8GB 확보**한다. 대신 복구 경로를 붙였다 — `--cluster-init`으로 시작해 나중에 server를 붙이면 그대로 HA가 되고, etcd 스냅샷을 S3에 올려 컨트롤플레인이 통째로 날아가도 복원된다.
 
-**Q. 3대인데 Postgres는 여전히 단일이지 않나?**
-맞다. 이번 범위에선 stateless 서비스의 가용성(replicas 2 + anti-affinity)까지만 올리고, Postgres는 EBS CSI로 "노드가 죽어도 볼륨이 살아 다른 노드에서 뜨는" 수준까지다. Postgres HA(스트리밍 복제·Patroni)는 난이도 대비 지금 필요가 없어 뺐다. 필요해지면 RDS로 빼는 게 현실적이다.
+**Q. 컨트롤플레인에 taint를 왜 거나? 파드도 받으면 자원이 남지 않나?**
+2GB짜리 노드에 워크로드를 받으면 apiserver·etcd가 메모리 경합에 휘말린다. 컨트롤플레인이 흔들리면 클러스터 전체가 흔들리므로, 여기만은 자원을 나눠 쓰지 않는다. k3s는 기본이 "server도 워크로드를 받는다"이므로 `--node-taint`로 명시적으로 껐다.
 
-**Q. 스팟을 프로덕션에 써도 되나?**
-dev/포트폴리오 클러스터라 썼다. etcd HA가 1대 회수를 견디고, 2대 동시 회수는 `cluster-reset`으로 복구 절차를 마련했다. 실사용자가 있다면 최소 컨트롤플레인 quorum(2대)은 온디맨드로 둔다.
+**Q. DB를 왜 RDS로 뺐나? 파드로 띄우면 월 $18을 아끼는데.**
+파드 Postgres에서 아끼는 $18의 대가가 백업·복구·버전 패치 전부를 직접 하는 것이다. 그리고 워커 노드 하나가 죽으면 DB가 같이 죽는다 — 워커가 2대뿐이라 이게 실제로 자주 일어날 상황이다. RDS는 자동 스냅샷(7일)·PITR·마이너 버전 자동 패치를 가져오고, **DB 가용성을 노드 장애와 분리**한다. 개인정보가 든 데이터를 다루면서 백업 전략이 "수동 `pg_dump`"인 건 감당할 수 없다고 판단했다. Redis(캐시라 유실 허용)와 RabbitMQ는 그대로 파드다 — ElastiCache·AmazonMQ까지 가면 월 $60~가 더 붙는데 거긴 그만한 값이 없다.
+
+**Q. 그럼 k8s 스토리지는 안 배우게 되는 것 아닌가?**
+RabbitMQ와 Prometheus PVC가 남아서 EBS CSI·StorageClass·`WaitForFirstConsumer`·AZ 제약은 그대로 다룬다. 빠진 건 "DB를 직접 운영한다"는 항목 하나고, 그건 실무에서도 대부분 관리형으로 가는 쪽이다.
+
+**Q. RDS가 단일 AZ면 결국 SPOF 아닌가?**
+맞다. Multi-AZ는 요금이 2배(+$18)라 이번 예산에서 뺐다. 대신 자동 스냅샷과 PITR이 있어 **데이터 유실**은 막힌다 — 잃는 건 가용성이지 데이터가 아니다. 파드 Postgres 시절과 비교하면 그것만으로도 순이익이다. 실사용자가 생기면 `multi_az = true` 한 줄이다.
+
+**Q. 스팟을 쓰나?**
+절체가 끝날 때까지는 안 쓴다. 컨트롤플레인은 SPOF라 온디맨드 고정이다. Postgres가 RDS로 빠져서 워커 회수의 타격은 줄었지만, 워커가 2대뿐이라 1대 회수 시 남은 1대에 전부 몰린다. 안정화 후 워커 1대만 스팟으로 바꿔 월 ~$15를 아끼는 정도가 적정선이다.
+
+**Q. 왜 ghcr.io가 아니라 ECR인가?**
+같은 리전이라 pull이 빠르고 전송료가 없다. 결정적인 건 인증 통일이다 — 노드는 인스턴스 프로파일로, CI는 GitHub OIDC로 붙어서 **imagePullSecret도 GitHub에 저장한 액세스 키도 없어진다**. NHN에서 `ncr-cred` Secret과 `NCR_ACCESS_KEY`를 관리하던 게 통째로 사라진다. 비용은 lifecycle policy(최근 10개 유지)를 걸면 월 $1 미만이다.
 
 **Q. 정적 액세스 키를 없앤 이유는?**
 Secret에 평문으로 있는 키는 유출 경로(로그, 덤프, 실수 커밋)가 있다. IAM 인스턴스 프로파일이면 키 자체가 존재하지 않아 유출할 게 없다. AWS로 옮기면서 공짜로 얻는 보안 개선이었다.
 
-**Q. NAT Gateway 없이 노드를 public에 둔 게 괜찮나?**
-SG로 인바운드를 80/443/22(관리자 IP)로 제한하면 실질 노출면은 같다. NAT Gateway는 월 $35로 노드 1대 값이다. 프라이빗 서브넷은 규모가 커져 노드가 늘고 감사 요건이 생길 때 도입한다.
+**Q. 노드를 퍼블릭 서브넷에 두는 게 괜찮나?**
+프라이빗 + NAT를 검토했고 비용 때문에 접었다. NAT Gateway는 월 $44 — 워커 1.5대 값이고, NAT 인스턴스로 내려도 $8에 SPOF가 하나 는다. 반면 얻는 건 "SG 실수를 라우팅이 한 번 더 막아준다"는 2차 방어선이다. 그 대신 **SG를 3개로 쪼개** 노출면을 줄였다 — 마스터에는 `node` SG(자기참조만)만 붙어서 공인 IP가 있어도 인터넷에서 열린 포트가 0개고, 80/443은 워커에만 열린다. 실질 노출은 어차피 서비스해야 하는 포트뿐이다. 다만 이건 **"SG를 항상 Terraform으로만 관리한다"는 규율에 기대는 설계**라, 콘솔 직접 수정을 금지 규칙으로 박아뒀다. 가용성·보안 요구가 올라가면 프라이빗 + NAT 인스턴스가 첫 번째 승급 대상이다.
+
+**Q. 그럼 프라이빗 서브넷은 왜 만들었나?**
+RDS 때문이다. RDS는 아웃바운드가 필요 없어서 **NAT 없이도 프라이빗에 둘 수 있다** — 서브넷 자체는 무료라 안 쓸 이유가 없다. `publicly_accessible=false`와 SG(노드에서만 5432)가 실제 차단 장치이고, 프라이빗 서브넷은 라우팅 레벨의 한 겹을 더한다. 개인정보가 든 DB에는 그만한 값이 있다. 겸사겸사 나중에 노드를 프라이빗으로 옮길 자리도 미리 잡힌 셈이다.
+
+**Q. ALB를 왜 안 썼나?**
+월 $25(시간당 요금 + 퍼블릭 IPv4 2개)를 내고 얻는 게 ACM 자동 갱신과 워커 장애 시 자동 페일오버인데, 전자는 traefik 내장 ACME가 대신하고 후자는 EIP 수동 이동으로 감당 가능하다고 봤다 — dev/포트폴리오 클러스터라 새벽 장애 대응 SLA가 없다. **정직하게 말하면 이건 가용성을 돈으로 바꾼 결정이고, 실사용자가 생기면 제일 먼저 되돌릴 항목이다.** ALB 도입은 진입점만 바꾸는 국소 변경이라 나중에도 싸다.
+
+**Q. cert-manager 대신 traefik 내장 ACME를 쓴 이유는?**
+둘 다 Let's Encrypt에서 인증서를 받아오는 도구고, 차이는 운영 부담이다. cert-manager는 파드 3개(controller/webhook/cainjector)와 CRD를 더 얹는데, k3s에 이미 들어 있는 traefik이 `certResolvers` 설정 몇 줄로 같은 일을 한다. 우리처럼 도메인 하나에 Ingress 몇 개인 규모에서 cert-manager는 과하다. 대가는 traefik `replicas: 1` 제약(acme.json을 공유할 수 없다)인데, 어차피 1이라 문제가 안 됐다. Ingress가 늘고 인증서를 여러 개 다루게 되면 cert-manager로 옮기는 게 맞다.
+
+**Q. Cloudflare를 앞에 두면 무료 TLS에 DDoS 방어까지 되는데 왜 안 썼나?**
+실제로 검토했다. 무료 플랜만으로 TLS·DDoS 방어·오리진 은닉을 얻고, SG를 Cloudflare IP 대역으로 좁히면 퍼블릭 노드의 최대 약점도 줄어든다. Tunnel까지 가면 인바운드 포트 0개·공인 IP 0개로 EIP도 필요 없어져 비용이 더 낮다. 안 고른 이유는 두 가지다. (1) DNS를 가비아에서 Cloudflare로 옮겨야 하고, 트래픽 진입 경로 전체가 AWS 밖 서비스에 의존하게 된다 — 장애 시 원인 절단면이 하나 늘어난다. (2) 이번 이관의 목표가 "AWS 위에서 인프라를 직접 구성해보는 것"인데, 진입점을 통째로 위임하면 SG 설계·TLS·DNS라는 학습 대상이 사라진다. **다만 이건 뒤집힐 수 있는 결정이다** — 퍼블릭 노드 노출이 실제로 문제가 되면(스캐너 트래픽, 봇) 비용 없이 방어를 얹는 가장 빠른 수단이 Cloudflare다.
+
+**Q. 1년 약정(Savings Plans)으로 더 싸게 할 수 있지 않나?**
+있지만 지금은 아니다. 청구서의 35%(EBS·퍼블릭 IPv4·RDS 스토리지·S3·ECR)는 애초에 약정 대상이 아니라, EC2에 -30%를 적용해도 절감액은 월 $23이다. 그리고 대회 프로젝트라 1년 존속이 확실하지 않은데 **중도 해지가 안 된다** — 3개월 쓰고 내리면 남은 9개월치를 그대로 낸다. 절체 후 2~4주 실사용으로 베이스라인이 굳고 계속 쓸 게 확실해지면, 항상 켜둘 최소치(70% 정도)만 약정하는 게 맞다. 참고로 RDS는 Savings Plans 대상이 아니라 예약 인스턴스를 따로 사야 한다.
 
 **Q. 마이그레이션에서 제일 조심한 건?**
 이중 과금과 개인정보. 양쪽 클러스터가 동시에 도는 구간을 최소화했고, NHN 볼륨이 `Retain`이라 PVC를 지워도 과금이 남는 걸 절차에 박았다. DB 덤프에 사용자 정보가 들어가므로 로컬을 거치지 않고 S3 경유 후 삭제했다.
@@ -584,24 +724,26 @@ SG로 인바운드를 80/443/22(관리자 IP)로 제한하면 실질 노출면�
 
 ## 6. 부록
 
-### 6.1 Terraform 디렉터리 구조 (제안)
+### 6.1 Terraform 디렉터리 구조
 
 ```
 infra/
 ├── README.md              환경별 설명 + 마이그레이션 이력
-├── nhncloud/              ← 기존 infra/terraform/ 이동. 파일 변경 없음. destroy 후에도 보존
+├── nhncloud/              ← 기존 infra/terraform/ 에서 이동 완료. 파일 변경 없음. destroy 후에도 보존
 │   ├── network.tf  nks.tf  provider.tf  versions.tf  variables.tf  outputs.tf
 │   ├── terraform.tfvars.example  openrc.sample
 │   └── README.md
 └── aws/
     ├── versions.tf         backend "s3" (state 버킷은 부트스트랩으로 먼저 생성)
     ├── provider.tf         region 변수, 자격증명은 env/profile
-    ├── network.tf          VPC, subnet, IGW, route table, SG
-    ├── ec2.tf              instance ×3 (for_each), EIP, root/data EBS, user_data(k3s 설치 훅 선택)
-    ├── iam.tf              인스턴스 프로파일 (S3, EBS CSI 권한)
-    ├── s3.tf               사진 버킷 (퍼블릭 읽기 정책은 prefix 한정)
-    ├── variables.tf        instance_type, node_count=3, admin_cidr, key_name
-    ├── outputs.tf          EIP, private IPs (kubeconfig 등 민감정보 출력 금지)
+    ├── network.tf          VPC, public/private subnet ×2, IGW, route table, SG ×3(node/ingress/rds), S3 엔드포인트
+    ├── ec2.tf              master ×1(taint) + worker ×N, EIP, 조인 토큰, user_data(k3s 설치)
+    ├── rds.tf              subnet group, postgres 인스턴스, 마스터 비밀번호
+    ├── iam.tf              인스턴스 프로파일 (S3, ECR pull, EBS CSI, SSM 권한)
+    ├── s3.tf               사진 버킷 (공개 차단 — 조회는 presigned URL)
+    ├── ecr.tf              서비스별 리포지토리 ×4 + lifecycle policy, CI용 OIDC Role
+    ├── variables.tf        master/worker instance_type, worker_count=2, azs, db_*
+    ├── outputs.tf          EIP, 인스턴스 ID, RDS 엔드포인트·비밀번호 (k3s 토큰·kubeconfig는 출력 금지)
     └── terraform.tfvars.example
 ```
 
@@ -610,23 +752,35 @@ NHN state와 AWS state는 완전히 분리한다. NHN 디렉터리를 지우지 
 ### 6.2 착수 전 체크리스트
 
 - [ ] NHN `.tfstate` 소재 확인 (없으면 4.4를 콘솔 수동으로 계획)
-- [ ] AWS 계정 결제 알림 설정 (Budget $50, $100 알림)
-- [ ] Terraform용 IAM 사용자 최소 권한 (EC2, VPC, S3, IAM PassRole 한정)
+- [ ] AWS 계정 결제 알림 설정 (**Budget $100 / $150 알림** — 예상 월 ~$175)
+- [ ] **구 프리 티어(12개월) 대상 계정인지 확인** — 대상이면 RDS db.t4g.micro 750시간 무료로 월 ~$17 절감
+- [ ] Terraform용 IAM 사용자 최소 권한 (EC2, VPC, S3, ECR, IAM PassRole 한정)
 - [ ] 가비아 WHOIS 등록정보 공개 제한 신청 여부 확인
 - [ ] `.gitignore`에 `*.dump`, `cluster-issuer.yaml`(실제 파일) 추가
 - [ ] 카카오 개발자 콘솔에 https Redirect URI 추가 준비
+- [ ] Let's Encrypt **스테이징 issuer로 먼저 발급 검증** (프로덕션은 실패 5회/시간 제한)
+- [ ] 로컬에 AWS CLI + **Session Manager 플러그인** 설치 (노드 접속·kubectl 포트포워딩에 필수)
 
 ### 6.3 용어
 
 | 용어 | 뜻 |
 |---|---|
-| k3s server / agent | 컨트롤플레인 포함 노드 / 워커 전용 노드. server도 기본적으로 워크로드를 받는다 |
-| embedded etcd | k3s가 내장한 etcd. `--cluster-init`으로 활성화. 홀수 노드 필요 |
-| quorum | etcd 다수결 정족수. 3노드면 2대 생존 필요 |
+| k3s server / agent | 컨트롤플레인 포함 노드 / 워커 전용 노드. server도 **기본적으로는** 워크로드를 받는다 → taint로 껐다 |
+| taint / toleration | 노드가 거는 "이런 파드만 받는다" 표시 / 파드가 그걸 견디겠다는 선언. 컨트롤플레인 분리의 수단 |
+| embedded etcd | k3s가 내장한 etcd. `--cluster-init`으로 활성화. HA로 가려면 홀수 노드 필요 |
+| quorum | etcd 다수결 정족수. 3노드면 2대 생존 필요. **현재는 server 1대라 quorum 개념이 없다**(HA 전환 시 등장) |
 | CSI | Container Storage Interface. 클라우드 볼륨을 k8s PV로 쓰게 하는 드라이버 |
 | Retain | PVC 삭제 시 PV·실제 볼륨을 남기는 정책. 데이터 보호용이나 과금 주의 |
 | traefik | k3s 내장 Ingress Controller |
-| cert-manager | Let's Encrypt 인증서 자동 발급·갱신 |
-| HTTP-01 | ACME 챌린지. 도메인이 서버를 가리켜야 통과 |
+| HTTP-01 | ACME 챌린지 방식. 도메인이 이 서버의 80을 가리켜야 통과. traefik이 자동 처리 |
 | PDB | PodDisruptionBudget. drain 시 최소 가용 파드 수 보장 |
 | 인스턴스 프로파일 | EC2에 IAM Role을 붙이는 방법. 키 없이 AWS API 접근 |
+| ServiceLB (klipper) | k3s 내장 LB. `LoadBalancer` Service를 전 노드 hostPort로 노출 |
+| certResolver | traefik 내장 ACME 클라이언트. `acme.json`에 인증서를 저장하고 자동 갱신 |
+| IGW / NAT Gateway | IGW는 VPC의 인터넷 출입구(무료, 공인 IP 있는 리소스만). NAT는 공인 IP 없는 사설 리소스가 나갈 때 쓰는 대리인(유료, 아웃바운드만) |
+| 퍼블릭 IPv4 과금 | 2024년 2월부터 모든 공인 IPv4에 시간당 $0.005. EIP·자동할당 구분 없음 |
+| VPC 엔드포인트 | VPC에서 AWS 서비스로 직접 가는 경로. S3 게이트웨이형은 무료 |
+| SSM Session Manager | 공인 IP·22 없이 인스턴스 셸·포트포워딩. IAM으로 인가 |
+| 서브넷 그룹 | RDS가 쓸 서브넷 묶음. 2AZ 이상 필수 (인스턴스는 1AZ에 뜬다) |
+| ECR lifecycle policy | 오래된 이미지를 자동 삭제하는 규칙. 커밋 SHA 태그 누적 방지 |
+| GitHub OIDC | GitHub Actions가 단기 토큰으로 IAM Role을 맡는 방식. 저장된 액세스 키 불필요 |
