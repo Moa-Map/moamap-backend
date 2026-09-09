@@ -1,0 +1,12 @@
+# cp terraform.tfvars.example terraform.tfvars 후 값 채우기. terraform.tfvars는 커밋 금지.
+
+photo_bucket_name = "moamap-photo-xxxx"
+
+# 기본값으로 충분하면 아래는 생략 가능
+# azs                  = ["ap-northeast-2a", "ap-northeast-2c"]
+# master_instance_type = "t4g.small"
+# worker_instance_type = "t4g.medium"
+# worker_count         = 2
+# k3s_version          = "v1.31.5+k3s1"
+# db_instance_class    = "db.t4g.micro"
+# db_deletion_protection = true   # 실데이터 이전 후 켠다

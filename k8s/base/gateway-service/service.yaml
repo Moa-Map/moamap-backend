@@ -4,10 +4,10 @@ metadata:
   name: gateway-service
   namespace: moamap
 spec:
-  # 외부 진입점 — LoadBalancer로 만들면 NHN이 공인 IP(플로팅 IP)를 붙여준다.
-  type: LoadBalancer
+  # 외부 노출은 traefik Ingress가 맡는다. 이 Service는 클러스터 내부용.
+  type: ClusterIP
   selector:
     app: gateway-service
   ports:
-    - port: 80
+    - port: 8080
       targetPort: 8080

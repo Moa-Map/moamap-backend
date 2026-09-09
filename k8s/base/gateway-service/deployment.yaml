@@ -18,11 +18,14 @@ spec:
         runAsUser: 1001
         seccompProfile:
           type: RuntimeDefault
+      # k3s는 EKS와 달리 kubelet에 ECR credential provider가 없다. 노드에 IAM 인스턴스
+      # 프로파일이 붙어 있어도 containerd가 ECR 인증을 못 하므로 imagePullSecret이 필요하다.
+      # 토큰이 12시간마다 만료되므로 k8s/cluster/ecr-cred-refresh.yaml 이 8시간마다 갱신한다.
       imagePullSecrets:
-        - name: ncr-cred # NCR pull 인증 (배포 이슈에서 생성)
+        - name: ecr-cred
       containers:
         - name: gateway-service
-          image: 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/gateway-service:latest
+          image: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/gateway-service:latest
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

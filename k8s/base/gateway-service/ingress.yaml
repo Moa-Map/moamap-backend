@@ -1,0 +1,19 @@
+# 외부 진입점. traefik(k3s 내장)이 이 규칙을 읽어 gateway-service로 넘긴다.
+# host를 비워두면 어떤 Host 헤더로 와도 매칭된다 → EIP로 직접 접근 가능.
+# 도메인 절체 시점에 오버레이에서 host와 TLS(certresolver)를 패치한다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  namespace: moamap
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 8080
