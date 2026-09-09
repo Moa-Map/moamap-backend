@@ -33,6 +33,16 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     void updateReviewSummary(@Param("placeId") Long placeId, @Param("avgRating") BigDecimal avgRating,
             @Param("commentCount") int commentCount);
 
+    /**
+     * 하트 수를 place_likes에서 다시 세어 반영한다.
+     *
+     * updateReviewSummary와 같은 이유로 벌크 업데이트다 — 엔티티를 로드해 필드를 고치면
+     * 동시에 하트를 누른 요청들이 Place의 @Version에서 낙관적 락 충돌을 낸다.
+     */
+    @Modifying
+    @Query("update Place p set p.likeCount = :likeCount where p.id = :placeId")
+    void updateLikeCount(@Param("placeId") Long placeId, @Param("likeCount") int likeCount);
+
     /** 목록 노출 대상(APPROVED·미삭제)의 현재 절대 개수. 이벤트 발행 시점에 조회한다(청사진 2-2, 3-3(가)). */
     long countByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status);
 

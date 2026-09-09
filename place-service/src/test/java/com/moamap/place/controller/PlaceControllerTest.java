@@ -60,7 +60,7 @@ class PlaceControllerTest {
             1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
             PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
-            null, 0, null, null, null, null, List.of(), List.of()
+            null, 0, 0, false, null, null, null, null, List.of(), List.of()
         );
     }
 
@@ -101,7 +101,7 @@ class PlaceControllerTest {
             1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
             BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
             PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
-            null, 0, null, null, null, null, List.of("데이트", "조용한"), List.of()
+            null, 0, 0, false, null, null, null, null, List.of("데이트", "조용한"), List.of()
         );
         given(placeService.create(any(), eq(1L))).willReturn(responseWithTags);
 
@@ -135,7 +135,7 @@ class PlaceControllerTest {
     @Test
     void getById는_존재하면_200과_장소를_반환한다() throws Exception {
         // given
-        given(placeService.findById(1L)).willReturn(response());
+        given(placeService.findById(eq(1L), any())).willReturn(response());
 
         // when & then
         mockMvc.perform(get("/api/v1/places/{id}", 1L))
@@ -147,7 +147,7 @@ class PlaceControllerTest {
     @Test
     void getById는_존재하지_않으면_404를_반환한다() throws Exception {
         // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
-        given(placeService.findById(999L)).willThrow(new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
+        given(placeService.findById(eq(999L), any())).willThrow(new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
 
         // when & then
         mockMvc.perform(get("/api/v1/places/{id}", 999L))
@@ -160,7 +160,7 @@ class PlaceControllerTest {
     void getAll은_mapId로_페이지_결과를_반환한다() throws Exception {
         // given
         PageResponse<PlaceResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
-        given(placeService.findAllByMapId(eq(10L), any())).willReturn(page);
+        given(placeService.findAllByMapId(eq(10L), any(), any())).willReturn(page);
 
         // when & then
         mockMvc.perform(get("/api/v1/places").param("mapId", "10"))

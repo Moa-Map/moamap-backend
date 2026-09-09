@@ -26,6 +26,7 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceCountByCreator;
+import com.moamap.place.repository.PlaceLikeRepository;
 import com.moamap.place.repository.PlaceRepository;
 import com.moamap.place.user.UserClient;
 import com.moamap.place.user.dto.UserProfileResponse;
@@ -59,6 +60,9 @@ class PlaceServiceTest {
 
     @Mock
     private PlaceRepository placeRepository;
+
+    @Mock
+    private PlaceLikeRepository placeLikeRepository;
 
     @Mock
     private MapClient mapClient;
@@ -239,7 +243,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> placeService.findById(1L))
+        assertThatThrownBy(() -> placeService.findById(1L, null))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.PLACE_NOT_FOUND);
@@ -256,7 +260,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
 
         // when
-        PlaceResponse response = placeService.findById(1L);
+        PlaceResponse response = placeService.findById(1L, null);
 
         // then
         assertThat(response.name()).isEqualTo("스타벅스 강남점");
@@ -273,13 +277,56 @@ class PlaceServiceTest {
         );
 
         // when
-        PageResponse<PlaceResponse> result = placeService.findAllByMapId(10L, pageable);
+        PageResponse<PlaceResponse> result = placeService.findAllByMapId(10L, null, pageable);
 
         // then
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).name()).isEqualTo("승인된 장소");
         assertThat(result.totalElements()).isEqualTo(1);
         verifyNoInteractions(mapClient);
+    }
+
+    /**
+     * 목록 조회에서 "내가 하트를 눌렀는지"를 건별로 물으면 페이지 건수만큼 쿼리가 붙는다.
+     * #85에서 실측한 map_tag N+1과 같은 함정이라, 쿼리 1회로 끝나는 것을 계약으로 고정한다.
+     */
+    @Test
+    void findAllByMapId는_likedByMe를_건별이_아니라_한_번의_조회로_채운다() {
+        // given: 20건짜리 페이지
+        Pageable pageable = PageRequest.of(0, 20);
+        List<Place> places = java.util.stream.IntStream.rangeClosed(1, 20)
+            .mapToObj(i -> Place.builder()
+                .id((long) i).name("장소 " + i).mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build())
+            .toList();
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.APPROVED, pageable))
+            .willReturn(new PageImpl<>(places, pageable, 20));
+        given(placeLikeRepository.findLikedPlaceIds(eq(2L), any())).willReturn(List.of(3L, 7L));
+
+        // when
+        PageResponse<PlaceResponse> result = placeService.findAllByMapId(10L, 2L, pageable);
+
+        // then: 조회는 1회뿐이고 건별 확인(exists)은 쓰지 않는다
+        verify(placeLikeRepository, times(1)).findLikedPlaceIds(eq(2L), any());
+        verify(placeLikeRepository, never()).existsByPlaceIdAndUserId(any(), any());
+        assertThat(result.content()).filteredOn(PlaceResponse::likedByMe)
+            .extracting(PlaceResponse::id).containsExactly(3L, 7L);
+    }
+
+    @Test
+    void findAllByMapId는_비로그인이면_하트_조회를_아예_하지_않는다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.APPROVED, pageable))
+            .willReturn(new PageImpl<>(List.of(
+                Place.builder().id(1L).name("장소").mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build()
+            ), pageable, 1));
+
+        // when
+        PageResponse<PlaceResponse> result = placeService.findAllByMapId(10L, null, pageable);
+
+        // then
+        verifyNoInteractions(placeLikeRepository);
+        assertThat(result.content().get(0).likedByMe()).isFalse();
     }
 
     @Test
