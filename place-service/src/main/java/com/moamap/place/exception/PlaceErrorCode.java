@@ -21,14 +21,16 @@ public enum PlaceErrorCode implements ErrorCode {
     MAP_SERVICE_UNAVAILABLE("PLACE_008", "지도 서비스와 통신할 수 없습니다. 잠시 후 다시 시도해 주세요.", 503),
     GEMINI_EXTRACTION_FAILED("PLACE_009", "인스타그램 설명글에서 장소를 추출하지 못했습니다. 잠시 후 다시 시도해 주세요.", 503),
     DUPLICATE_PLACE("PLACE_010", "해당 지도에 이미 등록된 장소입니다.", 409),
-    REVIEW_NOT_FOUND("PLACE_011", "리뷰를 찾을 수 없습니다.", 404),
-    NOT_REVIEW_OWNER("PLACE_012", "본인이 작성한 리뷰만 수정/삭제할 수 있습니다.", 403),
+    COMMENT_NOT_FOUND("PLACE_011", "댓글을 찾을 수 없습니다.", 404),
+    NOT_COMMENT_OWNER("PLACE_012", "본인이 작성한 댓글만 수정/삭제할 수 있습니다.", 403),
     INVALID_FILE_TYPE("PLACE_013", "허용되지 않은 파일 형식입니다.", 400),
     FILE_SIZE_EXCEEDED("PLACE_014", "파일 크기가 허용치를 초과했습니다.", 400),
     UNSUPPORTED_SHARE_LINK("PLACE_015", "지원하지 않는 공유 링크입니다. 네이버지도·카카오맵·구글맵의 리스트 공유 링크를 넣어주세요.", 400),
     SHARE_LINK_EXTRACTION_FAILED("PLACE_016", "공유 링크에서 장소 목록을 가져오지 못했습니다. 공개된 리스트인지 확인해 주세요.", 502),
     SHARE_LIST_STRUCTURE_CHANGED("PLACE_017", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502),
-    OFFICIAL_MAP_NO_ACTIVITY_LOG("PLACE_018", "공식 지도는 활동 내역을 제공하지 않습니다.", 403);
+    OFFICIAL_MAP_NO_ACTIVITY_LOG("PLACE_018", "공식 지도는 활동 내역을 제공하지 않습니다.", 403),
+    ALREADY_REPORTED_COMMENT("PLACE_019", "이미 신고한 댓글입니다.", 409),
+    CANNOT_REPORT_OWN_COMMENT("PLACE_020", "본인이 작성한 댓글은 신고할 수 없습니다.", 400);
 
     private final String code;
     private final String message;
