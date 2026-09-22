@@ -6,8 +6,8 @@ import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.common.storage.ObjectStoragePresigner;
 import com.moamap.common.storage.PresignedUploadUrl;
-import com.moamap.place.dto.ReviewPhotoUploadUrlRequest;
-import com.moamap.place.dto.ReviewPhotoUploadUrlResponse;
+import com.moamap.place.dto.CommentPhotoUploadUrlRequest;
+import com.moamap.place.dto.CommentPhotoUploadUrlResponse;
 import com.moamap.place.entity.Place;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
@@ -32,10 +32,10 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 리뷰 이미지 업로드 presigned URL 발급의 권한(리뷰 작성 권한과 동일)·파일 검증 규칙을 검증한다.
+ * 댓글 이미지 업로드 presigned URL 발급의 권한(댓글 작성 권한과 동일)·파일 검증 규칙을 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
-class PlaceReviewPhotoServiceTest {
+class PlaceCommentPhotoServiceTest {
 
     private static final long MAX_FILE_SIZE = 5L * 1024 * 1024;
     private static final long PLACE_ID = 10L;
@@ -52,22 +52,22 @@ class PlaceReviewPhotoServiceTest {
     private ObjectStoragePresigner objectStoragePresigner;
 
     @InjectMocks
-    private PlaceReviewPhotoService placeReviewPhotoService;
+    private PlaceCommentPhotoService placeCommentPhotoService;
 
     private Place place() {
         return Place.builder().id(PLACE_ID).mapId(MAP_ID).name("장소").lat(BigDecimal.ZERO).lng(BigDecimal.ZERO).build();
     }
 
-    private ReviewPhotoUploadUrlRequest request(String contentType, long fileSize) {
-        return new ReviewPhotoUploadUrlRequest(contentType, fileSize);
+    private CommentPhotoUploadUrlRequest request(String contentType, long fileSize) {
+        return new CommentPhotoUploadUrlRequest(contentType, fileSize);
     }
 
     private void stubPresign() {
         given(objectStoragePresigner.presign(anyString(), anyString(), anyLong()))
             .willReturn(new PresignedUploadUrl(
                 "https://upload.example.com/signed",
-                "place-reviews/10/uuid.jpg",
-                "https://cdn.moamap.com/place-reviews/10/uuid.jpg",
+                "place-comments/10/uuid.jpg",
+                "https://cdn.moamap.com/place-comments/10/uuid.jpg",
                 300L));
     }
 
@@ -77,12 +77,12 @@ class PlaceReviewPhotoServiceTest {
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
         stubPresign();
 
-        ReviewPhotoUploadUrlResponse response =
-            placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID);
+        CommentPhotoUploadUrlResponse response =
+            placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID);
 
         assertThat(response.uploadUrl()).isEqualTo("https://upload.example.com/signed");
-        assertThat(response.objectKey()).isEqualTo("place-reviews/10/uuid.jpg");
-        assertThat(response.fileUrl()).isEqualTo("https://cdn.moamap.com/place-reviews/10/uuid.jpg");
+        assertThat(response.objectKey()).isEqualTo("place-comments/10/uuid.jpg");
+        assertThat(response.fileUrl()).isEqualTo("https://cdn.moamap.com/place-comments/10/uuid.jpg");
         assertThat(response.expiresInSeconds()).isEqualTo(300L);
     }
 
@@ -92,16 +92,16 @@ class PlaceReviewPhotoServiceTest {
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
         stubPresign();
 
-        placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID);
+        placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID);
 
-        org.mockito.Mockito.verify(objectStoragePresigner).presign(eq("place-reviews/10"), eq("image/jpeg"), anyLong());
+        org.mockito.Mockito.verify(objectStoragePresigner).presign(eq("place-comments/10"), eq("image/jpeg"), anyLong());
     }
 
     @Test
     void 존재하지_않는_장소면_PLACE_NOT_FOUND를_던진다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.PLACE_NOT_FOUND);
@@ -113,7 +113,7 @@ class PlaceReviewPhotoServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.NOT_MAP_MEMBER);
@@ -122,7 +122,7 @@ class PlaceReviewPhotoServiceTest {
 
     @Test
     void 로그인하지_않았으면_placeRepository를_호출하지_않고_UNAUTHORIZED를_던진다() {
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), null))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), null))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(CommonErrorCode.UNAUTHORIZED);
@@ -135,7 +135,7 @@ class PlaceReviewPhotoServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request(invalidContentType, 1024L), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request(invalidContentType, 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.INVALID_FILE_TYPE);
@@ -147,7 +147,7 @@ class PlaceReviewPhotoServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 0L), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 0L), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.FILE_SIZE_EXCEEDED);
@@ -159,7 +159,7 @@ class PlaceReviewPhotoServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", MAX_FILE_SIZE + 1), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", MAX_FILE_SIZE + 1), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.FILE_SIZE_EXCEEDED);
@@ -172,8 +172,8 @@ class PlaceReviewPhotoServiceTest {
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
         stubPresign();
 
-        ReviewPhotoUploadUrlResponse response =
-            placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", MAX_FILE_SIZE), USER_ID);
+        CommentPhotoUploadUrlResponse response =
+            placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", MAX_FILE_SIZE), USER_ID);
 
         assertThat(response).isNotNull();
     }
@@ -183,7 +183,7 @@ class PlaceReviewPhotoServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willThrow(new BusinessException(PlaceErrorCode.MAP_NOT_FOUND));
 
-        assertThatThrownBy(() -> placeReviewPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
+        assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.MAP_NOT_FOUND);

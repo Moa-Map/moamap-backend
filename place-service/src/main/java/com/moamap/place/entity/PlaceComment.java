@@ -19,6 +19,13 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 장소에 달리는 댓글. 별점(rating)을 함께 가진다 — 화면에서 별점과 글을 한 번에 입력받는다.
+ *
+ * 물리 테이블명은 옛 이름(place_reviews)을 그대로 쓴다. ddl-auto=update는 테이블을 RENAME하지 못하고
+ * 새 테이블을 만든 뒤 옛 테이블을 방치하기 때문에, 이름만 바꾸면 기존 데이터가 통째로 끊긴다.
+ * 물리 스키마 정리는 Flyway 이관 때 한 번에 한다.
+ */
 @Entity
 @Table(name = "place_reviews",
     indexes = @Index(name = "idx_place_reviews_place_created", columnList = "place_id, created_at"))
@@ -26,7 +33,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class PlaceReview {
+public class PlaceComment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -49,6 +56,14 @@ public class PlaceReview {
     @Column(name = "image_url", length = 1000)
     @Builder.Default
     private List<String> imageUrls = new ArrayList<>();
+
+    /**
+     * 누적 신고 수. 신고 행은 지워지지 않으므로 재계산 없이 증분만으로 정확하다.
+     * 관리자 조회에만 노출한다 — 일반 목록에 보이면 낙인 효과가 생기고 "나도 신고"를 부른다.
+     */
+    @Column(name = "report_count", nullable = false, columnDefinition = "integer not null default 0")
+    @Builder.Default
+    private Integer reportCount = 0;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -80,5 +95,9 @@ public class PlaceReview {
 
     public void delete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isWrittenBy(Long userId) {
+        return this.userId.equals(userId);
     }
 }

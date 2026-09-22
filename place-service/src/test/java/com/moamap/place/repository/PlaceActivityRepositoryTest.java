@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDateTime;
 import java.util.List;
 import com.moamap.place.entity.Place;
-import com.moamap.place.entity.PlaceReview;
+import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ class PlaceActivityRepositoryTest {
     private PlaceRepository placeRepository;
 
     @Autowired
-    private PlaceReviewRepository placeReviewRepository;
+    private PlaceCommentRepository placeCommentRepository;
 
     private static final Long MAP_ID = 10L;
 
@@ -50,8 +50,8 @@ class PlaceActivityRepositoryTest {
             .status(PlaceStatus.APPROVED);
     }
 
-    private PlaceReview.PlaceReviewBuilder reviewBuilder(Long placeId) {
-        return PlaceReview.builder()
+    private PlaceComment.PlaceCommentBuilder commentBuilder(Long placeId) {
+        return PlaceComment.builder()
             .placeId(placeId)
             .userId(1L)
             .rating(5);
@@ -64,7 +64,7 @@ class PlaceActivityRepositoryTest {
             .name("연남동 카페")
             .createdAt(LocalDateTime.of(2026, 7, 26, 9, 0))
             .build());
-        placeReviewRepository.saveAndFlush(reviewBuilder(place.getId())
+        placeCommentRepository.saveAndFlush(commentBuilder(place.getId())
             .createdAt(LocalDateTime.of(2026, 7, 27, 14, 0))
             .build());
         Place deletedPlace = placeRepository.saveAndFlush(placeBuilder()
@@ -92,7 +92,7 @@ class PlaceActivityRepositoryTest {
     void includeReviews가_false면_리뷰_이벤트가_전혀_나오지_않는다() {
         // given: COMMUNITY 지도를 가정한 조회 (includeReviews=false)
         Place place = placeRepository.saveAndFlush(placeBuilder().build());
-        placeReviewRepository.saveAndFlush(reviewBuilder(place.getId()).build());
+        placeCommentRepository.saveAndFlush(commentBuilder(place.getId()).build());
 
         // when
         Page<Object[]> result = placeActivityRepository.findActivities(MAP_ID, false, PageRequest.of(0, 20));
@@ -136,7 +136,7 @@ class PlaceActivityRepositoryTest {
             .deletedAt(LocalDateTime.of(2026, 7, 27, 10, 0))
             .deletedBy(9L)
             .build());
-        placeReviewRepository.saveAndFlush(reviewBuilder(place.getId()).build());
+        placeCommentRepository.saveAndFlush(commentBuilder(place.getId()).build());
 
         // when
         Page<Object[]> result = placeActivityRepository.findActivities(MAP_ID, true, PageRequest.of(0, 20));
@@ -152,7 +152,7 @@ class PlaceActivityRepositoryTest {
     void 소프트_삭제된_리뷰는_노출되지_않는다() {
         // given
         Place place = placeRepository.saveAndFlush(placeBuilder().build());
-        placeReviewRepository.saveAndFlush(reviewBuilder(place.getId())
+        placeCommentRepository.saveAndFlush(commentBuilder(place.getId())
             .deletedAt(LocalDateTime.of(2026, 7, 27, 10, 0))
             .build());
 
@@ -259,7 +259,7 @@ class PlaceActivityRepositoryTest {
             .deletedAt(LocalDateTime.of(2026, 7, 27, 9, 0))
             .deletedBy(1L)
             .build());
-        placeReviewRepository.saveAndFlush(reviewBuilder(addedOnly.getId()).build());
+        placeCommentRepository.saveAndFlush(commentBuilder(addedOnly.getId()).build());
 
         // when
         Page<Object[]> result = placeActivityRepository.findActivities(MAP_ID, true, PageRequest.of(0, 20));

@@ -4,12 +4,12 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.place.dto.PageResponse;
-import com.moamap.place.dto.PlaceReviewCreateRequest;
-import com.moamap.place.dto.PlaceReviewResponse;
-import com.moamap.place.dto.PlaceReviewUpdateRequest;
+import com.moamap.place.dto.PlaceCommentCreateRequest;
+import com.moamap.place.dto.PlaceCommentResponse;
+import com.moamap.place.dto.PlaceCommentUpdateRequest;
 import com.moamap.place.exception.PlaceErrorCode;
-import com.moamap.place.service.PlaceReviewPhotoService;
-import com.moamap.place.service.PlaceReviewService;
+import com.moamap.place.service.PlaceCommentPhotoService;
+import com.moamap.place.service.PlaceCommentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -29,10 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 라우팅/요청 바인딩/상태 코드만 검증한다. 평균별점 갱신, 소유권 판단 같은
- * 비즈니스 로직 자체는 PlaceReviewServiceTest에서 이미 검증한다.
+ * 비즈니스 로직 자체는 PlaceCommentServiceTest에서 이미 검증한다.
  */
-@WebMvcTest(PlaceReviewController.class)
-class PlaceReviewControllerTest {
+@WebMvcTest(PlaceCommentController.class)
+class PlaceCommentControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -41,23 +41,23 @@ class PlaceReviewControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private PlaceReviewService placeReviewService;
+    private PlaceCommentService placeCommentService;
 
     @MockitoBean
-    private PlaceReviewPhotoService placeReviewPhotoService;
+    private PlaceCommentPhotoService placeCommentPhotoService;
 
-    private PlaceReviewResponse response() {
-        return new PlaceReviewResponse(1L, 1L, 2L, 5, "최고예요", List.of("https://img/1.jpg"), null, null);
+    private PlaceCommentResponse response() {
+        return new PlaceCommentResponse(1L, 1L, 2L, 5, "최고예요", List.of("https://img/1.jpg"), null, null);
     }
 
     @Test
-    void create는_성공하면_201과_생성된_리뷰를_반환한다() throws Exception {
+    void create는_성공하면_201과_생성된_댓글을_반환한다() throws Exception {
         // given
-        PlaceReviewCreateRequest request = new PlaceReviewCreateRequest(5, "최고예요", List.of("https://img/1.jpg"));
-        given(placeReviewService.create(eq(1L), eq(2L), any())).willReturn(response());
+        PlaceCommentCreateRequest request = new PlaceCommentCreateRequest(5, "최고예요", List.of("https://img/1.jpg"));
+        given(placeCommentService.create(eq(1L), eq(2L), any())).willReturn(response());
 
         // when & then
-        mockMvc.perform(post("/api/v1/places/{placeId}/reviews", 1L)
+        mockMvc.perform(post("/api/v1/places/{placeId}/comments", 1L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -74,7 +74,7 @@ class PlaceReviewControllerTest {
             """;
 
         // when & then
-        mockMvc.perform(post("/api/v1/places/{placeId}/reviews", 1L)
+        mockMvc.perform(post("/api/v1/places/{placeId}/comments", 1L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidBody))
@@ -84,23 +84,23 @@ class PlaceReviewControllerTest {
     @Test
     void getAll은_페이지_결과를_반환한다() throws Exception {
         // given
-        PageResponse<PlaceReviewResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
-        given(placeReviewService.findAllByPlaceId(eq(1L), any())).willReturn(page);
+        PageResponse<PlaceCommentResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
+        given(placeCommentService.findAllByPlaceId(eq(1L), any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(get("/api/v1/places/{placeId}/reviews", 1L))
+        mockMvc.perform(get("/api/v1/places/{placeId}/comments", 1L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].rating").value(5));
     }
 
     @Test
-    void update는_성공하면_200과_수정된_리뷰를_반환한다() throws Exception {
+    void update는_성공하면_200과_수정된_댓글을_반환한다() throws Exception {
         // given
-        PlaceReviewUpdateRequest request = new PlaceReviewUpdateRequest(4, "괜찮아요", null);
-        given(placeReviewService.update(eq(1L), eq(5L), eq(2L), any())).willReturn(response());
+        PlaceCommentUpdateRequest request = new PlaceCommentUpdateRequest(4, "괜찮아요", null);
+        given(placeCommentService.update(eq(1L), eq(5L), eq(2L), any())).willReturn(response());
 
         // when & then
-        mockMvc.perform(patch("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L)
+        mockMvc.perform(patch("/api/v1/places/{placeId}/comments/{commentId}", 1L, 5L)
                 .header("X-User-Id", 2L)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -111,19 +111,19 @@ class PlaceReviewControllerTest {
     @Test
     void delete는_성공하면_success_envelope을_반환한다() throws Exception {
         // when & then
-        mockMvc.perform(delete("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 2L))
+        mockMvc.perform(delete("/api/v1/places/{placeId}/comments/{commentId}", 1L, 5L).header("X-User-Id", 2L))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test
-    void delete는_본인_리뷰가_아니면_403을_반환한다() throws Exception {
+    void delete는_본인_댓글이_아니면_403을_반환한다() throws Exception {
         // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
-        org.mockito.BDDMockito.willThrow(new BusinessException(PlaceErrorCode.NOT_REVIEW_OWNER))
-            .given(placeReviewService).delete(1L, 5L, 3L);
+        org.mockito.BDDMockito.willThrow(new BusinessException(PlaceErrorCode.NOT_COMMENT_OWNER))
+            .given(placeCommentService).delete(1L, 5L, 3L);
 
         // when & then
-        mockMvc.perform(delete("/api/v1/places/{placeId}/reviews/{reviewId}", 1L, 5L).header("X-User-Id", 3L))
+        mockMvc.perform(delete("/api/v1/places/{placeId}/comments/{commentId}", 1L, 5L).header("X-User-Id", 3L))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error.code").value("PLACE_012"));
     }
