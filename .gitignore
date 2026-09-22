@@ -76,6 +76,9 @@ Thumbs.db
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+# terraform plan 파일 — k3s 조인 토큰·DB 비밀번호가 평문으로 들어간다
+tfplan
+*.tfplan
 # 인증 정보(OpenStack openrc). 실제 파일은 커밋 금지, .sample만 커밋
 openrc
 .openrc

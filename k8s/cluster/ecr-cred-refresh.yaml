@@ -1,0 +1,70 @@
+# ECR 로그인 토큰은 12시간이면 만료된다. k3s에는 kubelet ECR credential provider가 없어
+# imagePullSecret 방식을 쓰므로, 이 CronJob이 8시간마다 토큰을 새로 받아 Secret을 덮어쓴다.
+#
+# AWS 자격증명은 노드의 인스턴스 프로파일(moamap-node)을 IMDS로 가져다 쓴다 — 키 없음.
+# 네임스페이스마다 하나씩 필요하다(Secret이 네임스페이스 스코프).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecr-cred-refresh
+  namespace: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ecr-cred-refresh
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ecr-cred-refresh
+  namespace: dev
+subjects:
+  - kind: ServiceAccount
+    name: ecr-cred-refresh
+    namespace: dev
+roleRef:
+  kind: Role
+  name: ecr-cred-refresh
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ecr-cred-refresh
+  namespace: dev
+spec:
+  schedule: "0 */8 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ecr-cred-refresh
+          restartPolicy: OnFailure
+          containers:
+            - name: refresh
+              image: alpine/k8s:1.31.0
+              env:
+                - name: REGISTRY
+                  value: "189923011357.dkr.ecr.ap-northeast-2.amazonaws.com"
+                - name: AWS_REGION
+                  value: "ap-northeast-2"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TOKEN=$(aws ecr get-login-password --region "$AWS_REGION")
+                  kubectl -n dev create secret docker-registry ecr-cred \
+                    --docker-server="$REGISTRY" \
+                    --docker-username=AWS \
+                    --docker-password="$TOKEN" \
+                    --dry-run=client -o yaml | kubectl apply -f -
+                  echo "ecr-cred refreshed"

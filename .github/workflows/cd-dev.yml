@@ -4,39 +4,68 @@ on:
   push:
     branches: [develop]
 
-# 매니페스트 커밋까지 하므로 쓰기 권한 필요 (ci.yml은 읽기 전용, 이건 별개).
+# contents: write — 매니페스트 태그 갱신 커밋
+# id-token: write — AWS OIDC 페더레이션 (저장된 액세스 키 없이 IAM Role을 맡는다)
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: cd-dev-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com
+
 jobs:
-  build-push-deploy:
-    name: build, push, update dev manifest
+  build-push:
+    name: build & push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway-service, user-service, map-service, place-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::189923011357:role/moamap-ci-ecr-push
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      # 노드가 Graviton(arm64)이라 arm64 이미지가 아니면 파드가 exec format error로 죽는다.
+      # runner는 amd64라 QEMU 에뮬레이션이 필요하다 — 그래서 setup-qemu가 먼저 온다.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          build-args: SERVICE=${{ matrix.service }}
+          tags: ${{ env.ECR_REGISTRY }}/moamap/${{ matrix.service }}:${{ github.sha }}
+          push: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  update-manifest:
+    name: update dev overlay image tags
+    needs: build-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
 
-      - name: Log in to NCR
-        run: echo "${{ secrets.NCR_SECRET_KEY }}" | docker login 9c5fef4c-kr1-registry.container.nhncloud.com -u "${{ secrets.NCR_ACCESS_KEY }}" --password-stdin
-
-      # 4개 서비스를 순차로 빌드+push. 나중에 matrix 등으로 병렬화 개선 예정.
-      - name: Build and push all services
+      - name: Bump newTag
         run: |
           for svc in gateway-service user-service map-service place-service; do
-            echo "=== building $svc ==="
-            docker build --build-arg SERVICE=$svc \
-              -t 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/$svc:${{ github.sha }} .
-            docker push 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/$svc:${{ github.sha }}
-          done
-
-      - name: Update dev overlay image tags
-        run: |
-          for svc in gateway-service user-service map-service place-service; do
-            yq -i "(.images[] | select(.name == \"9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/${svc}\")).newTag = \"${{ github.sha }}\"" k8s/overlays/dev/kustomization.yaml
+            yq -i "(.images[] | select(.name == \"${{ env.ECR_REGISTRY }}/moamap/${svc}\")).newTag = \"${{ github.sha }}\"" k8s/overlays/dev/kustomization.yaml
           done
 
       - name: Commit and push
