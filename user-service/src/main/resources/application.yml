@@ -83,3 +83,14 @@ outbox:
 apple:
   enabled: ${APPLE_ENABLED:false}
   client-id: ${APPLE_CLIENT_ID:}
+  token:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    # Apple에서 발급받은 .p8 내용. 실제 값은 배포 Secret으로 주입한다.
+    private-key: ${APPLE_PRIVATE_KEY:}
+  credentials:
+    active-key-version: ${APPLE_CREDENTIAL_ACTIVE_KEY_VERSION:v1}
+    # AES-256 키(32바이트)의 Base64 인코딩. Apple 개인키와 다른 키다.
+    # 교체 시 이전 버전도 keys 아래에 남겨야 기존 암호문을 읽을 수 있다.
+    keys:
+      v1: ${APPLE_CREDENTIAL_KEY_V1:}
