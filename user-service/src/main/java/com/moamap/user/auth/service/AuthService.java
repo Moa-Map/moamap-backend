@@ -6,14 +6,12 @@ import com.moamap.user.auth.jwt.JwtProperties;
 import com.moamap.user.event.UserRegisteredEvent;
 import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.auth.jwt.JwtProvider;
-import com.moamap.user.auth.oauth.OAuthClient;
 import com.moamap.user.auth.oauth.OAuthUserInfo;
 import com.moamap.user.refreshtoken.RefreshTokenStore;
 import com.moamap.user.user.entity.User;
 import com.moamap.user.user.repository.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.UUID;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -24,21 +22,20 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final OAuthClient oAuthClient;
     private final UserRepository userRepository;
     private final RefreshTokenStore refreshTokenStore;
     private final JwtProvider jwtProvider;
     private final JwtProperties jwtProperties;
     private final OutboxRecorder outboxRecorder;
 
+    /** 제공자별 인증이 끝난 사용자 정보로 회원과 가입 이벤트를 같은 트랜잭션에 저장한다. */
     @Transactional
-    public TokenResponse login(String kakaoAccessToken) {
-        OAuthUserInfo info = oAuthClient.getUserInfo(kakaoAccessToken);
+    public TokenResponse login(OAuthUserInfo info) {
         Optional<User> existing = userRepository.findByProviderAndProviderId(info.provider(), info.providerId());
         boolean newUser = existing.isEmpty();
         User user = existing.orElseGet(() -> userRepository.save(User.createSocialUser(
                 info.provider(), info.providerId(),
-                resolveNickname(info), info.email(), info.profileImageUrl())));
+                info.nickname(), info.email(), info.profileImageUrl())));
         if (newUser) {
             recordRegistered(user.getId());
         }
@@ -55,14 +52,6 @@ public class AuthService {
             String.valueOf(userId),
             UserRegisteredEvent.TYPE,
             new UserRegisteredEvent(UUID.randomUUID().toString(), userId, Instant.now()));
-    }
-
-    // 닉네임은 카카오 동의항목에서 선택 동의라 거부 시 null로 온다. NOT NULL 컬럼이므로 기본값으로 대체.
-    private String resolveNickname(OAuthUserInfo info) {
-        if (info.nickname() != null && !info.nickname().isBlank()) {
-            return info.nickname();
-        }
-        return "kakao_" + info.providerId();
     }
 
     @Transactional

@@ -13,7 +13,6 @@ import com.moamap.user.auth.dto.TokenResponse;
 import com.moamap.user.auth.exception.RefreshTokenNotFoundException;
 import com.moamap.user.auth.jwt.JwtProperties;
 import com.moamap.user.auth.jwt.JwtProvider;
-import com.moamap.user.auth.oauth.OAuthClient;
 import com.moamap.user.auth.oauth.OAuthUserInfo;
 import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.refreshtoken.RefreshTokenStore;
@@ -32,7 +31,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock private OAuthClient oAuthClient;
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenStore refreshTokenStore;
     @Mock private JwtProvider jwtProvider;
@@ -43,15 +41,13 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                oAuthClient, userRepository, refreshTokenStore, jwtProvider,
+                userRepository, refreshTokenStore, jwtProvider,
                 new JwtProperties("secret-key-min-32-bytes-long-for-test!!", 30, 14),
                 outboxRecorder);
     }
 
     @Test
     void 신규_사용자는_가입_후_토큰을_발급받는다() {
-        given(oAuthClient.getUserInfo("kakao-token"))
-                .willReturn(new OAuthUserInfo("kakao", "111", "길동", "a@b.com", "http://img"));
         given(userRepository.findByProviderAndProviderId("kakao", "111"))
                 .willReturn(Optional.empty());
         given(userRepository.save(any(User.class))).willAnswer(inv -> {
@@ -62,7 +58,8 @@ class AuthServiceTest {
         given(jwtProvider.createAccessToken(1L, Role.USER)).willReturn("access-jwt");
         given(jwtProvider.getAccessTokenExpiresInSeconds()).willReturn(1800L);
 
-        TokenResponse response = authService.login("kakao-token");
+        TokenResponse response = authService.login(
+                new OAuthUserInfo("kakao", "111", "길동", "a@b.com", "http://img"));
 
         assertThat(response.userId()).isEqualTo(1L);
         assertThat(response.accessToken()).isEqualTo("access-jwt");
@@ -78,14 +75,13 @@ class AuthServiceTest {
     void 기존_사용자는_가입없이_토큰을_발급받는다() {
         User existing = User.createSocialUser("kakao", "111", "길동", "a@b.com", null);
         ReflectionTestUtils.setField(existing, "id", 7L);
-        given(oAuthClient.getUserInfo("kakao-token"))
-                .willReturn(new OAuthUserInfo("kakao", "111", "길동", "a@b.com", null));
         given(userRepository.findByProviderAndProviderId("kakao", "111"))
                 .willReturn(Optional.of(existing));
         given(jwtProvider.createAccessToken(7L, Role.USER)).willReturn("access-jwt");
         given(jwtProvider.getAccessTokenExpiresInSeconds()).willReturn(1800L);
 
-        TokenResponse response = authService.login("kakao-token");
+        TokenResponse response = authService.login(
+                new OAuthUserInfo("kakao", "111", "길동", "a@b.com", null));
 
         assertThat(response.userId()).isEqualTo(7L);
         assertThat(response.accessToken()).isEqualTo("access-jwt");
