@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.moamap.user.auth.dto.TokenResponse;
 import com.moamap.user.auth.exception.InvalidOAuthTokenException;
 import com.moamap.user.auth.service.AuthService;
+import com.moamap.user.auth.service.KakaoLoginService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -25,9 +26,12 @@ class AuthControllerTest {
     @MockBean
     private AuthService authService;
 
+    @MockBean
+    private KakaoLoginService kakaoLoginService;
+
     @Test
     void 카카오_로그인_성공시_토큰을_반환한다() throws Exception {
-        given(authService.login("kakao-token"))
+        given(kakaoLoginService.login("kakao-token"))
                 .willReturn(new TokenResponse(42L, "access", "refresh", "Bearer", 1800, 1209600, true));
 
         mockMvc.perform(post("/api/v1/auth/kakao/login")
@@ -53,7 +57,7 @@ class AuthControllerTest {
 
     @Test
     void 유효하지_않은_카카오_토큰이면_401을_반환한다() throws Exception {
-        given(authService.login(anyString()))
+        given(kakaoLoginService.login(anyString()))
                 .willThrow(new InvalidOAuthTokenException("bad token"));
 
         mockMvc.perform(post("/api/v1/auth/kakao/login")
