@@ -64,14 +64,11 @@ dev-login:
   enabled: ${DEV_LOGIN_ENABLED:false}
 
 storage:
-  # NHN Cloud Object Storage(S3 호환) 연동. 자격증명은 절대 커밋 금지 — 환경변수로 주입.
-  # endpoint가 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
-  endpoint: ${OBJECT_STORAGE_ENDPOINT:}
-  region: ${OBJECT_STORAGE_REGION:kr-standard}
+  # AWS S3 연동. 자격증명은 설정으로 받지 않는다 — DefaultCredentialsProvider(EC2 인스턴스 프로파일 / ~/.aws)가 찾는다.
+  # bucket이 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
+  region: ${OBJECT_STORAGE_REGION:ap-northeast-2}
   bucket: ${OBJECT_STORAGE_BUCKET:}
   public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
-  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
-  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
 
 outbox:
   # 보관함을 훑는 주기. 가입 직후 지도가 만들어지기까지의 지연이 이 값에 좌우된다.

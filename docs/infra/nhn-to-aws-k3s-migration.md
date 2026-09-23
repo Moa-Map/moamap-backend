@@ -242,7 +242,7 @@ push → main          cd-prod.yml (prod 미배포라 실질 미사용)
 | 종류 | 위치 | 내용 |
 |---|---|---|
 | ConfigMap `moamap-config` | `k8s/base/configmap.yaml` + overlay 패치 | 서비스 간 내부 URL, DB/Redis/RabbitMQ 호스트, `PUBLIC_GATEWAY_URL`, `KAKAO_REDIRECT_URI`, `DEV_LOGIN_ENABLED` |
-| Secret `moamap-secrets` | `k8s/secrets/app-secrets.yaml` (gitignore) | `JWT_SECRET`, `DB_*`, `KAKAO_*`, `GEMINI_*`, `SEOUL_API_KEY`, `OBJECT_STORAGE_*` (endpoint/bucket/access-key/secret-key), `RABBITMQ_*` |
+| Secret `moamap-secrets` | `k8s/secrets/app-secrets.yaml` (gitignore) | `JWT_SECRET`, `DB_*`, `KAKAO_*`, `GEMINI_*`, `SEOUL_API_KEY`, `OBJECT_STORAGE_*` (region/bucket/public-base-url), `RABBITMQ_*` |
 | imagePullSecret | `ncr-cred` | NCR 인증 |
 
 - 오브젝트 스토리지는 **정적 액세스 키**로 인증 (Secret에 평문). AWS 이전 시 IAM Role로 대체 가능 (3.8).
@@ -474,9 +474,9 @@ Ingress에 `traefik.ingress.kubernetes.io/router.tls.certresolver: le` 를 붙�
 | 항목 | 변경 |
 |---|---|
 | ConfigMap | `PUBLIC_GATEWAY_URL`, `KAKAO_REDIRECT_URI`를 `https://dev-api.moamap.co.kr` 기반으로 |
-| 오브젝트 스토리지 | `OBJECT_STORAGE_ENDPOINT`를 S3로. **코드는 이미 AWS S3 SDK(`S3Presigner`)라 변경 없음** |
+| 오브젝트 스토리지 | `OBJECT_STORAGE_BUCKET`/`_REGION`/`_PUBLIC_BASE_URL`을 S3 값으로. `OBJECT_STORAGE_ENDPOINT`는 없어졌다 — 리전이 엔드포인트를 정한다 (#108에서 반영 완료) |
 | **DB 접속 정보** | `DB_HOST`를 RDS 엔드포인트로, `DB_PASSWORD`는 Terraform이 생성한 값(`terraform output -raw db_password`). 파드 이름(`postgres`)이 아니라 RDS 주소가 들어간다 |
-| **액세스 키 제거** | EC2 인스턴스 프로파일(IAM Role)로 S3 접근. 코드에서 static credentials → `DefaultCredentialsProvider`로 바꾸면 `OBJECT_STORAGE_ACCESS_KEY/SECRET_KEY`가 **없어진다** (별도 이슈) |
+| **액세스 키 제거** | EC2 인스턴스 프로파일(IAM Role)로 S3 접근. 코드에서 static credentials → `DefaultCredentialsProvider`로 바꾸면 `OBJECT_STORAGE_ACCESS_KEY/SECRET_KEY`가 **없어진다** (#108에서 반영 완료) |
 | 그 외 시크릿 | `moamap-secrets` 재생성 (JWT, 카카오, Gemini, 서울 API, DB, RabbitMQ) |
 
 ### 3.9 관측 (신규 구축)
