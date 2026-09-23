@@ -48,6 +48,11 @@ resource "aws_instance" "master" {
   EOT
 
   tags = { Name = "${var.name_prefix}-master" }
+
+  # SSM 파라미터가 새 AMI를 가리켜도 기존 노드를 교체하지 않는다. 새 AMI는 노드를 새로 만들 때만 적용된다.
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
 resource "aws_instance" "worker" {
@@ -81,6 +86,11 @@ resource "aws_instance" "worker" {
   EOT
 
   tags = { Name = "${var.name_prefix}-worker-${count.index + 1}" }
+
+  # SSM 파라미터가 새 AMI를 가리켜도 기존 노드를 교체하지 않는다. 새 AMI는 노드를 새로 만들 때만 적용된다.
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
 # 서비스 진입점. DNS A 레코드가 가리키는 고정 IP.
