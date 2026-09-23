@@ -2,6 +2,8 @@ package com.moamap.user.auth.apple;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.user.user.repository.UserRepository;
+import com.moamap.user.auth.service.AppleLoginService;
+import com.moamap.user.auth.service.AuthService;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -53,6 +55,12 @@ public class AppleAuthConfiguration {
     AppleCredentialStore appleCredentialStore(UserRepository users, AppleCredentialRepository credentials,
             AppleTokenCipher cipher, AppleProperties properties) {
         return new AppleCredentialStore(users, credentials, cipher, properties);
+    }
+
+    @Bean
+    AppleLoginService appleLoginService(AppleIdentityTokenVerifier verifier, AppleTokenExchanger exchanger,
+            AppleCredentialStore credentials, AuthService authService) {
+        return new AppleLoginService(verifier, exchanger, credentials, authService);
     }
 
     private RestClient appleHttpClient(RestClient.Builder builder) {

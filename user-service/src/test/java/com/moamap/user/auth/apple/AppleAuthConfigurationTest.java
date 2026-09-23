@@ -16,7 +16,9 @@ class AppleAuthConfigurationTest {
             .withBean(com.fasterxml.jackson.databind.ObjectMapper.class, com.fasterxml.jackson.databind.ObjectMapper::new)
             .withBean(com.moamap.user.user.repository.UserRepository.class,
                     () -> mock(com.moamap.user.user.repository.UserRepository.class))
-            .withBean(AppleCredentialRepository.class, () -> mock(AppleCredentialRepository.class));
+            .withBean(AppleCredentialRepository.class, () -> mock(AppleCredentialRepository.class))
+            .withBean(com.moamap.user.auth.service.AuthService.class,
+                    () -> mock(com.moamap.user.auth.service.AuthService.class));
 
     @Test
     void 기본은_비활성화이며_Apple_설정이_없어도_기동한다() {
@@ -50,6 +52,7 @@ class AppleAuthConfigurationTest {
                     assertThat(context).hasSingleBean(AppleIdentityTokenVerifier.class);
                     assertThat(context).hasSingleBean(AppleTokenExchanger.class);
                     assertThat(context).hasSingleBean(AppleCredentialStore.class);
+                    assertThat(context).hasSingleBean(com.moamap.user.auth.service.AppleLoginService.class);
                 });
     }
 }

@@ -1,5 +1,6 @@
 package com.moamap.user.auth.service;
 
+import com.moamap.user.auth.apple.AppleCredentialStore;
 import com.moamap.user.auth.dto.TokenResponse;
 import com.moamap.user.auth.exception.RefreshTokenNotFoundException;
 import com.moamap.user.auth.jwt.JwtProperties;
@@ -39,6 +40,22 @@ public class AuthService {
         if (newUser) {
             recordRegistered(user.getId());
         }
+        user.updateLastLogin(Instant.now());
+        return issueTokens(user, newUser);
+    }
+
+    /** Apple 자격증명 저장까지 회원·가입 이벤트와 같은 트랜잭션에서 처리한다. */
+    @Transactional
+    public TokenResponse loginApple(OAuthUserInfo info, AppleCredentialStore credentials,
+                                    String appleRefreshToken) {
+        Optional<User> existing = userRepository.findByProviderAndProviderId(info.provider(), info.providerId());
+        boolean newUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> userRepository.save(User.createSocialUser(
+                info.provider(), info.providerId(), info.nickname(), info.email(), info.profileImageUrl())));
+        if (newUser) {
+            recordRegistered(user.getId());
+        }
+        credentials.save(user.getId(), appleRefreshToken);
         user.updateLastLogin(Instant.now());
         return issueTokens(user, newUser);
     }
