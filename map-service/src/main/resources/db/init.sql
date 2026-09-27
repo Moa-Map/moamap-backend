@@ -54,6 +54,60 @@ CREATE TABLE IF NOT EXISTS foot_traffic_congestion (
     updated_at      TIMESTAMP NOT NULL DEFAULT now() -- 우리가 upsert한 시각
 );
 
+-- 공공화장실. 실제 테이블은 Hibernate가 엔티티로 먼저 만들므로 이 정의는 엔티티와 같게 유지한다.
+-- 문자열 255자는 의도적이다(원천 최대 103자). 좁히면 긴 값이 온 행이 저장 실패 후 소프트 삭제된다.
+CREATE TABLE IF NOT EXISTS public_restroom (
+    id                        BIGSERIAL PRIMARY KEY,
+    mng_no                    VARCHAR(255) NOT NULL UNIQUE,
+    name                      VARCHAR(255) NOT NULL,
+    category                  VARCHAR(255),
+    owner_type                VARCHAR(255),
+    road_address              VARCHAR(255),
+    lot_address               VARCHAR(255),
+
+    male_toilet               SMALLINT NOT NULL,
+    male_urinal               SMALLINT NOT NULL,
+    male_disabled_toilet      SMALLINT NOT NULL,
+    male_disabled_urinal      SMALLINT NOT NULL,
+    male_child_toilet         SMALLINT NOT NULL,
+    male_child_urinal         SMALLINT NOT NULL,
+    female_toilet             SMALLINT NOT NULL,
+    female_disabled_toilet    SMALLINT NOT NULL,
+    female_child_toilet       SMALLINT NOT NULL,
+
+    open_hours                VARCHAR(255),
+    open_hours_detail         VARCHAR(255),
+    diaper_table              BOOLEAN NOT NULL,
+    diaper_table_location     VARCHAR(255),
+    emergency_bell            BOOLEAN NOT NULL,
+    emergency_bell_location   VARCHAR(255),
+    entrance_cctv             BOOLEAN NOT NULL,
+    waste_disposal            VARCHAR(255),
+    manager_org               VARCHAR(255),
+    phone                     VARCHAR(255),
+    installed_ym              VARCHAR(255),
+    remodeled_ym              VARCHAR(255),
+
+    source_modified_at        TIMESTAMP,
+    data_ref_date             DATE,
+    lat                       NUMERIC(9,6),
+    lng                       NUMERIC(9,6),
+    geocode_status            VARCHAR(10) NOT NULL CHECK (geocode_status IN ('PENDING', 'OK', 'FAILED')),
+    hidden                    BOOLEAN NOT NULL DEFAULT false, -- 운영자 숨김. 원천 주소 변경 시 동기화가 해제
+
+    last_synced_at            TIMESTAMP NOT NULL,
+    created_at                TIMESTAMP NOT NULL,
+    updated_at                TIMESTAMP NOT NULL,
+    deleted_at                TIMESTAMP
+);
+
+-- hidden은 나중에 추가된 컬럼이라 이미 만들어진 테이블에도 붙인다.
+ALTER TABLE public_restroom ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_public_restroom_coord
+    ON public_restroom (lat, lng)
+    WHERE deleted_at IS NULL AND lat IS NOT NULL;
+
 -- ============================================================
 -- 2. 유동인구 관측지점 seed (121곳)
 -- ============================================================
@@ -322,3 +376,19 @@ UPDATE foot_traffic_area SET lat = 37.531239, lng = 126.916277, boundary = '{"ty
 --  Hibernate가 만들고, defer-datasource-initialization=true 라 이 스크립트가 그 뒤에 실행된다.)
 CREATE UNIQUE INDEX IF NOT EXISTS uk_map_personal_owner
     ON map_entity (owner_id) WHERE personal = TRUE;
+
+-- ============================================================
+-- 4. 공식 지도
+-- ============================================================
+-- 공식 지도는 사용자가 만들 수 없어 여기서 시드한다. owner_id = 0은 시스템 소유라 누구도 수정/삭제할 수 없다.
+-- 이 스크립트는 기동마다 돌아서 이름으로 중복을 막는다. 이름을 바꾸면 새 행이 하나 더 생기고,
+-- 프론트도 이름으로 유동인구/화장실 데이터를 구분하므로 함께 맞춰야 한다.
+INSERT INTO map_entity (name, description, type, owner_id, member_count, place_count, personal, created_at, updated_at)
+SELECT '유동인구 지도', '서울시 실시간 도시데이터를 기반으로 주요 장소의 혼잡도를 5분마다 갱신해 보여주는 공식 지도입니다.',
+       'OFFICIAL', 0, 0, 0, FALSE, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM map_entity WHERE type = 'OFFICIAL' AND name = '유동인구 지도');
+
+INSERT INTO map_entity (name, description, type, owner_id, member_count, place_count, personal, created_at, updated_at)
+SELECT '공중화장실 지도', '행정안전부 공공데이터를 기반으로 전국 공중화장실의 위치와 개방 시간, 편의시설 정보를 보여주는 공식 지도입니다.',
+       'OFFICIAL', 0, 0, 0, FALSE, now(), now()
+WHERE NOT EXISTS (SELECT 1 FROM map_entity WHERE type = 'OFFICIAL' AND name = '공중화장실 지도');
