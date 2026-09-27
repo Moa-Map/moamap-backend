@@ -1,5 +1,7 @@
 package com.moamap.map;
 
+import com.moamap.map.client.KakaoAddressProperties;
+import com.moamap.map.client.PublicRestroomApiProperties;
 import com.moamap.map.client.SeoulOpenApiProperties;
 import com.moamap.map.recommendation.RecommendationProperties;
 import com.moamap.map.place.PlaceServiceProperties;
@@ -11,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
 @EnableConfigurationProperties({SeoulOpenApiProperties.class, UserServiceProperties.class, PlaceServiceProperties.class,
-    RecommendationProperties.class})
+    RecommendationProperties.class, PublicRestroomApiProperties.class, KakaoAddressProperties.class})
 @SpringBootApplication
 public class MapServiceApplication {
 
