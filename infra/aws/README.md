@@ -31,10 +31,16 @@ private 10.0.11.0/24 · 10.0.12.0/24
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars   # 값 채우기 (커밋 금지)
-terraform init && terraform apply
+terraform init && terraform plan
 ```
 
-state 원격화는 `versions.tf`의 backend 주석 참고. **state에 k3s 조인 토큰과 DB 비밀번호가 들어가므로 버킷은 비공개·암호화.**
+state는 S3(`s3://moamap-tfstate/aws/terraform.tfstate`)에 있고 `use_lockfile`로 잠근다. 로컬 `terraform.tfstate`를 만들거나 쓰지 않는다.
+- AWS 자격증명(`moamap-tfstate` 버킷 읽기/쓰기 권한)이 있어야 `init`이 된다.
+- apply 전에 항상 `develop` 최신화 후 `plan` 확인. 코드와 state가 어긋난 채로 apply하면 남의 리소스를 지운다.
+- `Error acquiring the state lock` → 누가 apply 중이다. 기다린다. 확실히 죽은 락만 `terraform force-unlock <ID>`.
+- 잘못 덮어썼으면 버킷 버전 관리로 이전 버전 복구.
+
+**state에 k3s 조인 토큰과 DB 비밀번호가 들어가므로 버킷은 비공개·암호화.**
 
 ## apply 이후 (Terraform 밖)
 
