@@ -55,7 +55,7 @@ public class MapController {
         return ApiResponse.success(mapService.create(request, userId));
     }
 
-    @Operation(summary = "커뮤니티 지도 목록", description = "공개 지도를 태그/정렬 조건으로 조회한다.")
+    @Operation(summary = "커뮤니티 지도 목록", description = "공개 지도를 태그/정렬 조건으로 조회한다. 로그인 시 이미 참여 중인 지도는 제외한다.")
     @GetMapping
     public ApiResponse<PageResponse<MapSummaryResponse>> getCommunityMaps(
         @RequestParam(required = false) String tag,

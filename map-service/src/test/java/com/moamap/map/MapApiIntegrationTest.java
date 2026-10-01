@@ -128,15 +128,18 @@ class MapApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("커뮤니티 목록은 공개 지도를 반환하고 요청자의 참여 여부를 표시한다")
-    void communityListShowsJoinedFlag() throws Exception {
-        long mapId = createMap(OWNER, "힙플 지도", "PUBLIC");
-        mockMvc.perform(post("/api/v1/maps/{mapId}/join", mapId).header(USER_HEADER, OTHER)).andExpect(status().isOk());
+    @DisplayName("커뮤니티 목록은 요청자가 참여 중인 지도를 제외한 공개 지도를 반환한다")
+    void communityListExcludesJoinedMaps() throws Exception {
+        long joinedMapId = createMap(OWNER, "힙플 지도", "PUBLIC");
+        createMap(OWNER, "산책 지도", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", joinedMapId).header(USER_HEADER, OTHER)).andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OTHER))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(1))
+            .andExpect(jsonPath("$.data.content[0].name").value("산책 지도"))
             .andExpect(jsonPath("$.data.content[0].type").value("COMMUNITY"))
-            .andExpect(jsonPath("$.data.content[0].joined").value(true));
+            .andExpect(jsonPath("$.data.content[0].joined").value(false));
     }
 
     @Test
@@ -241,7 +244,8 @@ class MapApiIntegrationTest {
     void mapListIncludesPlaceCount() throws Exception {
         createMap(OWNER, "장소 개수 목록 테스트", "PUBLIC");
 
-        mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OWNER))
+        // 만든 사람은 자동 참여라 탐색 목록에서 빠지므로 다른 사용자로 조회한다.
+        mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OTHER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].placeCount").value(0));
     }
