@@ -2,7 +2,7 @@ package com.moamap.user.auth.dev;
 
 import com.moamap.common.response.ApiResponse;
 import com.moamap.user.auth.dto.TokenResponse;
-import com.moamap.user.auth.service.AuthService;
+import com.moamap.user.auth.service.KakaoLoginService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DevKakaoCallbackController {
 
     private final KakaoAuthCodeExchanger exchanger;
-    private final AuthService authService;
+    private final KakaoLoginService kakaoLoginService;
 
     @GetMapping("/callback")
     @Operation(
@@ -37,6 +37,6 @@ public class DevKakaoCallbackController {
     )
     public ApiResponse<TokenResponse> callback(@RequestParam String code) {
         String kakaoAccessToken = exchanger.exchange(code);
-        return ApiResponse.success(authService.login(kakaoAccessToken));
+        return ApiResponse.success(kakaoLoginService.login(kakaoAccessToken));
     }
 }

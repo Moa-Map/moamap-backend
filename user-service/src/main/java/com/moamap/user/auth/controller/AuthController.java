@@ -6,6 +6,7 @@ import com.moamap.user.auth.dto.LogoutRequest;
 import com.moamap.user.auth.dto.RefreshRequest;
 import com.moamap.user.auth.dto.TokenResponse;
 import com.moamap.user.auth.service.AuthService;
+import com.moamap.user.auth.service.KakaoLoginService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,10 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final KakaoLoginService kakaoLoginService;
 
     @PostMapping("/kakao/login")
     public ApiResponse<TokenResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
-        return ApiResponse.success(authService.login(request.kakaoAccessToken()));
+        return ApiResponse.success(kakaoLoginService.login(request.kakaoAccessToken()));
     }
 
     @PostMapping("/token/refresh")

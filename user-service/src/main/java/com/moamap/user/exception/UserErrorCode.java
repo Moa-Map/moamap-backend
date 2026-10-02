@@ -17,7 +17,9 @@ public enum UserErrorCode implements ErrorCode {
     TOO_MANY_USER_IDS("USER_004", "한 번에 조회할 수 있는 사용자는 100명입니다.", 400),
     INVALID_FILE_TYPE("USER_005", "허용되지 않은 파일 형식입니다.", 400),
     FILE_SIZE_EXCEEDED("USER_006", "파일 크기가 허용치를 초과했습니다.", 400),
-    STORAGE_NOT_CONFIGURED("USER_007", "이미지 업로드를 사용할 수 없습니다.", 503);
+    STORAGE_NOT_CONFIGURED("USER_007", "이미지 업로드를 사용할 수 없습니다.", 503),
+    INVALID_APPLE_TOKEN("USER_008", "Apple 인증에 실패했습니다. 다시 로그인해 주세요.", 401),
+    APPLE_AUTH_UNAVAILABLE("USER_009", "Apple 로그인을 일시적으로 사용할 수 없습니다.", 503);
 
     private final String code;
     private final String message;
