@@ -25,6 +25,13 @@ spring:
       mode: always
       data-locations: classpath:db/init.sql
 
+  task:
+    scheduling:
+      pool:
+        # 화장실 동기화(수 시간)와 혼잡도 수집(5분 주기)이 기본 풀(size=1)을 공유하면
+        # 화장실 배치가 도는 동안 혼잡도 수집이 멈춘다 — 각자 스레드를 쓰도록 늘린다.
+        size: 2
+
   http:
     client:
       # 외부·내부 HTTP 호출 타임아웃. 상대가 멈췄을 때 요청 스레드가 오래 붙잡히지 않도록 상한을 둔다.
@@ -66,6 +73,21 @@ seoul:
     key: ${SEOUL_API_KEY:}
     service: citydata_ppltn
 
+restroom:
+  api:
+    # 행정안전부 공중화장실 정보 조회 서비스. 서비스키는 절대 커밋 금지 — 환경변수로 주입.
+    # 일일 트래픽 10,000건. 매달 전체 수집은 약 54페이지(53,582건 / 1000, PublicRestroomSyncService.PAGE_SIZE)라 여유 있음.
+    # 데이터는 매일 갱신되지만 2일 전 기준으로 현행화됨.
+    base-url: ${RESTROOM_API_BASE_URL:https://apis.data.go.kr}
+    path: ${RESTROOM_API_PATH:/1741000/public_restroom_info_v2/info_v2}
+    service-key: ${RESTROOM_API_SERVICE_KEY:}
+
+kakao:
+  local:
+    # 카카오 로컬(주소 검색) API. place-service와 동일한 환경변수 이름을 쓴다.
+    rest-api-key: ${KAKAO_REST_API_KEY:}
+    base-url: https://dapi.kakao.com/v2/local/search/address.json
+
 storage:
   # AWS S3 연동. 자격증명은 설정으로 받지 않는다 — DefaultCredentialsProvider(EC2 인스턴스 프로파일 / ~/.aws)가 찾는다.
   # bucket이 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
@@ -85,6 +107,9 @@ map:
   personal-map:
     # 가입 시 만들어지는 지도 이름. 문구를 바꿀 때 재배포하지 않아도 되도록 설정으로 뺀다.
     name: ${PERSONAL_MAP_NAME:나만의 지도}
+  restroom:
+    # 원천이 월 단위로 갱신되므로 매월 1일 04:00
+    sync-cron: ${RESTROOM_SYNC_CRON:0 0 4 1 * *}
   congestion:
     # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
     sync-interval-ms: ${CONGESTION_SYNC_INTERVAL_MS:300000}

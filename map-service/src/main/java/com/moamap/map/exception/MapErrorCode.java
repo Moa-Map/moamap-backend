@@ -30,7 +30,8 @@ public enum MapErrorCode implements ErrorCode {
     MAP_POST_NOT_SUPPORTED("MAP_017", "이 지도에는 로그 탭이 없습니다.", 404),
     MAP_POST_NOT_FOUND("MAP_018", "게시물을 찾을 수 없습니다.", 404),
     MAP_POST_COMMENT_NOT_FOUND("MAP_019", "댓글을 찾을 수 없습니다.", 404),
-    DUPLICATE_PLACE_TAG("MAP_020", "같은 장소를 두 번 태그할 수 없습니다.", 400);
+    DUPLICATE_PLACE_TAG("MAP_020", "같은 장소를 두 번 태그할 수 없습니다.", 400),
+    RESTROOM_NOT_FOUND("MAP_021", "화장실 정보를 찾을 수 없습니다.", 404);
 
     private final String code;
     private final String message;
