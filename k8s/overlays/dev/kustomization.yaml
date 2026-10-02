@@ -43,10 +43,10 @@ patches:
 # base의 image가 이미 ECR 경로라 newName은 불필요, newTag(커밋 SHA)만 갱신한다.
 images:
   - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/gateway-service
-    newTag: 78bba4765e1afbb0cc4dbc4b355698057b2bc452
+    newTag: f97cec139a86aece463eda0858a51a8ae499826a
   - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/user-service
-    newTag: 78bba4765e1afbb0cc4dbc4b355698057b2bc452
+    newTag: f97cec139a86aece463eda0858a51a8ae499826a
   - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/map-service
-    newTag: 78bba4765e1afbb0cc4dbc4b355698057b2bc452
+    newTag: f97cec139a86aece463eda0858a51a8ae499826a
   - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/place-service
-    newTag: 78bba4765e1afbb0cc4dbc4b355698057b2bc452
+    newTag: f97cec139a86aece463eda0858a51a8ae499826a
