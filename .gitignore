@@ -55,6 +55,11 @@ CLAUDE.local.md
 docs/specs/
 docs/superpowers/
 
+### AI 도구 산출물 (로컬 전용) ###
+docs/superpowers/
+.understand-anything/
+.gstack/
+
 ### Kubernetes ###
 # 실제 시크릿 매니페스트는 커밋 금지 (예시 템플릿만 커밋)
 k8s/secrets/*.yaml

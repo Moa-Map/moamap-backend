@@ -23,6 +23,16 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
         + "and m.id in (select mm.mapId from MapMember mm where mm.userId = :userId)")
     Page<MapEntity> findJoinedByType(@Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
 
+    // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.
+    @Query("select m from MapEntity m where m.type = :type "
+        + "and m.id not in (select mm.mapId from MapMember mm where mm.userId = :userId)")
+    Page<MapEntity> findNotJoinedByType(@Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
+
+    @Query("select distinct m from MapEntity m join m.tags t where m.type = :type and t = :tag "
+        + "and m.id not in (select mm.mapId from MapMember mm where mm.userId = :userId)")
+    Page<MapEntity> findNotJoinedByTypeAndTag(@Param("userId") Long userId, @Param("type") MapType type,
+                                              @Param("tag") String tag, Pageable pageable);
+
     Optional<MapEntity> findByInviteCode(String inviteCode);
 
     boolean existsByInviteCode(String inviteCode);

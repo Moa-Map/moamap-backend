@@ -76,10 +76,19 @@ public class MapService {
 
     public Page<MapSummaryResponse> getCommunityMaps(String tag, MapSort sort, Pageable pageable, Long requesterId) {
         Pageable sorted = withSort(pageable, sort);
-        Page<MapEntity> maps = (tag == null || tag.isBlank())
-            ? mapRepository.findByType(MapType.COMMUNITY, sorted)
-            : mapRepository.findByTypeAndTag(MapType.COMMUNITY, tag, sorted);
-        return toSummaryPage(maps, requesterId);
+        boolean noTag = (tag == null || tag.isBlank());
+        Page<MapEntity> maps;
+        if (requesterId == null) {
+            maps = noTag
+                ? mapRepository.findByType(MapType.COMMUNITY, sorted)
+                : mapRepository.findByTypeAndTag(MapType.COMMUNITY, tag, sorted);
+        } else {
+            maps = noTag
+                ? mapRepository.findNotJoinedByType(requesterId, MapType.COMMUNITY, sorted)
+                : mapRepository.findNotJoinedByTypeAndTag(requesterId, MapType.COMMUNITY, tag, sorted);
+        }
+        // 비로그인은 참여 정보가 없고, 로그인은 참여 중인 지도를 이미 뺐으므로 joined는 항상 false.
+        return maps.map(map -> MapSummaryResponse.of(map, false));
     }
 
     public Page<MapSummaryResponse> getOfficialMaps(Pageable pageable, Long requesterId) {
