@@ -8,6 +8,7 @@ import com.moamap.map.dto.MapMemberListResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
 import com.moamap.map.dto.MapMemberRoleUpdateRequest;
 import com.moamap.map.dto.MapMemberRoleUpdateResponse;
+import com.moamap.map.dto.MapOrderUpdateRequest;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
@@ -83,6 +84,20 @@ public class MapController {
         @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
         return ApiResponse.success(PageResponse.from(mapService.getMyMaps(type, pageable, userId)));
+    }
+
+    @Operation(
+        summary = "모음 탭 지도 순서 변경",
+        description = "모음 화면에서 지도 순서를 바꾼다. 해당 탭(type)에서 참여 중인 지도 전체를 원하는 순서대로 보내야 한다. "
+            + "하나라도 빠지거나 중복되면 전체가 거부된다. 같은 요청을 다시 보내도 결과는 같다."
+    )
+    @PatchMapping("/me/order")
+    public ApiResponse<Void> updateMyMapOrder(
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId,
+        @Valid @RequestBody MapOrderUpdateRequest request
+    ) {
+        mapService.updateMyMapOrder(userId, request);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "지도 상세 조회", description = "프라이빗 지도는 멤버만 조회할 수 있다.")
