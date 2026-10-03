@@ -76,9 +76,11 @@ public class AuthService {
         // Redis TTL이 만료를 처리하므로, 만료됐거나 없으면 findUserId가 빈 값을 준다.
         Long userId = refreshTokenStore.findUserId(refreshToken)
                 .orElseThrow(() -> new RefreshTokenNotFoundException("리프레시 토큰을 찾을 수 없습니다."));
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RefreshTokenNotFoundException("사용자를 찾을 수 없습니다."));
         refreshTokenStore.delete(refreshToken); // 회전: 기존 토큰 폐기 후 새로 발급
+        // 탈퇴 회원의 리프레시 토큰은 Redis에 남아 있을 수 있다(회원별로 모아 지울 수 없는 구조). 여기서 막는다.
+        User user = userRepository.findById(userId)
+                .filter(found -> !found.isWithdrawn())
+                .orElseThrow(() -> new RefreshTokenNotFoundException("사용자를 찾을 수 없습니다."));
         return issueTokens(user, false);
     }
 

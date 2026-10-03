@@ -28,6 +28,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
+    /** 탈퇴한 회원의 표시 이름. 다른 서비스가 프로필을 조회하면 탈퇴 회원은 빠지지만, 직접 조회되는 경우를 대비한다. */
+    public static final String WITHDRAWN_NICKNAME = "탈퇴한 사용자";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -84,6 +87,25 @@ public class User {
 
     public void updateLastLogin(Instant at) {
         this.lastLoginAt = at;
+    }
+
+    /**
+     * 탈퇴 처리. 행은 남기고 개인을 알아볼 수 있는 값만 지운다(소프트 삭제 + 익명화).
+     *
+     * 소셜 ID도 지운다. 남겨두면 소셜 회원번호라는 식별 정보가 남고, (provider, provider_id) 유일 제약 때문에
+     * 같은 소셜 계정으로 다시 가입할 수 없다. 회원 ID를 넣은 값으로 바꾸므로 유일 제약도 그대로 지켜진다.
+     */
+    public void withdraw(Instant at) {
+        this.nickname = WITHDRAWN_NICKNAME;
+        this.email = null;
+        this.profileImageUrl = null;
+        this.introduction = null;
+        this.providerId = "withdrawn:" + id;
+        this.deletedAt = at;
+    }
+
+    public boolean isWithdrawn() {
+        return deletedAt != null;
     }
 
     public void updateProfile(String nickname, String profileImageUrl, String email, String introduction) {
