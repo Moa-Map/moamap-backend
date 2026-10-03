@@ -1,5 +1,7 @@
 package com.moamap.place.repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import com.moamap.place.dto.ReportedCommentResponse;
 import com.moamap.place.entity.PlaceComment;
@@ -57,4 +59,13 @@ public interface PlaceCommentRepository extends JpaRepository<PlaceComment, Long
           and c.reportCount > 0
         """)
     Page<ReportedCommentResponse> findReportedByMapId(@Param("mapId") Long mapId, Pageable pageable);
+
+    /** 탈퇴 정리용. 댓글을 지운 뒤 댓글 수·평점을 다시 계산할 장소들이다. */
+    @Query("select distinct c.placeId from PlaceComment c where c.userId = :userId and c.deletedAt is null")
+    List<Long> findPlaceIdsOfActiveCommentsByUserId(@Param("userId") Long userId);
+
+    /** 작성자가 직접 지울 때와 같은 소프트 삭제다. 신고 기록은 댓글을 가리킨 채로 남는다. */
+    @Modifying
+    @Query("update PlaceComment c set c.deletedAt = :deletedAt where c.userId = :userId and c.deletedAt is null")
+    int softDeleteAllByUserId(@Param("userId") Long userId, @Param("deletedAt") LocalDateTime deletedAt);
 }

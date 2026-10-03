@@ -30,4 +30,12 @@ public interface PlaceLikeRepository extends JpaRepository<PlaceLike, Long> {
      */
     @Query("select l.placeId from PlaceLike l where l.userId = :userId and l.placeId in :placeIds")
     List<Long> findLikedPlaceIds(@Param("userId") Long userId, @Param("placeIds") Collection<Long> placeIds);
+
+    /** 탈퇴 정리용. 하트를 지운 뒤 하트 수를 다시 셀 장소들이다. */
+    @Query("select l.placeId from PlaceLike l where l.userId = :userId")
+    List<Long> findPlaceIdsByUserId(@Param("userId") Long userId);
+
+    @Modifying
+    @Query("delete from PlaceLike l where l.userId = :userId")
+    int deleteAllByUserId(@Param("userId") Long userId);
 }
