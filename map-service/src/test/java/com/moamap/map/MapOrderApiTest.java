@@ -88,6 +88,27 @@ class MapOrderApiTest {
     }
 
     @Test
+    @DisplayName("커뮤니티 탭도 같은 방식으로 순서를 바꾼다")
+    void reorderCommunityTab() throws Exception {
+        Long hobby = joinCommunityMap("취미", ME);
+        Long food = joinCommunityMap("맛집", ME);
+
+        mockMvc.perform(patch(ORDER_URL)
+                .header(USER_HEADER, ME)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(MapType.COMMUNITY, List.of(hobby, food))))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "COMMUNITY").header(USER_HEADER, ME))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].name").value("취미"))
+            .andExpect(jsonPath("$.data.content[1].name").value("맛집"));
+
+        // 탭은 서로 독립이다 — 커뮤니티를 바꿔도 프라이빗 순서는 그대로다.
+        assertMyMapNames("감마", "베타", "알파");
+    }
+
+    @Test
     @DisplayName("일부만 보내면 거부하고 순서를 건드리지 않는다")
     void rejectPartialList() throws Exception {
         mockMvc.perform(patch(ORDER_URL)
