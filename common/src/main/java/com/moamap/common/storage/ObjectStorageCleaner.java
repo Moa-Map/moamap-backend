@@ -67,11 +67,16 @@ public class ObjectStorageCleaner {
         }
     }
 
+    /**
+     * "profiles/42/"처럼 두 단계 이상이어야 한다. "profiles/"만 넘어오면 모든 회원의 사진이 지워지므로,
+     * 호출부의 실수(회원 ID가 비어 들어온 경우 등)가 대량 삭제로 번지지 않게 여기서 막는다.
+     */
     private static void requireDirectoryPrefix(String keyPrefix) {
-        boolean valid = keyPrefix != null && keyPrefix.length() > 1 && keyPrefix.endsWith("/")
-            && !keyPrefix.startsWith("/") && !keyPrefix.contains("..");
+        boolean valid = keyPrefix != null && keyPrefix.endsWith("/") && !keyPrefix.startsWith("/")
+            && !keyPrefix.contains("..") && !keyPrefix.contains("//")
+            && keyPrefix.chars().filter(c -> c == '/').count() >= 2;
         if (!valid) {
-            throw new IllegalArgumentException("키 접두어는 'profiles/42/'처럼 '/'로 끝나는 하위 경로여야 합니다.");
+            throw new IllegalArgumentException("키 접두어는 'profiles/42/'처럼 두 단계 이상의 하위 경로여야 합니다.");
         }
     }
 }

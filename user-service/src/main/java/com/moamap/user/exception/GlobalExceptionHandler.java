@@ -5,6 +5,7 @@ import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.common.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -51,6 +52,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
             .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    /**
+     * 같은 회원을 동시에 고친 경우(User.@Version). 탈퇴와 로그인이 겹치면 탈퇴가 이기고 나머지 요청이 여기로 온다.
+     * 500으로 두면 서버 오류처럼 보이므로, 다시 시도하면 되는 409로 알린다.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(ObjectOptimisticLockingFailureException e) {
+        return ResponseEntity.status(UserErrorCode.CONCURRENT_UPDATE.getStatus())
+            .body(ApiResponse.error(UserErrorCode.CONCURRENT_UPDATE));
     }
 
     @ExceptionHandler(Exception.class)

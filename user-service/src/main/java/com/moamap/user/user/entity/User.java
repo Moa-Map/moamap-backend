@@ -11,6 +11,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -69,6 +70,16 @@ public class User {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    /**
+     * 낙관적 락. JPA는 수정 시 모든 컬럼을 다시 쓰므로, 탈퇴 직전에 회원을 읽어 둔 다른 요청(로그인, 프로필 수정)이
+     * 탈퇴 뒤에 저장하면 deleted_at과 개인정보를 탈퇴 전 값으로 되돌린다. 버전이 어긋나면 그 저장을 거부한다.
+     *
+     * 기존 행에 값을 채우려고 기본값을 둔다(ddl-auto: update가 컬럼을 추가할 때 NULL이면 버전 비교가 깨진다).
+     */
+    @Version
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long version;
 
     private User(String provider, String providerId, String nickname,
                  String email, String profileImageUrl) {

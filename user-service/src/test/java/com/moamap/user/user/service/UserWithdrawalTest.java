@@ -22,10 +22,14 @@ import com.moamap.user.refreshtoken.RefreshTokenStore;
 import com.moamap.user.user.entity.User;
 import com.moamap.user.user.exception.UserNotFoundException;
 import com.moamap.user.user.repository.UserRepository;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +39,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -165,6 +170,36 @@ class UserWithdrawalTest {
 
         assertThatThrownBy(() -> authService.refresh("leftover-token"))
                 .isInstanceOf(RefreshTokenNotFoundException.class);
+    }
+
+    @Test
+    void 탈퇴_직전에_회원을_읽어_둔_요청은_탈퇴를_되돌리지_못한다() {
+        Long userId = kakaoUser("3412345678").getId();
+        ExecutorService otherRequest = Executors.newSingleThreadExecutor();
+        try {
+            // 로그인 요청이 회원을 읽은 사이에 탈퇴가 커밋되고, 그 뒤 로그인이 마지막 접속 시각을 저장하는 순서다.
+            assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                User readBeforeWithdrawal = userRepository.findById(userId).orElseThrow();
+                awaitWithdrawal(otherRequest, userId);
+                readBeforeWithdrawal.updateLastLogin(Instant.now());
+            })).isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        } finally {
+            otherRequest.shutdownNow();
+        }
+
+        // JPA는 모든 컬럼을 다시 쓰므로, 막지 않으면 deleted_at과 이메일이 탈퇴 전 값으로 돌아간다.
+        User reloaded = userRepository.findById(userId).orElseThrow();
+        assertThat(reloaded.isWithdrawn()).isTrue();
+        assertThat(reloaded.getEmail()).isNull();
+        assertThat(reloaded.getProviderId()).isEqualTo("withdrawn:" + userId);
+    }
+
+    private void awaitWithdrawal(ExecutorService executor, Long userId) {
+        try {
+            executor.submit(() -> withdrawalWriter.withdraw(userId)).get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private User kakaoUser(String providerId) {

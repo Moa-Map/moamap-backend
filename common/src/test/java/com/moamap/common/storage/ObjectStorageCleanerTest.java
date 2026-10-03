@@ -93,9 +93,9 @@ class ObjectStorageCleanerTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @ValueSource(strings = {"profiles/42", "/", "/profiles/42/", "profiles/../7/"})
+    @ValueSource(strings = {"profiles/42", "/", "/profiles/42/", "profiles/../7/", "profiles/", "profiles//"})
     void 디렉터리_형태가_아닌_접두어는_거부한다(String prefix) {
-        // "profiles/4"를 허용하면 profiles/42, profiles/43…까지 지워진다.
+        // "profiles/4"를 허용하면 profiles/42, profiles/43…까지, "profiles/"를 허용하면 모든 회원 사진이 지워진다.
         assertThatThrownBy(() -> cleaner().deleteAllUnder(prefix)).isInstanceOf(IllegalArgumentException.class);
         verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
     }
