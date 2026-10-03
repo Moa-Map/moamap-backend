@@ -103,13 +103,12 @@ class UserWithdrawalTest {
     }
 
     @Test
-    void 정리에_필요한_값은_커밋_후_작업용으로_돌려준다() {
+    void 카카오_회원은_폐기할_Apple_토큰이_없다() {
         Long userId = kakaoUser("111").getId();
 
         WithdrawnUser withdrawn = withdrawalWriter.withdraw(userId);
 
         assertThat(withdrawn.userId()).isEqualTo(userId);
-        assertThat(withdrawn.profileImageUrl()).isEqualTo("https://photos.example.com/profiles/" + userId + "/a.jpg");
         assertThat(withdrawn.appleRefreshToken()).isNull();
     }
 

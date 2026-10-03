@@ -1,53 +1,77 @@
 package com.moamap.common.storage;
 
+import java.util.List;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
 /**
- * 저장된 파일 URL로 오브젝트를 지운다. ObjectStoragePresigner가 만든 URL(publicBaseUrl + "/" + key)의 역방향이다.
+ * 키 접두어 아래의 오브젝트를 모두 지운다.
  *
- * 파일 URL은 클라이언트가 보내온 값이 그대로 저장된 것이라 믿을 수 없다. 그래서 두 가지를 확인한 뒤에만 지운다.
- * - 우리 버킷 주소로 시작하는가 — 카카오 프로필 사진처럼 외부 URL이면 건드리지 않는다.
- * - 호출부가 지정한 키 접두어 아래에 있는가 — 남의 파일 URL을 자기 것처럼 저장해 두고 삭제를 유도하는 걸 막는다.
+ * 파일 URL이 아니라 접두어로 지우는 이유: DB에는 마지막으로 저장된 URL 하나만 남지만, 실제 버킷에는 교체 전 사진이나
+ * 업로드만 하고 저장하지 않은 사진도 같은 접두어 아래에 남아 있다. 사진 버킷은 공개 읽기라 이것들까지 지워야 한다.
+ * 접두어는 호출부가 서버 값(회원 ID 등)으로 만든다 — 클라이언트가 보낸 URL에서 뽑지 않으므로 남의 경로를 지울 수 없다.
  */
 public class ObjectStorageCleaner {
 
+    /** S3 DeleteObjects와 ListObjectsV2가 한 번에 다루는 최대 개수와 같다. */
+    private static final int BATCH_SIZE = 1000;
+
     private final S3Client s3Client;
     private final String bucket;
-    private final String publicBaseUrl;
 
-    public ObjectStorageCleaner(S3Client s3Client, String bucket, String publicBaseUrl) {
+    public ObjectStorageCleaner(S3Client s3Client, String bucket) {
         this.s3Client = s3Client;
         this.bucket = bucket;
-        this.publicBaseUrl = publicBaseUrl;
     }
 
     /**
-     * @param fileUrl         DB에 저장된 파일 URL
-     * @param ownedKeyPrefix  이 호출자가 지울 권한이 있는 키 접두어. 반드시 "/"로 끝나야 한다(예: "profiles/42/").
-     * @return 실제로 삭제 요청을 보냈으면 true, 조건에 맞지 않아 건너뛰었으면 false
+     * @param keyPrefix "profiles/42/"처럼 "/"로 끝나는 디렉터리 형태여야 한다. "profiles/4"로 부르면 profiles/42까지 지워지므로 막는다.
+     * @return 지운 오브젝트 수
      */
-    public boolean deleteIfOwned(String fileUrl, String ownedKeyPrefix) {
-        if (ownedKeyPrefix == null || !ownedKeyPrefix.endsWith("/")) {
-            throw new IllegalArgumentException("키 접두어는 '/'로 끝나야 다른 사용자의 경로와 겹치지 않는다.");
-        }
-        String objectKey = objectKeyOf(fileUrl);
-        if (objectKey == null || !objectKey.startsWith(ownedKeyPrefix)) {
-            return false;
-        }
-        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(objectKey).build());
-        return true;
+    public int deleteAllUnder(String keyPrefix) {
+        requireDirectoryPrefix(keyPrefix);
+        int deleted = 0;
+        String continuationToken = null;
+        do {
+            ListObjectsV2Response page = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                .bucket(bucket)
+                .prefix(keyPrefix)
+                .maxKeys(BATCH_SIZE)
+                .continuationToken(continuationToken)
+                .build());
+            List<ObjectIdentifier> objects = page.contents().stream()
+                .map(object -> ObjectIdentifier.builder().key(object.key()).build())
+                .toList();
+            if (!objects.isEmpty()) {
+                deleteBatch(objects);
+                deleted += objects.size();
+            }
+            continuationToken = Boolean.TRUE.equals(page.isTruncated()) ? page.nextContinuationToken() : null;
+        } while (continuationToken != null);
+        return deleted;
     }
 
-    /** 우리 버킷 URL이 아니거나 경로 조작이 섞여 있으면 null. */
-    private String objectKeyOf(String fileUrl) {
-        String base = publicBaseUrl + "/";
-        if (fileUrl == null || !fileUrl.startsWith(base)) {
-            return null;
+    /** 일괄 삭제는 일부만 실패해도 200으로 응답한다. 실패 항목이 있으면 예외로 알려 호출부가 기록하게 한다. */
+    private void deleteBatch(List<ObjectIdentifier> objects) {
+        DeleteObjectsResponse response = s3Client.deleteObjects(DeleteObjectsRequest.builder()
+            .bucket(bucket)
+            .delete(Delete.builder().objects(objects).quiet(true).build())
+            .build());
+        if (response.hasErrors() && !response.errors().isEmpty()) {
+            throw new IllegalStateException("오브젝트 " + response.errors().size() + "개를 지우지 못했습니다.");
         }
-        String objectKey = fileUrl.substring(base.length());
-        boolean tampered = objectKey.isEmpty() || objectKey.startsWith("/") || objectKey.contains("..")
-                || objectKey.contains("?") || objectKey.contains("#") || objectKey.contains("\\");
-        return tampered ? null : objectKey;
+    }
+
+    private static void requireDirectoryPrefix(String keyPrefix) {
+        boolean valid = keyPrefix != null && keyPrefix.length() > 1 && keyPrefix.endsWith("/")
+            && !keyPrefix.startsWith("/") && !keyPrefix.contains("..");
+        if (!valid) {
+            throw new IllegalArgumentException("키 접두어는 'profiles/42/'처럼 '/'로 끝나는 하위 경로여야 합니다.");
+        }
     }
 }

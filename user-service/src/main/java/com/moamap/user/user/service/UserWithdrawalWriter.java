@@ -40,7 +40,6 @@ class UserWithdrawalWriter {
                 .filter(found -> !found.isWithdrawn())
                 .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다."));
 
-        String profileImageUrl = user.getProfileImageUrl();
         String appleRefreshToken = takeAppleRefreshToken(userId);
         Instant now = Instant.now();
 
@@ -48,7 +47,7 @@ class UserWithdrawalWriter {
         outboxRecorder.record(String.valueOf(userId), UserWithdrawnEvent.TYPE,
                 new UserWithdrawnEvent(UUID.randomUUID().toString(), userId, now));
 
-        return new WithdrawnUser(userId, profileImageUrl, appleRefreshToken);
+        return new WithdrawnUser(userId, appleRefreshToken);
     }
 
     /**

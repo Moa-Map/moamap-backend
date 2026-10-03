@@ -3,96 +3,109 @@ package com.moamap.common.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+import software.amazon.awssdk.services.s3.model.S3Error;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 @ExtendWith(MockitoExtension.class)
 class ObjectStorageCleanerTest {
 
     private static final String BUCKET = "moamap-photos";
-    private static final String PUBLIC_BASE_URL = "https://photos.example.com";
 
     @Mock
     private S3Client s3Client;
 
     private ObjectStorageCleaner cleaner() {
-        return new ObjectStorageCleaner(s3Client, BUCKET, PUBLIC_BASE_URL);
+        return new ObjectStorageCleaner(s3Client, BUCKET);
     }
 
     @Test
-    void 우리_버킷의_허용된_경로면_해당_키를_삭제한다() {
-        boolean deleted = cleaner().deleteIfOwned(PUBLIC_BASE_URL + "/profiles/42/a.jpg", "profiles/42/");
+    void 접두어_아래_오브젝트를_모두_지운다() {
+        // 지금 프로필 사진뿐 아니라 교체 전 사진도 같은 경로에 남아 있다.
+        given(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
+            .willReturn(page(false, null, "profiles/42/old.jpg", "profiles/42/current.jpg"));
+        given(s3Client.deleteObjects(any(DeleteObjectsRequest.class))).willReturn(DeleteObjectsResponse.builder().build());
 
-        assertThat(deleted).isTrue();
-        ArgumentCaptor<DeleteObjectRequest> request = ArgumentCaptor.forClass(DeleteObjectRequest.class);
-        verify(s3Client).deleteObject(request.capture());
-        assertThat(request.getValue().bucket()).isEqualTo(BUCKET);
-        assertThat(request.getValue().key()).isEqualTo("profiles/42/a.jpg");
+        int deleted = cleaner().deleteAllUnder("profiles/42/");
+
+        assertThat(deleted).isEqualTo(2);
+        ArgumentCaptor<ListObjectsV2Request> list = ArgumentCaptor.forClass(ListObjectsV2Request.class);
+        verify(s3Client).listObjectsV2(list.capture());
+        assertThat(list.getValue().bucket()).isEqualTo(BUCKET);
+        assertThat(list.getValue().prefix()).isEqualTo("profiles/42/");
+        ArgumentCaptor<DeleteObjectsRequest> delete = ArgumentCaptor.forClass(DeleteObjectsRequest.class);
+        verify(s3Client).deleteObjects(delete.capture());
+        assertThat(delete.getValue().delete().objects()).extracting(ObjectIdentifier::key)
+            .containsExactly("profiles/42/old.jpg", "profiles/42/current.jpg");
     }
 
     @Test
-    void 외부_URL은_건드리지_않는다() {
-        // 가입할 때 받아온 카카오 프로필 사진은 우리가 지울 수도, 지울 필요도 없다.
-        boolean deleted = cleaner().deleteIfOwned("https://k.kakaocdn.net/dn/profile.jpg", "profiles/42/");
+    void 결과가_여러_페이지면_끝까지_지운다() {
+        given(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
+            .willReturn(page(true, "next", "profiles/42/a.jpg"))
+            .willReturn(page(false, null, "profiles/42/b.jpg"));
+        given(s3Client.deleteObjects(any(DeleteObjectsRequest.class))).willReturn(DeleteObjectsResponse.builder().build());
 
-        assertThat(deleted).isFalse();
-        verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
+        int deleted = cleaner().deleteAllUnder("profiles/42/");
+
+        assertThat(deleted).isEqualTo(2);
+        ArgumentCaptor<ListObjectsV2Request> list = ArgumentCaptor.forClass(ListObjectsV2Request.class);
+        verify(s3Client, times(2)).listObjectsV2(list.capture());
+        assertThat(list.getAllValues().get(1).continuationToken()).isEqualTo("next");
     }
 
     @Test
-    void 다른_사용자의_경로는_지우지_않는다() {
-        // 남의 사진 URL을 자기 프로필로 저장해 두고 탈퇴해도 남의 파일은 지워지지 않아야 한다.
-        boolean deleted = cleaner().deleteIfOwned(PUBLIC_BASE_URL + "/profiles/7/a.jpg", "profiles/42/");
+    void 지울_게_없으면_삭제_요청을_보내지_않는다() {
+        given(s3Client.listObjectsV2(any(ListObjectsV2Request.class))).willReturn(page(false, null));
 
-        assertThat(deleted).isFalse();
-        verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
+        assertThat(cleaner().deleteAllUnder("profiles/42/")).isZero();
+        verify(s3Client, never()).deleteObjects(any(DeleteObjectsRequest.class));
     }
 
     @Test
-    void 사용자_ID가_앞자리만_같은_경로는_지우지_않는다() {
-        // 접두어를 "/"로 끝내지 않으면 profiles/4 가 profiles/42 를 포함해 버린다.
-        boolean deleted = cleaner().deleteIfOwned(PUBLIC_BASE_URL + "/profiles/42/a.jpg", "profiles/4/");
+    void 일부만_지워지면_예외로_알린다() {
+        given(s3Client.listObjectsV2(any(ListObjectsV2Request.class))).willReturn(page(false, null, "profiles/42/a.jpg"));
+        given(s3Client.deleteObjects(any(DeleteObjectsRequest.class))).willReturn(DeleteObjectsResponse.builder()
+            .errors(S3Error.builder().key("profiles/42/a.jpg").code("AccessDenied").build())
+            .build());
 
-        assertThat(deleted).isFalse();
+        assertThatThrownBy(() -> cleaner().deleteAllUnder("profiles/42/")).isInstanceOf(IllegalStateException.class);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-        "/profiles/42/../7/a.jpg",
-        "//profiles/42/a.jpg",
-        "/profiles/42/a.jpg?versionId=1",
-        "/profiles/42/a.jpg#x",
-        "/profiles/42\\..\\7\\a.jpg",
-        "/"
-    })
-    void 경로_조작이_섞인_URL은_지우지_않는다(String path) {
-        boolean deleted = cleaner().deleteIfOwned(PUBLIC_BASE_URL + path, "profiles/42/");
-
-        assertThat(deleted).isFalse();
-        verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
+    @NullAndEmptySource
+    @ValueSource(strings = {"profiles/42", "/", "/profiles/42/", "profiles/../7/"})
+    void 디렉터리_형태가_아닌_접두어는_거부한다(String prefix) {
+        // "profiles/4"를 허용하면 profiles/42, profiles/43…까지 지워진다.
+        assertThatThrownBy(() -> cleaner().deleteAllUnder(prefix)).isInstanceOf(IllegalArgumentException.class);
+        verify(s3Client, never()).listObjectsV2(any(ListObjectsV2Request.class));
     }
 
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", "https://photos.example.com.evil.com/profiles/42/a.jpg"})
-    void 비어_있거나_비슷하게_생긴_다른_호스트면_지우지_않는다(String url) {
-        assertThat(cleaner().deleteIfOwned(url, "profiles/42/")).isFalse();
-    }
-
-    @Test
-    void 접두어가_슬래시로_끝나지_않으면_호출_실수로_보고_거부한다() {
-        assertThatThrownBy(() -> cleaner().deleteIfOwned(PUBLIC_BASE_URL + "/profiles/42/a.jpg", "profiles/42"))
-            .isInstanceOf(IllegalArgumentException.class);
+    private static ListObjectsV2Response page(boolean truncated, String nextToken, String... keys) {
+        List<S3Object> contents = java.util.Arrays.stream(keys).map(key -> S3Object.builder().key(key).build()).toList();
+        return ListObjectsV2Response.builder()
+            .contents(contents)
+            .isTruncated(truncated)
+            .nextContinuationToken(nextToken)
+            .build();
     }
 }

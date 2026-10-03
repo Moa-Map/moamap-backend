@@ -38,7 +38,7 @@ public class ObjectStorageConfig {
         return new ObjectStoragePresigner(s3Presigner, properties.bucket(), properties.publicBaseUrl());
     }
 
-    /** 탈퇴 시 프로필 사진 삭제용. 노드 역할에 s3:DeleteObject가 이미 허용돼 있다(infra/aws/iam.tf). */
+    /** 탈퇴 시 프로필 사진 삭제용. 노드 역할에 s3:ListBucket·s3:DeleteObject가 이미 허용돼 있다(infra/aws/iam.tf). */
     @Bean(destroyMethod = "close")
     public S3Client s3Client(ObjectStorageProperties properties) {
         return S3Client.builder()
@@ -49,6 +49,6 @@ public class ObjectStorageConfig {
 
     @Bean
     public ObjectStorageCleaner objectStorageCleaner(S3Client s3Client, ObjectStorageProperties properties) {
-        return new ObjectStorageCleaner(s3Client, properties.bucket(), properties.publicBaseUrl());
+        return new ObjectStorageCleaner(s3Client, properties.bucket());
     }
 }

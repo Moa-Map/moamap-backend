@@ -26,23 +26,24 @@ public class UserWithdrawalService {
 
     public void withdraw(Long userId) {
         WithdrawnUser withdrawn = withdrawalWriter.withdraw(userId);
-        deleteProfilePhoto(withdrawn);
+        deleteProfilePhotos(userId);
         revokeAppleToken(withdrawn);
     }
 
     /**
      * 사진 버킷은 공개 읽기라, DB에서 주소만 지우면 파일은 주소를 아는 누구나 계속 볼 수 있다. 파일까지 지운다.
-     * 본인 경로(profiles/{userId}/) 아래 파일만 지운다 — 프로필 주소는 클라이언트가 보낸 값 그대로 저장되기 때문이다.
+     * 지금 사진 하나가 아니라 이 회원 경로 아래 전부를 지운다 — 교체 전 사진, 업로드만 하고 저장하지 않은 사진도 남아 있다.
+     * 경로는 서버가 회원 ID로 만든다. 클라이언트가 보낸 URL을 쓰지 않으므로 남의 파일을 지울 수 없다.
      */
-    private void deleteProfilePhoto(WithdrawnUser withdrawn) {
+    private void deleteProfilePhotos(Long userId) {
         ObjectStorageCleaner cleaner = storageCleaner.getIfAvailable();
-        if (cleaner == null || withdrawn.profileImageUrl() == null) {
+        if (cleaner == null) {
             return;
         }
         try {
-            cleaner.deleteIfOwned(withdrawn.profileImageUrl(), PROFILE_KEY_PREFIX + withdrawn.userId() + "/");
+            cleaner.deleteAllUnder(PROFILE_KEY_PREFIX + userId + "/");
         } catch (RuntimeException e) {
-            log.warn("탈퇴 회원의 프로필 사진을 지우지 못했습니다. userId={}", withdrawn.userId(), e);
+            log.warn("탈퇴 회원의 프로필 사진을 지우지 못했습니다. userId={}, cause={}", userId, e.getClass().getSimpleName());
         }
     }
 
