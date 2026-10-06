@@ -98,5 +98,7 @@ apple:
     keys:
       v1: ${APPLE_CREDENTIAL_KEY_V1:}
   revocation:
+    # 기동 후 첫 재시도까지 기다리는 시간. 막 뜬 서버가 바쁠 때 Apple을 부르지 않는다.
+    initial-delay-ms: ${APPLE_REVOCATION_INITIAL_DELAY_MS:60000}
     # 탈퇴 회원의 Apple 토큰 폐기를 재시도할 대상이 있는지 훑는 주기.
     poll-interval-ms: ${APPLE_REVOCATION_POLL_INTERVAL_MS:300000}

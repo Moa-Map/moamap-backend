@@ -45,7 +45,12 @@ public class AppleTokenRevocationProcessor {
         credentials.findPendingRevocation(userId).ifPresent(this::attempt);
     }
 
-    @Scheduled(fixedDelayString = "${apple.revocation.poll-interval-ms:300000}")
+    /**
+     * 기동 직후에는 바로 돌지 않는다. 막 뜬 서버가 바쁠 때 외부(Apple)를 부르지 않고, 테스트에서는 이 지연을 길게 둬
+     * 백그라운드 실행이 테스트와 같은 행을 동시에 집지 않게 한다.
+     */
+    @Scheduled(initialDelayString = "${apple.revocation.initial-delay-ms:60000}",
+            fixedDelayString = "${apple.revocation.poll-interval-ms:300000}")
     @Transactional
     public void retryDue() {
         List<AppleCredential> due = credentials.findDueRevocations(clock.instant(), MAX_ATTEMPTS, Limit.of(BATCH_SIZE));
