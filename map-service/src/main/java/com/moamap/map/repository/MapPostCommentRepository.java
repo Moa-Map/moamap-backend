@@ -20,4 +20,9 @@ public interface MapPostCommentRepository extends JpaRepository<MapPostComment, 
     @Modifying
     @Query("update MapPostComment c set c.deletedAt = :deletedAt where c.userId = :userId and c.deletedAt is null")
     int softDeleteAllByUserId(@Param("userId") Long userId, @Param("deletedAt") LocalDateTime deletedAt);
+
+    /** 지도를 지울 때 그 지도 게시글에 달린 댓글을 지운다. 댓글은 컬렉션이 없어 한 번에 지운다. */
+    @Modifying
+    @Query("delete from MapPostComment c where c.mapPostId in (select p.id from MapPost p where p.mapId = :mapId)")
+    int deleteAllByMapId(@Param("mapId") Long mapId);
 }

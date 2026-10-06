@@ -11,6 +11,7 @@ import com.moamap.map.entity.MapPost;
 import com.moamap.map.entity.MapPostComment;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.entity.PlaceTag;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import com.moamap.map.repository.MapPostCommentRepository;
@@ -102,6 +103,31 @@ class MapWithdrawalCleanupTest {
     }
 
     @Test
+    void 지도를_지울_때_예전_멤버가_남긴_글과_댓글도_함께_지운다() {
+        // 예전 멤버가 글을 남기고 나간 뒤, 방장이 혼자 남은 상태에서 탈퇴하는 경우다.
+        MapEntity map = map(LEAVER, MapType.COMMUNITY);
+        MapPost leftBehind = mapPostRepository.save(MapPost.create(map.getId(), EARLY_MEMBER, "나간 멤버의 글",
+            List.of("https://photos.example.com/map-posts/1/a.jpg"), List.of(new PlaceTag(1L, "장소"))));
+        mapPostCommentRepository.save(MapPostComment.create(leftBehind.getId(), LATE_MEMBER, "댓글"));
+        MapEntity otherMap = map(EARLY_MEMBER, MapType.COMMUNITY);
+        MapPost untouched = mapPostRepository.save(MapPost.create(otherMap.getId(), EARLY_MEMBER, "다른 지도 글",
+            List.of("https://photos.example.com/map-posts/2/b.jpg"), List.of()));
+        em.flush();
+
+        cleanUpAndReload(LEAVER);
+
+        assertThat(mapRepository.findById(map.getId())).isEmpty();
+        assertThat(mapPostRepository.findById(leftBehind.getId())).isEmpty();
+        assertThat(mapPostCommentRepository.findAll()).noneMatch(c -> c.getMapPostId().equals(leftBehind.getId()));
+        // 게시글을 엔티티로 지워야 컬렉션 테이블 행도 같이 사라진다. 남으면 없는 게시글을 가리키는 행이 된다.
+        assertThat(countRows("map_post_images", leftBehind.getId())).isZero();
+        assertThat(countRows("map_post_place_tags", leftBehind.getId())).isZero();
+        // 다른 지도의 글은 건드리지 않는다.
+        assertThat(mapPostRepository.findById(untouched.getId())).isPresent();
+        assertThat(countRows("map_post_images", untouched.getId())).isEqualTo(1);
+    }
+
+    @Test
     void 쓴_게시글과_댓글을_지우고_남의_글은_그대로_둔다() {
         MapEntity map = map(EARLY_MEMBER, MapType.COMMUNITY);
         join(map, LEAVER, MapRole.MEMBER);
@@ -150,6 +176,13 @@ class MapWithdrawalCleanupTest {
         mapMemberRepository.save(MapMember.of(map.getId(), userId, role));
         map.increaseMemberCount();
         em.flush();
+    }
+
+    private long countRows(String table, Long mapPostId) {
+        return ((Number) em.getEntityManager()
+            .createNativeQuery("select count(*) from " + table + " where map_post_id = :id")
+            .setParameter("id", mapPostId)
+            .getSingleResult()).longValue();
     }
 
     private MapRole roleOf(MapEntity map, Long userId) {

@@ -89,8 +89,13 @@ public class MapWithdrawalCleanupService {
         return others.stream().min(SUCCESSION_ORDER);
     }
 
-    /** MapService.delete와 같은 절차다. 참여 기록을 먼저 지우고 지도를 지운다. */
+    /**
+     * 지도가 사라지면 그 안의 글은 남겨둘 곳이 없다. 예전 멤버가 남긴 글·댓글까지 지우고 지도를 지운다.
+     * 지도를 하드 삭제하므로 글도 하드 삭제한다 — 소프트 삭제로 남기면 없는 지도를 가리키는 행만 쌓인다.
+     */
     private void delete(MapEntity map) {
+        mapPostCommentRepository.deleteAllByMapId(map.getId());
+        mapPostRepository.deleteAll(mapPostRepository.findAllByMapId(map.getId()));
         mapMemberRepository.deleteByMapId(map.getId());
         mapRepository.delete(map);
     }
