@@ -1,7 +1,7 @@
 package com.moamap.user.user.service;
 
 import com.moamap.common.storage.ObjectStorageCleaner;
-import com.moamap.user.auth.apple.AppleTokenRevoker;
+import com.moamap.user.auth.apple.AppleTokenRevocationProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
  * 회원 탈퇴. DB 처리(UserWithdrawalWriter)가 커밋된 뒤에 외부 정리를 한다.
  *
  * 외부 정리가 실패해도 탈퇴는 되돌리지 않는다. 사용자는 이미 탈퇴를 요청했고 개인정보도 DB에서 지워졌다.
- * 실패는 로그로 남겨 운영에서 확인한다. 로그에는 회원 ID만 남기고 토큰이나 사진 주소는 남기지 않는다.
+ * 실패는 로그로 남겨 운영에서 확인한다. Apple 토큰 폐기는 실패하면 배치가 다시 시도한다. 로그에는 회원 ID만 남기고 토큰이나 사진 주소는 남기지 않는다.
  */
 @Slf4j
 @Service
@@ -22,7 +22,7 @@ public class UserWithdrawalService {
 
     private final UserWithdrawalWriter withdrawalWriter;
     private final ObjectProvider<ObjectStorageCleaner> storageCleaner;
-    private final ObjectProvider<AppleTokenRevoker> appleTokenRevoker;
+    private final ObjectProvider<AppleTokenRevocationProcessor> appleTokenRevocation;
 
     public void withdraw(Long userId) {
         WithdrawnUser withdrawn = withdrawalWriter.withdraw(userId);
@@ -47,16 +47,19 @@ public class UserWithdrawalService {
         }
     }
 
+    /**
+     * 바로 한 번 시도한다. 실패해도 폐기 대기 행이 남아 AppleTokenRevocationProcessor 배치가 다시 시도하므로 여기선 기록만 한다.
+     * Apple 로그인이 꺼진 환경이면 행만 남고, 켜진 뒤 배치가 처리한다.
+     */
     private void revokeAppleToken(WithdrawnUser withdrawn) {
-        AppleTokenRevoker revoker = appleTokenRevoker.getIfAvailable();
-        if (revoker == null || withdrawn.appleRefreshToken() == null) {
+        AppleTokenRevocationProcessor revocation = appleTokenRevocation.getIfAvailable();
+        if (revocation == null || !withdrawn.appleRevokePending()) {
             return;
         }
         try {
-            revoker.revoke(withdrawn.appleRefreshToken());
+            revocation.revokeNow(withdrawn.userId());
         } catch (RuntimeException e) {
-            // 예외 메시지에 요청 본문(토큰)이 섞일 수 있어 예외 객체는 남기지 않는다.
-            log.warn("탈퇴 회원의 Apple 토큰 폐기 요청이 실패했습니다. userId={}, cause={}",
+            log.warn("탈퇴 회원의 Apple 토큰을 바로 폐기하지 못해 재시도에 맡깁니다. userId={}, cause={}",
                     withdrawn.userId(), e.getClass().getSimpleName());
         }
     }

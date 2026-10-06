@@ -47,7 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 탈퇴의 DB 부분을 실제 DB로 확인한다. 익명화·이벤트 기록·Apple 토큰 회수와,
+ * 탈퇴의 DB 부분을 실제 DB로 확인한다. 익명화·이벤트 기록·Apple 토큰 폐기 대기 표시와,
  * 탈퇴 뒤 같은 소셜 계정의 재가입과 남은 리프레시 토큰 차단까지 한 흐름으로 본다.
  */
 @DataJpaTest
@@ -114,7 +114,7 @@ class UserWithdrawalTest {
         WithdrawnUser withdrawn = withdrawalWriter.withdraw(userId);
 
         assertThat(withdrawn.userId()).isEqualTo(userId);
-        assertThat(withdrawn.appleRefreshToken()).isNull();
+        assertThat(withdrawn.appleRevokePending()).isFalse();
     }
 
     @Test
@@ -133,7 +133,7 @@ class UserWithdrawalTest {
     }
 
     @Test
-    void Apple_회원이면_토큰을_꺼내고_저장된_행은_지운다() {
+    void Apple_회원이면_토큰_행을_지우지_않고_폐기_대기로_표시한다() {
         // 자격증명은 회원 행을 공유 키로 쓰므로(@MapsId) 같은 영속성 컨텍스트에서 함께 만든다.
         Long userId = new TransactionTemplate(transactionManager).execute(status -> {
             User user = userRepository.save(User.createSocialUser("apple", "apple-sub", "사용자", null, null));
@@ -144,9 +144,13 @@ class UserWithdrawalTest {
 
         WithdrawnUser withdrawn = withdrawalWriter.withdraw(userId);
 
-        assertThat(withdrawn.appleRefreshToken()).isEqualTo("apple-refresh-secret");
-        assertThat(withdrawn.toString()).doesNotContain("apple-refresh-secret");
-        assertThat(appleCredentialRepository.findById(userId)).isEmpty();
+        assertThat(withdrawn.appleRevokePending()).isTrue();
+        // 폐기가 성공할 때까지 행을 남겨야 실패해도 다시 시도할 수 있다.
+        assertThat(appleCredentialRepository.findById(userId)).hasValueSatisfying(credential -> {
+            assertThat(credential.getRevokeRequestedAt()).isNotNull();
+            assertThat(credential.getNextRevokeAt()).isEqualTo(credential.getRevokeRequestedAt());
+            assertThat(credential.getRevokeAttempts()).isZero();
+        });
     }
 
     @Test

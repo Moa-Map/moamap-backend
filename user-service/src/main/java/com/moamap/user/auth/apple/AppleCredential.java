@@ -45,6 +45,17 @@ public class AppleCredential {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 탈퇴로 폐기를 요청한 시각. 값이 있으면 폐기 대기 중이고, Apple 폐기가 성공하면 행을 지운다. */
+    @Column(name = "revoke_requested_at")
+    private Instant revokeRequestedAt;
+
+    /** 폐기에 실패한 횟수. 기존 행을 채우려고 기본값을 둔다(ddl-auto: update). */
+    @Column(name = "revoke_attempts", nullable = false, columnDefinition = "integer not null default 0")
+    private int revokeAttempts;
+
+    @Column(name = "next_revoke_at")
+    private Instant nextRevokeAt;
+
     public AppleCredential(User user, String clientId, AppleTokenCipher.EncryptedToken token) {
         this.user = user;
         this.clientId = clientId;
@@ -54,6 +65,16 @@ public class AppleCredential {
     public void replace(AppleTokenCipher.EncryptedToken token) {
         this.encryptedRefreshToken = token.ciphertext();
         this.keyVersion = token.keyVersion();
+    }
+
+    public void requestRevoke(Instant at) {
+        this.revokeRequestedAt = at;
+        this.nextRevokeAt = at;
+    }
+
+    public void recordRevokeFailure(Instant nextAttemptAt) {
+        this.revokeAttempts++;
+        this.nextRevokeAt = nextAttemptAt;
     }
 
     @PrePersist

@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: user-service
+  # @Scheduled 작업은 기본 1개 스레드를 나눠 쓴다. Apple 토큰 폐기 재시도가 외부 호출로 오래 걸려도
+  # outbox 발행이 밀리지 않도록 2개로 둔다.
+  task:
+    scheduling:
+      pool:
+        size: 2
   datasource:
     # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
@@ -91,3 +97,6 @@ apple:
     # 교체 시 이전 버전도 keys 아래에 남겨야 기존 암호문을 읽을 수 있다.
     keys:
       v1: ${APPLE_CREDENTIAL_KEY_V1:}
+  revocation:
+    # 탈퇴 회원의 Apple 토큰 폐기를 재시도할 대상이 있는지 훑는 주기.
+    poll-interval-ms: ${APPLE_REVOCATION_POLL_INTERVAL_MS:300000}
