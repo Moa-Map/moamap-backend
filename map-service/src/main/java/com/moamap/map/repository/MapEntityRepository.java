@@ -43,6 +43,28 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
     Page<MapEntity> findNotJoinedByTypeAndTag(@Param("userId") Long userId, @Param("type") MapType type,
                                               @Param("tag") String tag, Pageable pageable);
 
+    /**
+     * 공개 지도(커뮤니티·공식)를 이름/설명/태그로 검색한다. PRIVATE은 초대 코드로만 들어가는 지도라 제외한다.
+     *
+     * 태그 컬렉션을 조인하므로 distinct가 필요하고, 파생 count 쿼리는 이 중복을 그대로 세어
+     * totalElements를 부풀린다. countQuery를 직접 준다.
+     */
+    @Query(
+        value = "select distinct m from MapEntity m left join m.tags t "
+            + "where m.type in :types "
+            + "and (lower(m.name) like :keyword escape '\\' "
+            + "or lower(m.description) like :keyword escape '\\' "
+            + "or t like :keyword escape '\\')",
+        countQuery = "select count(distinct m) from MapEntity m left join m.tags t "
+            + "where m.type in :types "
+            + "and (lower(m.name) like :keyword escape '\\' "
+            + "or lower(m.description) like :keyword escape '\\' "
+            + "or t like :keyword escape '\\')"
+    )
+    Page<MapEntity> search(@Param("types") Collection<MapType> types,
+                           @Param("keyword") String keyword,
+                           Pageable pageable);
+
     Optional<MapEntity> findByInviteCode(String inviteCode);
 
     boolean existsByInviteCode(String inviteCode);

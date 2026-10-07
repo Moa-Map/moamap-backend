@@ -2,6 +2,7 @@ package com.moamap.map.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -44,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MapService {
 
     private static final int MAX_INVITE_CODE_TRIES = 5;
+    private static final List<MapType> SEARCHABLE_TYPES = List.of(MapType.COMMUNITY, MapType.OFFICIAL);
 
     private final MapEntityRepository mapRepository;
     private final MapMemberRepository mapMemberRepository;
@@ -90,6 +92,25 @@ public class MapService {
         }
         // 비로그인은 참여 정보가 없고, 로그인은 참여 중인 지도를 이미 뺐으므로 joined는 항상 false.
         return maps.map(map -> MapSummaryResponse.of(map, false));
+    }
+
+    /**
+     * 공개 지도를 이름/설명/태그로 검색한다. 로그인하지 않아도 볼 수 있어 requesterId는 null일 수 있다.
+     */
+    public Page<MapSummaryResponse> search(String keyword, MapSort sort, Pageable pageable, Long requesterId) {
+        Page<MapEntity> maps = mapRepository.search(
+            SEARCHABLE_TYPES, toLikePattern(keyword), withSort(pageable, sort));
+        return toSummaryPage(maps, requesterId);
+    }
+
+    /** 사용자가 '%'만 입력해 전체를 긁는 일이 없도록 와일드카드는 이스케이프한다. */
+    private static String toLikePattern(String keyword) {
+        String escaped = keyword.strip()
+            .toLowerCase(Locale.ROOT)
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 
     public Page<MapSummaryResponse> getOfficialMaps(Pageable pageable, Long requesterId) {

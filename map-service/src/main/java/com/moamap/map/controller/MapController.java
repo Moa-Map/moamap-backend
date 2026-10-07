@@ -19,7 +19,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Map", description = "지도 방 생성/조회/참여 API")
 @RestController
+@Validated
 @RequestMapping("/api/v1/maps")
 @RequiredArgsConstructor
 public class MapController {
@@ -65,6 +69,17 @@ public class MapController {
         @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
     ) {
         return ApiResponse.success(PageResponse.from(mapService.getCommunityMaps(tag, sort, pageable, userId)));
+    }
+
+    @Operation(summary = "지도 검색", description = "공개 지도(커뮤니티·공식)를 이름/설명/태그로 검색한다. 로그인 없이 볼 수 있다.")
+    @GetMapping("/search")
+    public ApiResponse<PageResponse<MapSummaryResponse>> search(
+        @RequestParam @NotBlank @Size(max = 50) String keyword,
+        @RequestParam(required = false) MapSort sort,
+        @PageableDefault(size = 20) Pageable pageable,
+        @Parameter(hidden = true) @RequestHeader(value = USER_ID_HEADER, required = false) Long userId
+    ) {
+        return ApiResponse.success(PageResponse.from(mapService.search(keyword, sort, pageable, userId)));
     }
 
     @Operation(summary = "공식 지도 목록", description = "공공데이터 기반 공식(OFFICIAL) 지도 목록을 조회한다. 로그인 없이 볼 수 있다.")

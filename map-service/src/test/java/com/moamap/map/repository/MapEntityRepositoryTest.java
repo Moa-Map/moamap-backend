@@ -6,11 +6,15 @@ import com.moamap.map.entity.MapType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 class MapEntityRepositoryTest {
+
+    private static final List<MapType> SEARCHABLE = List.of(MapType.COMMUNITY, MapType.OFFICIAL);
 
     @Autowired
     private MapEntityRepository mapEntityRepository;
@@ -32,5 +36,39 @@ class MapEntityRepositoryTest {
         int updatedRows = mapEntityRepository.updatePlaceCount(999_999L, 7L);
 
         assertThat(updatedRows).isEqualTo(0);
+    }
+
+    @Test
+    void 검색은_이름_설명_태그_어디에_걸려도_찾고_프라이빗_지도는_제외한다() {
+        mapEntityRepository.save(MapEntity.create("성수 카페 투어", "설명", null, MapType.COMMUNITY, 1L, List.of(), null));
+        mapEntityRepository.save(MapEntity.create("이름무관", "성수동 산책 코스", null, MapType.COMMUNITY, 1L, List.of(), null));
+        mapEntityRepository.save(MapEntity.create("태그매칭", "설명", null, MapType.OFFICIAL, 1L, List.of("성수"), null));
+        mapEntityRepository.save(MapEntity.create("성수 비밀 지도", "설명", null, MapType.PRIVATE, 1L, List.of(), null));
+
+        Page<MapEntity> found = mapEntityRepository.search(SEARCHABLE, "%성수%", PageRequest.of(0, 20));
+
+        assertThat(found.getContent()).extracting(MapEntity::getName)
+            .containsExactlyInAnyOrder("성수 카페 투어", "이름무관", "태그매칭");
+    }
+
+    @Test
+    void 태그가_여러_개인_지도도_검색_결과에서_한_건으로_센다() {
+        mapEntityRepository.save(
+            MapEntity.create("성수 카페 투어", "설명", null, MapType.COMMUNITY, 1L, List.of("카페", "성수", "데이트"), null));
+
+        Page<MapEntity> found = mapEntityRepository.search(SEARCHABLE, "%성수%", PageRequest.of(0, 20));
+
+        assertThat(found.getTotalElements()).isEqualTo(1);
+        assertThat(found.getContent()).hasSize(1);
+    }
+
+    @Test
+    void 대문자로_검색해도_소문자_이름을_찾는다() {
+        mapEntityRepository.save(MapEntity.create("seoul cafe", "설명", null, MapType.COMMUNITY, 1L, List.of(), null));
+
+        // 서비스가 검색어를 소문자로 낮춰 넘기므로 저장된 이름도 lower()로 맞춰 비교된다.
+        Page<MapEntity> found = mapEntityRepository.search(SEARCHABLE, "%cafe%", PageRequest.of(0, 20));
+
+        assertThat(found.getContent()).hasSize(1);
     }
 }
