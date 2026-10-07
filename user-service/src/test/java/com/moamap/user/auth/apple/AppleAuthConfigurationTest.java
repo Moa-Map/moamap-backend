@@ -52,6 +52,7 @@ class AppleAuthConfigurationTest {
                     assertThat(context).hasSingleBean(AppleIdentityTokenVerifier.class);
                     assertThat(context).hasSingleBean(AppleTokenExchanger.class);
                     assertThat(context).hasSingleBean(AppleCredentialStore.class);
+                    assertThat(context).hasSingleBean(AppleTokenRevocationProcessor.class);
                     assertThat(context).hasSingleBean(com.moamap.user.auth.service.AppleLoginService.class);
                 });
     }

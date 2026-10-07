@@ -47,6 +47,18 @@ public class AppleAuthConfiguration {
     }
 
     @Bean
+    AppleTokenRevoker appleTokenRevoker(RestClient.Builder builder, AppleProperties properties,
+            AppleClientSecretProvider secrets) {
+        return new AppleTokenRevoker(appleHttpClient(builder), properties, secrets);
+    }
+
+    @Bean
+    AppleTokenRevocationProcessor appleTokenRevocationProcessor(AppleCredentialRepository credentials,
+            AppleTokenCipher cipher, AppleTokenRevoker revoker) {
+        return new AppleTokenRevocationProcessor(credentials, cipher, revoker, Clock.systemUTC());
+    }
+
+    @Bean
     AppleTokenCipher appleTokenCipher(AppleCredentialProperties properties) {
         return new AppleTokenCipher(properties);
     }

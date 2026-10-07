@@ -76,8 +76,11 @@ public class PlaceCommentService {
     /**
      * avgRating/commentCount는 댓글 테이블에서 매번 다시 계산하는 파생값이라 낙관적 락이 필요 없다.
      * 엔티티를 로드하지 않고 벌크 업데이트로 바로 반영해, Place.@Version과 충돌하지 않게 한다.
+     *
+     * 탈퇴 회원 댓글을 한 번에 지울 때도 같은 계산을 써야 해서 공개한다(PlaceWithdrawalCleanupService).
      */
-    private void refreshPlaceCommentSummary(Long placeId) {
+    @Transactional
+    public void refreshPlaceCommentSummary(Long placeId) {
         long count = placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(placeId);
         BigDecimal average = count == 0
             ? null

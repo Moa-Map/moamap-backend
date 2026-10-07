@@ -26,6 +26,14 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:moamap}
     password: ${RABBITMQ_PASSWORD:moamap}
+    listener:
+      simple:
+        default-requeue-rejected: false # 실패 메시지는 무한 재큐 대신 DLQ로
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
 
 management:
   endpoints:
