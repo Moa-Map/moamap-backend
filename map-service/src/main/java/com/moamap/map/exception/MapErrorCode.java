@@ -31,7 +31,9 @@ public enum MapErrorCode implements ErrorCode {
     MAP_POST_NOT_FOUND("MAP_018", "게시물을 찾을 수 없습니다.", 404),
     MAP_POST_COMMENT_NOT_FOUND("MAP_019", "댓글을 찾을 수 없습니다.", 404),
     DUPLICATE_PLACE_TAG("MAP_020", "같은 장소를 두 번 태그할 수 없습니다.", 400),
-    RESTROOM_NOT_FOUND("MAP_021", "화장실 정보를 찾을 수 없습니다.", 404);
+    RESTROOM_NOT_FOUND("MAP_021", "화장실 정보를 찾을 수 없습니다.", 404),
+    // 없는 지도인지, 남의 지도인지 구분해서 알려주지 않는다. 메시지 차이로 멤버십을 캐낼 수 있기 때문이다.
+    INVALID_MAP_ORDER("MAP_022", "순서를 바꾸려면 해당 탭에서 참여 중인 지도를 중복 없이 모두 보내야 합니다.", 400);
 
     private final String code;
     private final String message;

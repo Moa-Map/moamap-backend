@@ -41,6 +41,14 @@ public class MapMember extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private MapRole role;
 
+    /**
+     * 모음 화면에서 사용자가 직접 지정한 노출 순서(0부터). 같은 지도라도 사용자마다 다르므로 지도가 아닌 멤버십에 둔다.
+     *
+     * 한 번도 순서를 바꾼 적 없으면 null이다. 이때는 조회 쿼리가 최신순으로 정렬한다(NULLS LAST).
+     */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     private MapMember(Long mapId, Long userId, MapRole role) {
         this.mapId = mapId;
         this.userId = userId;
@@ -53,5 +61,9 @@ public class MapMember extends BaseTimeEntity {
 
     public void changeRole(MapRole role) {
         this.role = role;
+    }
+
+    public void changeSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 }

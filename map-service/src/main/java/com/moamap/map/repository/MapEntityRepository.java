@@ -19,9 +19,19 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
     @Query("select distinct m from MapEntity m join m.tags t where m.type = :type and t = :tag")
     Page<MapEntity> findByTypeAndTag(@Param("type") MapType type, @Param("tag") String tag, Pageable pageable);
 
-    @Query("select m from MapEntity m where m.type = :type "
-        + "and m.id in (select mm.mapId from MapMember mm where mm.userId = :userId)")
-    Page<MapEntity> findJoinedByType(@Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
+    /**
+     * 모음 탭 목록. 사용자가 지정한 순서(MapMember.sortOrder)를 먼저 따르고, 아직 지정하지 않은 지도는 뒤에 최신순으로 붙인다.
+     *
+     * 정렬 기준이 MapMember에 있어 조인이 필요하다. 정렬을 쿼리에 고정하므로 Pageable의 Sort는 비워서 넘겨야
+     * Spring Data가 order by를 덧붙이지 않는다.
+     */
+    @Query(value = "select m from MapEntity m join MapMember mm on mm.mapId = m.id "
+        + "where mm.userId = :userId and m.type = :type "
+        + "order by mm.sortOrder asc nulls last, m.createdAt desc, m.id desc",
+        countQuery = "select count(mm) from MapMember mm join MapEntity m on mm.mapId = m.id "
+            + "where mm.userId = :userId and m.type = :type")
+    Page<MapEntity> findJoinedByTypeInMyOrder(
+        @Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
 
     // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.
     @Query("select m from MapEntity m where m.type = :type "
