@@ -38,6 +38,16 @@ class MyPageServiceTest {
     }
 
     @Test
+    void 탈퇴한_회원은_마이페이지를_조회할_수_없다() {
+        // 탈퇴 직후에도 액세스 토큰은 만료 전까지 유효하다. 익명화된 행이 응답으로 나가면 안 된다.
+        User user = 사용자(1L, "길동", "http://img");
+        user.withdraw(java.time.Instant.now());
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> myPageService.getMyPage(1L)).isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
     void 존재하는_사용자의_마이페이지_정보를_조회한다() {
         User user = 사용자(1L, "길동", "http://img");
         given(userRepository.findById(1L)).willReturn(Optional.of(user));

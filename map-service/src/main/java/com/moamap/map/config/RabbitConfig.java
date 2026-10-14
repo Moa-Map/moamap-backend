@@ -29,6 +29,9 @@ public class RabbitConfig {
     private static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
     private static final String USER_REGISTERED_QUEUE = "map-service.user-registered";
     private static final String USER_REGISTERED_DLQ = "map-service.user-registered.dlq";
+    private static final String USER_WITHDRAWN_ROUTING_KEY = "user.withdrawn";
+    private static final String USER_WITHDRAWN_QUEUE = "map-service.user-withdrawn";
+    private static final String USER_WITHDRAWN_DLQ = "map-service.user-withdrawn.dlq";
 
     @Bean
     public TopicExchange placeEventsExchange() {
@@ -77,6 +80,27 @@ public class RabbitConfig {
     @Bean
     public Binding userRegisteredBinding(Queue userRegisteredQueue, TopicExchange userEventsExchange) {
         return BindingBuilder.bind(userRegisteredQueue).to(userEventsExchange).with(USER_REGISTERED_ROUTING_KEY);
+    }
+
+    /**
+     * 탈퇴 이벤트 구독. 가입 이벤트와 같은 구성(전용 큐 + DLQ)이라, 한쪽 처리가 막혀도 다른 쪽에 영향이 없다.
+     */
+    @Bean
+    public Queue userWithdrawnQueue() {
+        return QueueBuilder.durable(USER_WITHDRAWN_QUEUE)
+            .withArgument("x-dead-letter-exchange", "")
+            .withArgument("x-dead-letter-routing-key", USER_WITHDRAWN_DLQ)
+            .build();
+    }
+
+    @Bean
+    public Queue userWithdrawnDeadLetterQueue() {
+        return QueueBuilder.durable(USER_WITHDRAWN_DLQ).build();
+    }
+
+    @Bean
+    public Binding userWithdrawnBinding(Queue userWithdrawnQueue, TopicExchange userEventsExchange) {
+        return BindingBuilder.bind(userWithdrawnQueue).to(userEventsExchange).with(USER_WITHDRAWN_ROUTING_KEY);
     }
 
     @Bean

@@ -156,4 +156,16 @@ public class MapEntity extends BaseTimeEntity {
     public boolean isOwnedBy(Long userId) {
         return this.ownerId.equals(userId);
     }
+
+    /**
+     * 방장 위임. 지금은 방장이 탈퇴할 때만 쓴다.
+     *
+     * 나만의 지도는 주인당 하나라는 유일 인덱스(uk_map_personal_owner)가 있고, 애초에 남에게 넘길 지도가 아니다.
+     */
+    public void transferOwnership(Long newOwnerId) {
+        if (this.personal) {
+            throw new IllegalStateException("나만의 지도는 방장을 넘길 수 없습니다.");
+        }
+        this.ownerId = newOwnerId;
+    }
 }

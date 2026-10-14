@@ -14,3 +14,9 @@ kakao:
   app-id: 12345
   token-info-uri: http://localhost/v1/user/access_token_info
   user-info-uri: http://localhost/v2/user/me
+
+# 테스트에서도 @EnableScheduling이 켜진다. Apple 폐기 재시도 배치가 기동 직후 돌면 테스트가 만든 폐기 대기 행을
+# 백그라운드에서 같이 처리해 결과가 실행 환경(속도)에 따라 달라진다. 테스트 중에는 돌지 않도록 첫 실행을 하루 뒤로 미룬다.
+apple:
+  revocation:
+    initial-delay-ms: 86400000

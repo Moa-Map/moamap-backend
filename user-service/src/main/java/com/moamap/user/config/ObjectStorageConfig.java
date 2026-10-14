@@ -1,5 +1,6 @@
 package com.moamap.user.config;
 
+import com.moamap.common.storage.ObjectStorageCleaner;
 import com.moamap.common.storage.ObjectStoragePresigner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -7,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -34,5 +36,19 @@ public class ObjectStorageConfig {
     @Bean
     public ObjectStoragePresigner objectStoragePresigner(S3Presigner s3Presigner, ObjectStorageProperties properties) {
         return new ObjectStoragePresigner(s3Presigner, properties.bucket(), properties.publicBaseUrl());
+    }
+
+    /** 탈퇴 시 프로필 사진 삭제용. 노드 역할에 s3:ListBucket·s3:DeleteObject가 이미 허용돼 있다(infra/aws/iam.tf). */
+    @Bean(destroyMethod = "close")
+    public S3Client s3Client(ObjectStorageProperties properties) {
+        return S3Client.builder()
+            .region(Region.of(properties.region()))
+            .credentialsProvider(DefaultCredentialsProvider.builder().build())
+            .build();
+    }
+
+    @Bean
+    public ObjectStorageCleaner objectStorageCleaner(S3Client s3Client, ObjectStorageProperties properties) {
+        return new ObjectStorageCleaner(s3Client, properties.bucket());
     }
 }

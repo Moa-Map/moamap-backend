@@ -29,7 +29,9 @@ public class MyPageService {
     }
 
     private User findUser(Long userId) {
+        // 탈퇴 직후에도 액세스 토큰은 만료 전까지 유효하다. 탈퇴 회원은 없는 회원으로 취급한다.
         return userRepository.findById(userId)
+                .filter(user -> !user.isWithdrawn())
                 .orElseThrow(() -> new UserNotFoundException("사용자를 찾을 수 없습니다."));
     }
 

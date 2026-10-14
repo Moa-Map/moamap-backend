@@ -19,7 +19,8 @@ public enum UserErrorCode implements ErrorCode {
     FILE_SIZE_EXCEEDED("USER_006", "파일 크기가 허용치를 초과했습니다.", 400),
     STORAGE_NOT_CONFIGURED("USER_007", "이미지 업로드를 사용할 수 없습니다.", 503),
     INVALID_APPLE_TOKEN("USER_008", "Apple 인증에 실패했습니다. 다시 로그인해 주세요.", 401),
-    APPLE_AUTH_UNAVAILABLE("USER_009", "Apple 로그인을 일시적으로 사용할 수 없습니다.", 503);
+    APPLE_AUTH_UNAVAILABLE("USER_009", "Apple 로그인을 일시적으로 사용할 수 없습니다.", 503),
+    CONCURRENT_UPDATE("USER_010", "다른 요청과 동시에 처리되어 반영하지 못했습니다. 다시 시도해 주세요.", 409);
 
     private final String code;
     private final String message;
