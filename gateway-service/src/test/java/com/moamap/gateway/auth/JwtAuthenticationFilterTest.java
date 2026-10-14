@@ -120,6 +120,27 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.invoked()).isTrue();
     }
 
+    @Test
+    void 배너_조회는_토큰_없이도_공개다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/banners"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isTrue();
+    }
+
+    @Test
+    void 배너_관리는_GET이어도_토큰이_필요하다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/admin/banners"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     private static String bearer(long userId) {
         String token = Jwts.builder().subject(String.valueOf(userId))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
