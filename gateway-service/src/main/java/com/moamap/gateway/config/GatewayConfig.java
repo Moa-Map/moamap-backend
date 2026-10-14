@@ -20,7 +20,8 @@ public class GatewayConfig {
     @Bean
     public RouteLocator routeLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-            .route("user-service", r -> r.path("/api/v1/auth/**", "/api/v1/users/**").uri(serviceUrls.userUrl()))
+            .route("user-service", r -> r.path("/api/v1/auth/**", "/api/v1/users/**",
+                "/api/v1/notices/**", "/api/v1/admin/notices/**").uri(serviceUrls.userUrl()))
             .route("map-service", r -> r.path("/api/v1/maps/**").uri(serviceUrls.mapUrl()))
             .route("place-service", r -> r.path("/api/v1/places/**").uri(serviceUrls.placeUrl()))
             // 통합 Swagger UI용 api-docs 프록시. 앞 경로(/user-service 등)를 떼고 각 서비스 기본 api-docs 경로로 전달.
