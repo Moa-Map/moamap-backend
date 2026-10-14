@@ -15,6 +15,9 @@ import com.moamap.user.auth.jwt.JwtProvider;
 import com.moamap.user.auth.oauth.OAuthUserInfo;
 import com.moamap.user.auth.service.AuthService;
 import com.moamap.user.event.UserWithdrawnEvent;
+import com.moamap.user.inquiry.entity.Inquiry;
+import com.moamap.user.inquiry.entity.InquiryType;
+import com.moamap.user.inquiry.repository.InquiryRepository;
 import com.moamap.user.outbox.OutboxEvent;
 import com.moamap.user.outbox.OutboxEventRepository;
 import com.moamap.user.outbox.OutboxRecorder;
@@ -63,6 +66,7 @@ class UserWithdrawalTest {
     @Autowired private AuthService authService;
     @Autowired private UserRepository userRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
+    @Autowired private InquiryRepository inquiryRepository;
     @Autowired private AppleCredentialRepository appleCredentialRepository;
     @Autowired private AppleTokenCipher cipher;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -71,6 +75,7 @@ class UserWithdrawalTest {
     @AfterEach
     void cleanUp() {
         appleCredentialRepository.deleteAll();
+        inquiryRepository.deleteAll();
         outboxEventRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -89,6 +94,19 @@ class UserWithdrawalTest {
         assertThat(withdrawn.getIntroduction()).isNull();
         // 소셜 회원번호도 개인 식별 정보라 남기지 않는다.
         assertThat(withdrawn.getProviderId()).doesNotContain("3412345678").isEqualTo("withdrawn:" + userId);
+    }
+
+    @Test
+    void 탈퇴하면_그_회원의_문의도_지우고_남의_문의는_남긴다() {
+        Long userId = kakaoUser("111").getId();
+        Long otherId = kakaoUser("222").getId();
+        inquiryRepository.save(Inquiry.receive(userId, InquiryType.ACCOUNT, "user@example.com", "내 문의"));
+        inquiryRepository.save(Inquiry.receive(otherId, InquiryType.OTHER, "other@example.com", "남의 문의"));
+
+        withdrawalWriter.withdraw(userId);
+
+        // 문의의 답변 이메일·내용도 개인정보라 회원 정보와 함께 지운다.
+        assertThat(inquiryRepository.findAll()).extracting(Inquiry::getUserId).containsExactly(otherId);
     }
 
     @Test

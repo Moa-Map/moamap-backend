@@ -20,7 +20,10 @@ public enum UserErrorCode implements ErrorCode {
     STORAGE_NOT_CONFIGURED("USER_007", "이미지 업로드를 사용할 수 없습니다.", 503),
     INVALID_APPLE_TOKEN("USER_008", "Apple 인증에 실패했습니다. 다시 로그인해 주세요.", 401),
     APPLE_AUTH_UNAVAILABLE("USER_009", "Apple 로그인을 일시적으로 사용할 수 없습니다.", 503),
-    CONCURRENT_UPDATE("USER_010", "다른 요청과 동시에 처리되어 반영하지 못했습니다. 다시 시도해 주세요.", 409);
+    CONCURRENT_UPDATE("USER_010", "다른 요청과 동시에 처리되어 반영하지 못했습니다. 다시 시도해 주세요.", 409),
+    // USER_011은 공지사항(#127)이 쓴다. 두 PR이 따로 머지돼도 번호가 겹치지 않게 비워 둔다.
+    INQUIRY_NOT_FOUND("USER_012", "문의를 찾을 수 없습니다.", 404),
+    TOO_MANY_INQUIRIES("USER_013", "문의는 하루 10건까지 보낼 수 있습니다. 잠시 후 다시 시도해 주세요.", 429);
 
     private final String code;
     private final String message;
