@@ -47,6 +47,13 @@ class GoogleAuthControllerTest {
     }
 
     @Test
+    void idToken이_16384자를_넘으면_400_COMMON_001() throws Exception {
+        mvc.perform(post(URL).contentType("application/json").content("{\"idToken\":\"" + "a".repeat(16385) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("COMMON_001"));
+    }
+
+    @Test
     void 서비스가_INVALID_GOOGLE_TOKEN이면_401_USER_018() throws Exception {
         given(service.login("bad")).willThrow(new BusinessException(UserErrorCode.INVALID_GOOGLE_TOKEN));
         mvc.perform(post(URL).contentType("application/json").content("{\"idToken\":\"bad\"}"))
