@@ -53,7 +53,7 @@ patches:
         value: "com.moamap.MoaMap"
       - op: add
         path: /data/APPLE_TEAM_ID
-        value: "DKN78S7233"
+        value: "A4BC8YG62N"
       - op: add
         path: /data/APPLE_KEY_ID
         value: "KF57XKT8QM"
