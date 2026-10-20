@@ -5,6 +5,8 @@ metadata:
   namespace: moamap
 # 비밀이 아닌 설정만. 비밀(비번·키·JWT_SECRET)은 Secret(app-secrets)에 둔다.
 data:
+  # JVM 기본 시간대. 이미지 기본값은 UTC라 LocalDateTime.now()·Auditing·DB 세션 시간대가 UTC가 된다.
+  TZ: "Asia/Seoul"
   # 서비스 간 내부 호출 주소 (k8s 서비스 DNS)
   USER_SERVICE_URL: "http://user-service:8081"
   MAP_SERVICE_URL: "http://map-service:8083"
