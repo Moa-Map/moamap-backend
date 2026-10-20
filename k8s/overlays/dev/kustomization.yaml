@@ -35,6 +35,14 @@ patches:
       - op: add
         path: /data/KAKAO_REDIRECT_URI
         value: "http://43.202.231.196/api/v1/auth/test/kakao/callback"
+      # Google 로그인. 허용할 client ID를 쉼표로 구분한다. 지금은 iOS만.
+      # Android 구글 로그인을 붙일 때 Web client ID(Android 토큰의 aud)를 추가한다.
+      - op: replace
+        path: /data/GOOGLE_ENABLED
+        value: "true"
+      - op: replace
+        path: /data/GOOGLE_CLIENT_IDS
+        value: "481427766287-airpbbn9mt841nrl8iplhii4lj4s9h4d.apps.googleusercontent.com"
       # DB는 클러스터 내 postgres 파드가 아니라 RDS다.
       - op: replace
         path: /data/DB_URL
