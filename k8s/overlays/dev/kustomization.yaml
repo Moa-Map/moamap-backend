@@ -43,6 +43,20 @@ patches:
       - op: replace
         path: /data/GOOGLE_CLIENT_IDS
         value: "481427766287-airpbbn9mt841nrl8iplhii4lj4s9h4d.apps.googleusercontent.com"
+      # Apple 로그인. client-id는 iOS 앱 Bundle ID. 개인키·암호화 키는 Secret(moamap-secrets)에 있다.
+      # Secret에 APPLE_PRIVATE_KEY, APPLE_CREDENTIAL_KEY_V1이 없으면 user-service가 기동하지 않는다.
+      - op: add
+        path: /data/APPLE_ENABLED
+        value: "true"
+      - op: add
+        path: /data/APPLE_CLIENT_ID
+        value: "com.moamap.MoaMap"
+      - op: add
+        path: /data/APPLE_TEAM_ID
+        value: "DKN78S7233"
+      - op: add
+        path: /data/APPLE_KEY_ID
+        value: "KF57XKT8QM"
       # DB는 클러스터 내 postgres 파드가 아니라 RDS다.
       - op: replace
         path: /data/DB_URL
