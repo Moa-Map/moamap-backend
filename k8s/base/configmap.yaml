@@ -18,3 +18,6 @@ data:
   RABBITMQ_PORT: "5672"
   # 개발용 카카오 로그인 콜백(dev-login) 리다이렉트 주소. dev-login.enabled=true일 때만 쓰인다.
   KAKAO_REDIRECT_URI: "REPLACE_ME_kakao_redirect_uri"
+  # Google 로그인. client ID는 앱 바이너리에 공개되는 값이라 Secret이 아니라 ConfigMap에 둔다.
+  GOOGLE_ENABLED: "false"
+  GOOGLE_CLIENT_IDS: ""
