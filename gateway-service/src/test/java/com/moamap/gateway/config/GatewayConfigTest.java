@@ -45,6 +45,14 @@ class GatewayConfigTest {
     }
 
     @Test
+    void user_service_라우트는_배너_조회와_관리_경로를_처리한다() {
+        Route userRoute = findRoute("user-service");
+
+        assertThat(matches(userRoute, "/api/v1/banners")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/admin/banners/order")).isTrue();
+    }
+
+    @Test
     void map_service_라우트는_maps_경로를_처리한다() {
         Route mapRoute = findRoute("map-service");
 

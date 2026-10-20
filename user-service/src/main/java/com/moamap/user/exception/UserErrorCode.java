@@ -23,7 +23,11 @@ public enum UserErrorCode implements ErrorCode {
     CONCURRENT_UPDATE("USER_010", "다른 요청과 동시에 처리되어 반영하지 못했습니다. 다시 시도해 주세요.", 409),
     NOTICE_NOT_FOUND("USER_011", "공지사항을 찾을 수 없습니다.", 404),
     INQUIRY_NOT_FOUND("USER_012", "문의를 찾을 수 없습니다.", 404),
-    TOO_MANY_INQUIRIES("USER_013", "문의는 하루 10건까지 보낼 수 있습니다. 잠시 후 다시 시도해 주세요.", 429);
+    TOO_MANY_INQUIRIES("USER_013", "문의는 하루 10건까지 보낼 수 있습니다. 잠시 후 다시 시도해 주세요.", 429),
+    BANNER_NOT_FOUND("USER_014", "배너를 찾을 수 없습니다.", 404),
+    BANNER_LIMIT_EXCEEDED("USER_015", "배너는 최대 10개까지 등록할 수 있습니다.", 409),
+    INVALID_BANNER_ORDER("USER_016", "순서를 바꾸려면 등록된 배너를 중복 없이 모두 보내야 합니다.", 400),
+    INVALID_BANNER_IMAGE("USER_017", "배너 이미지는 배너 업로드 주소로 올린 파일만 쓸 수 있습니다.", 400);
 
     private final String code;
     private final String message;

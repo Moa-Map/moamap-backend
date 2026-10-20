@@ -40,6 +40,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         PublicEndpoint.of(HttpMethod.GET, "/api/v1/maps/**"),
         // 공지 조회는 로그인 전 화면에서도 쓴다. 등록·수정·삭제(/api/v1/admin/notices)는 토큰이 필요하다.
         PublicEndpoint.of(HttpMethod.GET, "/api/v1/notices/**"),
+        // 메인 배너는 로그인 전 화면에서도 보인다. 관리(/api/v1/admin/banners)는 토큰이 필요하다.
+        PublicEndpoint.of(HttpMethod.GET, "/api/v1/banners/**"),
         // 통합 Swagger UI — 테스트 편의를 위해 공개.
         PublicEndpoint.of(HttpMethod.GET, "/swagger-ui.html"),
         PublicEndpoint.of(HttpMethod.GET, "/swagger-ui/**"),
