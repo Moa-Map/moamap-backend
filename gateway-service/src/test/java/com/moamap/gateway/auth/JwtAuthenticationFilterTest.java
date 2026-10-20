@@ -151,6 +151,28 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.invoked()).isFalse();
     }
 
+    @Test
+    void 문의_등록은_공개가_아니다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/inquiries"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 문의_열람은_GET이어도_공개가_아니다() {
+        // 문의에는 이메일 같은 개인정보가 있다. GET이라도 토큰 없이 열리면 안 된다.
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/admin/inquiries"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+    }
+
     private static String bearer(long userId) {
         String token = Jwts.builder().subject(String.valueOf(userId))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))

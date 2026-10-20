@@ -37,6 +37,14 @@ class GatewayConfigTest {
     }
 
     @Test
+    void user_service_라우트는_문의_등록과_관리_경로를_처리한다() {
+        Route userRoute = findRoute("user-service");
+
+        assertThat(matches(userRoute, "/api/v1/inquiries")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/admin/inquiries/1/status")).isTrue();
+    }
+
+    @Test
     void map_service_라우트는_maps_경로를_처리한다() {
         Route mapRoute = findRoute("map-service");
 
