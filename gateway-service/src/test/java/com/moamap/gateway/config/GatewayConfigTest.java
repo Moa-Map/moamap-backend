@@ -28,6 +28,23 @@ class GatewayConfigTest {
     }
 
     @Test
+    void user_service_라우트는_공지_조회와_관리_경로를_처리한다() {
+        Route userRoute = findRoute("user-service");
+
+        assertThat(matches(userRoute, "/api/v1/notices")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/notices/1")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/admin/notices/1")).isTrue();
+    }
+
+    @Test
+    void user_service_라우트는_문의_등록과_관리_경로를_처리한다() {
+        Route userRoute = findRoute("user-service");
+
+        assertThat(matches(userRoute, "/api/v1/inquiries")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/admin/inquiries/1/status")).isTrue();
+    }
+
+    @Test
     void user_service_라우트는_배너_조회와_관리_경로를_처리한다() {
         Route userRoute = findRoute("user-service");
 

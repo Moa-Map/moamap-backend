@@ -121,6 +121,59 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void 공지_조회는_토큰_없이도_공개다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/notices/1"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isTrue();
+    }
+
+    @Test
+    void 공지_관리는_토큰이_없으면_401이다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/admin/notices"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 공지_경로라도_GET이_아니면_공개가_아니다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.delete("/api/v1/notices/1"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+    }
+
+    @Test
+    void 문의_등록은_공개가_아니다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/inquiries"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 문의_열람은_GET이어도_공개가_아니다() {
+        // 문의에는 이메일 같은 개인정보가 있다. GET이라도 토큰 없이 열리면 안 된다.
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/admin/inquiries"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+    }
+
+    @Test
     void 배너_조회는_토큰_없이도_공개다() {
         CapturingChain chain = new CapturingChain();
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/banners"));
