@@ -53,8 +53,8 @@ class MyMapOrderQueryTest {
 
     @Test
     void 순서를_지정한_적_없으면_최신순으로_내려준다() {
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
+        Page<MapEntity> page = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 10));
 
         assertThat(page.getContent()).extracting(MapEntity::getName)
             .containsExactly("가장 나중 지도", "두 번째 지도", "가장 먼저 만든 지도");
@@ -67,8 +67,8 @@ class MyMapOrderQueryTest {
         order(third, USER_ID, 1);
         order(second, USER_ID, 2);
 
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
+        Page<MapEntity> page = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 10));
 
         assertThat(page.getContent()).extracting(MapEntity::getName)
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도", "두 번째 지도");
@@ -79,8 +79,8 @@ class MyMapOrderQueryTest {
         // 순서를 지정한 지도가 하나뿐이어도, 나머지가 앞으로 끼어들면 안 된다.
         order(first, USER_ID, 0);
 
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
+        Page<MapEntity> page = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 10));
 
         assertThat(page.getContent()).extracting(MapEntity::getName)
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도", "두 번째 지도");
@@ -93,10 +93,10 @@ class MyMapOrderQueryTest {
         order(second, OTHER_USER_ID, 0);
         order(first, OTHER_USER_ID, 1);
 
-        Page<MapEntity> mine = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
-        Page<MapEntity> others = mapRepository.findJoinedByTypeInMyOrder(
-            OTHER_USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
+        Page<MapEntity> mine = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 10));
+        Page<MapEntity> others = mapRepository.findJoinedByTypesInMyOrder(
+            OTHER_USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 10));
 
         // 상대가 순서를 바꿔도 내 목록은 그대로 최신순이다.
         assertThat(mine.getContent()).extracting(MapEntity::getName)
@@ -111,10 +111,10 @@ class MyMapOrderQueryTest {
         order(third, USER_ID, 1);
         order(second, USER_ID, 2);
 
-        Page<MapEntity> firstPage = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(0, 2));
-        Page<MapEntity> secondPage = mapRepository.findJoinedByTypeInMyOrder(
-            USER_ID, MapType.PRIVATE, PageRequest.of(1, 2));
+        Page<MapEntity> firstPage = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(0, 2));
+        Page<MapEntity> secondPage = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.PRIVATE), PageRequest.of(1, 2));
 
         assertThat(firstPage.getContent()).extracting(MapEntity::getName)
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도");
@@ -122,6 +122,38 @@ class MyMapOrderQueryTest {
             .containsExactly("두 번째 지도");
         // 전체 개수는 조인 후 내 참여분만 세야 한다.
         assertThat(firstPage.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
+    void 커뮤니티와_공식_지도는_한_목록에_섞이고_프라이빗은_빠진다() {
+        MapEntity community = mapRepository.save(
+            MapEntity.create("커뮤니티", "설명", null, MapType.COMMUNITY, OTHER_USER_ID, List.of(), null));
+        MapEntity official = mapRepository.save(
+            MapEntity.create("공식", "설명", null, MapType.OFFICIAL, OTHER_USER_ID, List.of(), null));
+        join(community, USER_ID);
+        join(official, USER_ID);
+        order(official, USER_ID, 0);
+        order(community, USER_ID, 1);
+
+        Page<MapEntity> page = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.COMMUNITY, MapType.OFFICIAL), PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).extracting(MapEntity::getName).containsExactly("공식", "커뮤니티");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void 여러_타입을_조회해도_전체_개수는_해당_타입_전부를_센다() {
+        join(mapRepository.save(
+            MapEntity.create("커뮤니티", "설명", null, MapType.COMMUNITY, OTHER_USER_ID, List.of(), null)), USER_ID);
+        join(mapRepository.save(
+            MapEntity.create("공식", "설명", null, MapType.OFFICIAL, OTHER_USER_ID, List.of(), null)), USER_ID);
+
+        Page<MapEntity> page = mapRepository.findJoinedByTypesInMyOrder(
+            USER_ID, List.of(MapType.COMMUNITY, MapType.OFFICIAL), PageRequest.of(0, 1));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getTotalElements()).isEqualTo(2);
     }
 
     private void join(MapEntity map, Long userId) {

@@ -119,10 +119,15 @@ public class MapService {
         return toSummaryPage(maps, requesterId);
     }
 
+    // OFFICIAL을 따로 두면 같은 탭의 sortOrder 번호 공간이 둘로 갈라져 중복이 생기므로 COMMUNITY와 같은 탭으로 묶는다.
+    private static List<MapType> tabTypesOf(MapType type) {
+        return type == MapType.PRIVATE ? List.of(MapType.PRIVATE) : List.of(MapType.COMMUNITY, MapType.OFFICIAL);
+    }
+
     public Page<MapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
         // 정렬은 쿼리가 고정한다(내 순서 → 최신순). Sort를 실어 보내면 order by가 중복으로 붙는다.
         Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        Page<MapEntity> maps = mapRepository.findJoinedByTypeInMyOrder(requesterId, type, unsorted);
+        Page<MapEntity> maps = mapRepository.findJoinedByTypesInMyOrder(requesterId, tabTypesOf(type), unsorted);
         // 내가 참여한 목록이므로 joined은 항상 true.
         return maps.map(map -> MapSummaryResponse.of(map, true));
     }
@@ -133,12 +138,13 @@ public class MapService {
      * 보낸 목록이 해당 탭의 내 참여 목록과 정확히 일치할 때만 반영한다. 하나라도 빠지거나 남거나 중복되면
      * 전체를 거부한다 — 일부만 반영되면 화면과 서버의 순서가 어긋난 채로 남기 때문이다.
      * 남의 지도 ID를 섞어 보내도 집합이 달라져 같은 400으로 막히므로, 응답으로 남의 멤버십을 떠볼 수 없다.
+     * 커뮤니티 탭은 COMMUNITY+OFFICIAL을 함께 다루므로 type=OFFICIAL도 같은 집합으로 처리한다.
      */
     @Transactional
     public void updateMyMapOrder(Long requesterId, MapOrderUpdateRequest request) {
         List<Long> mapIds = request.mapIds();
         Map<Long, MapMember> myMemberships = mapMemberRepository
-            .findByUserIdAndMapType(requesterId, request.type()).stream()
+            .findByUserIdAndMapTypeIn(requesterId, tabTypesOf(request.type())).stream()
             .collect(Collectors.toMap(MapMember::getMapId, member -> member));
 
         Set<Long> requested = Set.copyOf(mapIds);

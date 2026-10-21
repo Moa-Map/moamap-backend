@@ -26,12 +26,12 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
      * Spring Data가 order by를 덧붙이지 않는다.
      */
     @Query(value = "select m from MapEntity m join MapMember mm on mm.mapId = m.id "
-        + "where mm.userId = :userId and m.type = :type "
+        + "where mm.userId = :userId and m.type in :types "
         + "order by mm.sortOrder asc nulls last, m.createdAt desc, m.id desc",
         countQuery = "select count(mm) from MapMember mm join MapEntity m on mm.mapId = m.id "
-            + "where mm.userId = :userId and m.type = :type")
-    Page<MapEntity> findJoinedByTypeInMyOrder(
-        @Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
+            + "where mm.userId = :userId and m.type in :types")
+    Page<MapEntity> findJoinedByTypesInMyOrder(
+        @Param("userId") Long userId, @Param("types") Collection<MapType> types, Pageable pageable);
 
     // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.
     @Query("select m from MapEntity m where m.type = :type "
