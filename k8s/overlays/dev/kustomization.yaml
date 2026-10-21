@@ -35,14 +35,13 @@ patches:
       - op: add
         path: /data/KAKAO_REDIRECT_URI
         value: "http://43.202.231.196/api/v1/auth/test/kakao/callback"
-      # Google 로그인. 허용할 client ID를 쉼표로 구분한다. 지금은 iOS만.
-      # Android 구글 로그인을 붙일 때 Web client ID(Android 토큰의 aud)를 추가한다.
+      # Google 로그인. 허용할 client ID를 쉼표로 구분한다. iOS, Web(Android 토큰의 aud) 순.
       - op: replace
         path: /data/GOOGLE_ENABLED
         value: "true"
       - op: replace
         path: /data/GOOGLE_CLIENT_IDS
-        value: "481427766287-airpbbn9mt841nrl8iplhii4lj4s9h4d.apps.googleusercontent.com"
+        value: "481427766287-airpbbn9mt841nrl8iplhii4lj4s9h4d.apps.googleusercontent.com,481427766287-818l56rttj5fvc7209kc0e5rdsebdqvn.apps.googleusercontent.com"
       # Apple 로그인. client-id는 iOS 앱 Bundle ID. 개인키·암호화 키는 Secret(moamap-secrets)에 있다.
       # Secret에 APPLE_PRIVATE_KEY, APPLE_CREDENTIAL_KEY_V1이 없으면 user-service가 기동하지 않는다.
       - op: add
