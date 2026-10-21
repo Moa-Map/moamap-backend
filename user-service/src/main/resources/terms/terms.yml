@@ -13,7 +13,6 @@
 #   - 한 약관(code)은 한 버전만 active: true
 #   - kind: REQUIRED(동의 필요, 체크박스) / VIEW_ONLY(보기만)
 #
-# 아래는 개발용 예시 문안이다. 실제 문안은 기획·법무 확인 후 교체한다.
 terms:
   documents:
     - code: SERVICE
@@ -23,12 +22,12 @@ terms:
       active: true
       file: service-v1.md
       displayOrder: 1
-    - code: PRIVACY
-      title: 개인정보 수집·이용 동의
+    - code: AGE
+      title: 만 14세 이상 확인
       version: v1
       kind: REQUIRED
       active: true
-      file: privacy-v1.md
+      file: age-v1.md
       displayOrder: 2
     - code: POLICY
       title: 개인정보 처리방침

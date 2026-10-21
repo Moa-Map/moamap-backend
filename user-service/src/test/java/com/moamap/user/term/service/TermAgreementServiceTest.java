@@ -42,14 +42,14 @@ class TermAgreementServiceTest {
 
     private Long userId;
     private Term serviceV1;
-    private Term privacyV1;
+    private Term ageV1;
     private Term policyV1;
 
     @BeforeEach
     void setUp() {
         userId = userRepository.save(User.createSocialUser("kakao", "member", "닉네임", null, null)).getId();
         serviceV1 = term("SERVICE", "v1", TermKind.REQUIRED, true, "service-v1.md", 1);
-        privacyV1 = term("PRIVACY", "v1", TermKind.REQUIRED, true, "privacy-v1.md", 2);
+        ageV1 = term("AGE", "v1", TermKind.REQUIRED, true, "age-v1.md", 2);
         policyV1 = term("POLICY", "v1", TermKind.VIEW_ONLY, true, "policy-v1.md", 3);
     }
 
@@ -58,7 +58,7 @@ class TermAgreementServiceTest {
         term("OLD", "v1", TermKind.REQUIRED, false, "service-v1.md", 0);
 
         assertThat(termService.getActiveTerms()).extracting(TermSummaryResponse::code)
-                .containsExactly("SERVICE", "PRIVACY", "POLICY");
+                .containsExactly("SERVICE", "AGE", "POLICY");
     }
 
     @Test
@@ -90,17 +90,17 @@ class TermAgreementServiceTest {
 
         assertThat(status.needsAgreement()).isTrue();
         assertThat(status.pendingTerms()).extracting(TermSummaryResponse::termId)
-                .containsExactly(serviceV1.getId(), privacyV1.getId());
+                .containsExactly(serviceV1.getId(), ageV1.getId());
     }
 
     @Test
     void 필수_약관에_모두_동의하면_더_이상_동의할_것이_없다() {
-        TermAgreementStatusResponse response = termAgreementService.agree(userId, request(serviceV1, privacyV1));
+        TermAgreementStatusResponse response = termAgreementService.agree(userId, request(serviceV1, ageV1));
 
         assertThat(response.needsAgreement()).isFalse();
         assertThat(termAgreementService.getMyStatus(userId).needsAgreement()).isFalse();
         assertThat(userTermRepository.findTermIdsByUserId(userId))
-                .containsExactlyInAnyOrder(serviceV1.getId(), privacyV1.getId());
+                .containsExactlyInAnyOrder(serviceV1.getId(), ageV1.getId());
     }
 
     @Test
@@ -111,7 +111,7 @@ class TermAgreementServiceTest {
 
     @Test
     void 보기_전용_약관이나_없는_약관에는_동의할_수_없다() {
-        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, privacyV1, policyV1)),
+        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, ageV1, policyV1)),
                 UserErrorCode.INVALID_TERM_AGREEMENT);
         assertErrorCode(() -> termAgreementService.agree(userId, new TermAgreementRequest(List.of(serviceV1.getId(), 9999L))),
                 UserErrorCode.INVALID_TERM_AGREEMENT);
@@ -119,15 +119,15 @@ class TermAgreementServiceTest {
 
     @Test
     void 같은_요청을_다시_보내도_기록이_두_번_쌓이지_않는다() {
-        termAgreementService.agree(userId, request(serviceV1, privacyV1));
-        termAgreementService.agree(userId, request(serviceV1, privacyV1));
+        termAgreementService.agree(userId, request(serviceV1, ageV1));
+        termAgreementService.agree(userId, request(serviceV1, ageV1));
 
         assertThat(userTermRepository.findAll()).hasSize(2);
     }
 
     @Test
     void 약관이_개정되면_바뀐_약관만_다시_동의_대상이_된다() {
-        termAgreementService.agree(userId, request(serviceV1, privacyV1));
+        termAgreementService.agree(userId, request(serviceV1, ageV1));
 
         Term serviceV2 = revise(serviceV1, "v2");
 
@@ -143,13 +143,13 @@ class TermAgreementServiceTest {
     void 동의_화면을_띄운_사이에_약관이_개정되면_지난_버전_동의는_409다() {
         revise(serviceV1, "v2");
 
-        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, privacyV1)), UserErrorCode.TERM_OUTDATED);
+        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, ageV1)), UserErrorCode.TERM_OUTDATED);
         assertThat(userTermRepository.findAll()).isEmpty();
     }
 
     @Test
     void 지난_버전에_동의했던_기록은_남는다() {
-        termAgreementService.agree(userId, request(serviceV1, privacyV1));
+        termAgreementService.agree(userId, request(serviceV1, ageV1));
         revise(serviceV1, "v2");
 
         assertThat(userTermRepository.findTermIdsByUserId(userId)).contains(serviceV1.getId());
@@ -169,7 +169,7 @@ class TermAgreementServiceTest {
         userRepository.flush();
 
         assertErrorCode(() -> termAgreementService.getMyStatus(userId), UserErrorCode.USER_NOT_FOUND);
-        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, privacyV1)), UserErrorCode.USER_NOT_FOUND);
+        assertErrorCode(() -> termAgreementService.agree(userId, request(serviceV1, ageV1)), UserErrorCode.USER_NOT_FOUND);
     }
 
     @Test
