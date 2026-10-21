@@ -194,6 +194,40 @@ class JwtAuthenticationFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void 약관_목록과_전문은_토큰_없이도_공개다() {
+        for (String path : new String[] {"/api/v1/terms", "/api/v1/terms/4"}) {
+            CapturingChain chain = new CapturingChain();
+            MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path));
+
+            filter.filter(exchange, chain).block();
+
+            assertThat(chain.invoked()).as(path).isTrue();
+        }
+    }
+
+    @Test
+    void 약관_동의_현황은_GET이어도_토큰이_필요하다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/terms/agreements/me"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void 약관_동의는_토큰이_필요하다() {
+        CapturingChain chain = new CapturingChain();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/terms/agreements"));
+
+        filter.filter(exchange, chain).block();
+
+        assertThat(chain.invoked()).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     private static String bearer(long userId) {
         String token = Jwts.builder().subject(String.valueOf(userId))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
