@@ -121,7 +121,10 @@ public class MapService {
 
     // OFFICIAL을 따로 두면 같은 탭의 sortOrder 번호 공간이 둘로 갈라져 중복이 생기므로 COMMUNITY와 같은 탭으로 묶는다.
     private static List<MapType> tabTypesOf(MapType type) {
-        return type == MapType.PRIVATE ? List.of(MapType.PRIVATE) : List.of(MapType.COMMUNITY, MapType.OFFICIAL);
+        return switch (type) {
+            case PRIVATE -> List.of(MapType.PRIVATE);
+            case COMMUNITY, OFFICIAL -> List.of(MapType.COMMUNITY, MapType.OFFICIAL);
+        };
     }
 
     public Page<MapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
