@@ -18,6 +18,7 @@ import com.moamap.map.dto.MapOrderUpdateRequest;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
+import com.moamap.map.dto.MyMapSummaryResponse;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
 import com.moamap.map.entity.MapRole;
@@ -119,12 +120,11 @@ public class MapService {
         return toSummaryPage(maps, requesterId);
     }
 
-    public Page<MapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
+    public Page<MyMapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
         // 정렬은 쿼리가 고정한다(내 순서 → 최신순). Sort를 실어 보내면 order by가 중복으로 붙는다.
         Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        Page<MapEntity> maps = mapRepository.findJoinedByTypeInMyOrder(requesterId, type, unsorted);
-        // 내가 참여한 목록이므로 joined은 항상 true.
-        return maps.map(map -> MapSummaryResponse.of(map, true));
+        return mapRepository.findJoinedByTypeInMyOrder(requesterId, type, unsorted)
+            .map(MyMapSummaryResponse::from);
     }
 
     /**

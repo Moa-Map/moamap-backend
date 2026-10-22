@@ -15,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * 모음 탭 목록이 사용자가 지정한 순서를 따르는지 쿼리로 검증한다.
@@ -53,10 +54,10 @@ class MyMapOrderQueryTest {
 
     @Test
     void 순서를_지정한_적_없으면_최신순으로_내려준다() {
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> page = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
 
-        assertThat(page.getContent()).extracting(MapEntity::getName)
+        assertThat(page.getContent()).extracting(row -> row.map().getName())
             .containsExactly("가장 나중 지도", "두 번째 지도", "가장 먼저 만든 지도");
         assertThat(page.getTotalElements()).isEqualTo(3);
     }
@@ -67,10 +68,10 @@ class MyMapOrderQueryTest {
         order(third, USER_ID, 1);
         order(second, USER_ID, 2);
 
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> page = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
 
-        assertThat(page.getContent()).extracting(MapEntity::getName)
+        assertThat(page.getContent()).extracting(row -> row.map().getName())
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도", "두 번째 지도");
     }
 
@@ -79,10 +80,10 @@ class MyMapOrderQueryTest {
         // 순서를 지정한 지도가 하나뿐이어도, 나머지가 앞으로 끼어들면 안 된다.
         order(first, USER_ID, 0);
 
-        Page<MapEntity> page = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> page = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
 
-        assertThat(page.getContent()).extracting(MapEntity::getName)
+        assertThat(page.getContent()).extracting(row -> row.map().getName())
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도", "두 번째 지도");
     }
 
@@ -93,15 +94,15 @@ class MyMapOrderQueryTest {
         order(second, OTHER_USER_ID, 0);
         order(first, OTHER_USER_ID, 1);
 
-        Page<MapEntity> mine = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> mine = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
-        Page<MapEntity> others = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> others = mapRepository.findJoinedByTypeInMyOrder(
             OTHER_USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
 
         // 상대가 순서를 바꿔도 내 목록은 그대로 최신순이다.
-        assertThat(mine.getContent()).extracting(MapEntity::getName)
+        assertThat(mine.getContent()).extracting(row -> row.map().getName())
             .containsExactly("가장 나중 지도", "두 번째 지도", "가장 먼저 만든 지도");
-        assertThat(others.getContent()).extracting(MapEntity::getName)
+        assertThat(others.getContent()).extracting(row -> row.map().getName())
             .containsExactly("두 번째 지도", "가장 먼저 만든 지도");
     }
 
@@ -111,17 +112,33 @@ class MyMapOrderQueryTest {
         order(third, USER_ID, 1);
         order(second, USER_ID, 2);
 
-        Page<MapEntity> firstPage = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> firstPage = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(0, 2));
-        Page<MapEntity> secondPage = mapRepository.findJoinedByTypeInMyOrder(
+        Page<JoinedMapRow> secondPage = mapRepository.findJoinedByTypeInMyOrder(
             USER_ID, MapType.PRIVATE, PageRequest.of(1, 2));
 
-        assertThat(firstPage.getContent()).extracting(MapEntity::getName)
+        assertThat(firstPage.getContent()).extracting(row -> row.map().getName())
             .containsExactly("가장 먼저 만든 지도", "가장 나중 지도");
-        assertThat(secondPage.getContent()).extracting(MapEntity::getName)
+        assertThat(secondPage.getContent()).extracting(row -> row.map().getName())
             .containsExactly("두 번째 지도");
         // 전체 개수는 조인 후 내 참여분만 세야 한다.
         assertThat(firstPage.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
+    void 지도별_내_역할을_같은_행에_담아_내려준다() {
+        MapEntity admin = mapRepository.save(privateMap("관리 중인 지도"));
+        mapMemberRepository.save(MapMember.of(admin.getId(), USER_ID, MapRole.ADMIN));
+
+        Page<JoinedMapRow> page = mapRepository.findJoinedByTypeInMyOrder(
+            USER_ID, MapType.PRIVATE, PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).extracting(row -> row.map().getName(), JoinedMapRow::role)
+            .containsExactly(
+                tuple("관리 중인 지도", MapRole.ADMIN),
+                tuple("가장 나중 지도", MapRole.MEMBER),
+                tuple("두 번째 지도", MapRole.MEMBER),
+                tuple("가장 먼저 만든 지도", MapRole.MEMBER));
     }
 
     private void join(MapEntity map, Long userId) {

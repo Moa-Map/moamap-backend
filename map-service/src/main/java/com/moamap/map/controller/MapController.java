@@ -12,6 +12,7 @@ import com.moamap.map.dto.MapOrderUpdateRequest;
 import com.moamap.map.dto.MapSort;
 import com.moamap.map.dto.MapSummaryResponse;
 import com.moamap.map.dto.MapUpdateRequest;
+import com.moamap.map.dto.MyMapSummaryResponse;
 import com.moamap.map.dto.PageResponse;
 import com.moamap.map.entity.MapType;
 import com.moamap.map.service.MapService;
@@ -91,9 +92,9 @@ public class MapController {
         return ApiResponse.success(PageResponse.from(mapService.getOfficialMaps(pageable, userId)));
     }
 
-    @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다.")
+    @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다. 지도마다 내 역할(myRole)을 함께 내려준다.")
     @GetMapping("/me")
-    public ApiResponse<PageResponse<MapSummaryResponse>> getMyMaps(
+    public ApiResponse<PageResponse<MyMapSummaryResponse>> getMyMaps(
         @RequestParam MapType type,
         @PageableDefault(size = 20) Pageable pageable,
         @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
