@@ -41,6 +41,11 @@ output "ecr_registry" {
 }
 
 output "ci_role_arn" {
-  description = "GitHub Variables AWS_CI_ROLE_ARN에 넣을 값."
+  description = "GitHub Variable TEAM_AWS_CI_ROLE_ARN (빌드 + dev 배포)."
   value       = aws_iam_role.ci.arn
+}
+
+output "deploy_prod_role_arn" {
+  description = "GitHub Variable TEAM_AWS_DEPLOY_PROD_ROLE_ARN (environment production에서만 맡을 수 있음)."
+  value       = aws_iam_role.deploy_prod.arn
 }

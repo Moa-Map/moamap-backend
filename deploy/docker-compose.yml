@@ -53,6 +53,8 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13
+    # 데이터는 rabbit@<hostname> 아래 저장된다. 고정하지 않으면 재생성 때 새 노드로 떠서 기존 큐를 잃는다.
+    hostname: rabbitmq
     restart: unless-stopped
     mem_limit: 256m
     environment:

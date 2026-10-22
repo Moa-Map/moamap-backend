@@ -35,9 +35,20 @@ docker compose pull --quiet
 docker compose up -d --remove-orphans
 docker image prune -af --filter "until=168h" >/dev/null
 
+# 헬스체크: 외부 경로(nginx → gateway) + 각 서비스 직접. gateway만 보면 뒤 서비스가 죽어도 성공으로 보인다.
+# 서비스 직접 확인은 nginx 컨테이너의 wget으로 한다(앱 이미지에는 curl이 없을 수 있다).
 SECRET=$(sed -n "s/^ORIGIN_VERIFY_SECRET='\(.*\)'$/\1/p" .env)
-for _ in $(seq 1 36); do
-  if curl -fsS -o /dev/null -H "X-Origin-Verify: $SECRET" http://localhost/actuator/health; then
+TARGETS="user-service:8081 place-service:8082 map-service:8083 notification-service:8084"
+
+healthy() {
+  curl -fsS -o /dev/null -H "X-Origin-Verify: $SECRET" http://localhost/actuator/health || return 1
+  for t in $TARGETS; do
+    docker compose exec -T nginx wget -q -O /dev/null "http://$t/actuator/health" || return 1
+  done
+}
+
+for _ in $(seq 1 48); do
+  if healthy; then
     docker compose ps
     echo "배포 완료: $ENV $TAG"
     exit 0
@@ -46,6 +57,9 @@ for _ in $(seq 1 36); do
 done
 
 docker compose ps
-docker compose logs --tail 50
-echo "헬스체크 실패 (3분)" >&2
+for t in gateway-service:8080 $TARGETS; do
+  docker compose exec -T nginx wget -q -O /dev/null "http://$t/actuator/health" && echo "UP   $t" || echo "DOWN $t"
+done
+docker compose logs --tail 80
+echo "헬스체크 실패 (4분)" >&2
 exit 1

@@ -43,7 +43,7 @@ curl localhost:8081/actuator/health
 | 프레임워크 | Spring Boot 3.5.6, Spring Cloud 2025.0.0 |
 | 저장소 | PostgreSQL, Redis(user-service 리프레시 토큰), RabbitMQ(서비스 간 이벤트), S3(AWS SDK v2) |
 | 문서/모니터링 | springdoc-openapi 2.7.0, Actuator + micrometer-prometheus |
-| 배포 | Kubernetes(`k8s/`, kustomize overlays dev/prod) + ArgoCD, GitHub Actions(`.github/workflows/`) |
+| 배포 | **이관 중(#155)**: 팀 계정 EC2 + Docker Compose(`deploy/`, `infra/aws-team/`, `cd-team.yml`) + CloudFront. 이전 계정 정리 전까지 Kubernetes(`k8s/`) + ArgoCD(`cd-dev.yml`)도 병행 |
 
 ## 구조
 

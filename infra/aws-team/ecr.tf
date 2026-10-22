@@ -11,22 +11,36 @@ resource "aws_ecr_repository" "service" {
   }
 }
 
-# prod가 쓰는 이미지가 지워지지 않도록 dev보다 넉넉하게 남긴다.
+# main 빌드는 `prod-<sha>` 태그를 함께 단다(cd-team.yml). 상위 규칙에 걸린 이미지는 하위 규칙이 지우지 않으므로
+# develop push가 많아도 prod 이미지(롤백용 최근 10개)는 남는다.
 resource "aws_ecr_lifecycle_policy" "service" {
   for_each   = aws_ecr_repository.service
   repository = each.value.name
 
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "최근 30개만 유지"
-      selection = {
-        tagStatus   = "any"
-        countType   = "imageCountMoreThan"
-        countNumber = 30
+    rules = [
+      {
+        rulePriority = 1
+        description  = "prod 이미지 최근 10개 유지"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["prod-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "나머지 최근 30개 유지"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
+        }
+        action = { type = "expire" }
       }
-      action = { type = "expire" }
-    }]
+    ]
   })
 }
 
@@ -37,21 +51,51 @@ resource "aws_iam_openid_connect_provider" "github" {
   client_id_list = ["sts.amazonaws.com"]
 }
 
-resource "aws_iam_role" "ci" {
-  name = "${var.name_prefix}-ci"
+# GitHub OIDC 토큰의 sub는 job에 environment가 있으면 `repo:<r>:environment:<name>`, 없으면 `repo:<r>:ref:<ref>`다.
+# - ci 역할: 빌드(브랜치 push) + dev 배포(environment development). prod 서버에는 명령을 보낼 수 없다.
+# - deploy_prod 역할: environment production(승인자·main 제한이 걸린 환경)에서만 맡을 수 있다.
+# 역할을 하나로 두면 아무 브랜치의 워크플로가 승인 없이 prod에 root 명령을 보낼 수 있다.
+locals {
+  oidc_trust = {
+    ci          = ["repo:${var.github_repo}:ref:refs/heads/*", "repo:${var.github_repo}:environment:development"]
+    deploy_prod = ["repo:${var.github_repo}:environment:production"]
+  }
+  deploy_targets = {
+    ci          = "dev"
+    deploy_prod = "prod"
+  }
+}
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*" }
-      }
-    }]
-  })
+resource "aws_iam_role" "ci" {
+  name               = "${var.name_prefix}-ci"
+  assume_role_policy = data.aws_iam_policy_document.github_trust["ci"].json
+}
+
+resource "aws_iam_role" "deploy_prod" {
+  name               = "${var.name_prefix}-deploy-prod"
+  assume_role_policy = data.aws_iam_policy_document.github_trust["deploy_prod"].json
+}
+
+data "aws_iam_policy_document" "github_trust" {
+  for_each = local.oidc_trust
+
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = each.value
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ci" {
@@ -75,17 +119,31 @@ resource "aws_iam_role_policy" "ci" {
           "ecr:CompleteLayerUpload",
           "ecr:PutImage",
           "ecr:BatchGetImage",
+          "ecr:DescribeImages", # 같은 SHA 재빌드 건너뛰기(IMMUTABLE 태그)
         ]
         Resource = [for r in aws_ecr_repository.service : r.arn]
       },
-      # 배포: 우리 서버 두 대에만 셸 명령을 보낼 수 있다.
+    ]
+  })
+}
+
+# 배포: 각 역할은 자기 환경 서버 한 대에만 셸 명령을 보낼 수 있다.
+resource "aws_iam_role_policy" "deploy" {
+  for_each = local.deploy_targets
+
+  name = "${var.name_prefix}-deploy-${each.value}"
+  role = each.key == "ci" ? aws_iam_role.ci.id : aws_iam_role.deploy_prod.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
       {
         Effect = "Allow"
         Action = "ssm:SendCommand"
-        Resource = concat(
-          [for i in aws_instance.server : i.arn],
-          ["arn:aws:ssm:${var.region}::document/AWS-RunShellScript"]
-        )
+        Resource = [
+          aws_instance.server[each.value].arn,
+          "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
+        ]
       },
       {
         Effect   = "Allow"
