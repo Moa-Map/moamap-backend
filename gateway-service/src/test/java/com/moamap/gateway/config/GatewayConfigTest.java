@@ -76,6 +76,14 @@ class GatewayConfigTest {
         assertThat(matches(placeRoute, "/api/v1/places")).isTrue();
     }
 
+    @Test
+    void notification_service_라우트는_notifications_경로를_처리한다() {
+        Route notificationRoute = findRoute("notification-service");
+
+        assertThat(matches(notificationRoute, "/api/v1/notifications")).isTrue();
+        assertThat(matches(notificationRoute, "/api/v1/notifications/1/read")).isTrue();
+    }
+
     private Route findRoute(String id) {
         return routeLocator.getRoutes()
             .filter(route -> route.getId().equals(id))

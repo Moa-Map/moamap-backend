@@ -7,3 +7,4 @@ services:
   user-url: http://localhost:8081
   map-url: http://localhost:8083
   place-url: http://localhost:8082
+  notification-url: http://localhost:8084

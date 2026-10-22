@@ -51,7 +51,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         PublicEndpoint.of(HttpMethod.GET, "/webjars/**"),
         PublicEndpoint.of(HttpMethod.GET, "/user-service/v3/api-docs/**"),
         PublicEndpoint.of(HttpMethod.GET, "/map-service/v3/api-docs/**"),
-        PublicEndpoint.of(HttpMethod.GET, "/place-service/v3/api-docs/**")
+        PublicEndpoint.of(HttpMethod.GET, "/place-service/v3/api-docs/**"),
+        PublicEndpoint.of(HttpMethod.GET, "/notification-service/v3/api-docs/**")
     );
 
     private final JwtValidator jwtValidator;
