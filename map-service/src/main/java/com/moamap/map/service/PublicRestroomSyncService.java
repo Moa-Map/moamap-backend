@@ -56,7 +56,9 @@ public class PublicRestroomSyncService {
 
         runDeleteGuard(syncStartedAt, existingActiveCount, pagesResult);
         runGeocoding();
-        mapEntityRepository.updateOfficialPlaceCount(RESTROOM_MAP_NAME, repository.countVisibleMarkers());
+        if (mapEntityRepository.updateOfficialPlaceCount(RESTROOM_MAP_NAME, repository.countVisibleMarkers()) == 0) {
+            log.warn("장소 개수를 갱신할 공식 지도를 찾지 못했다. init.sql 시드 이름을 확인한다. name={}", RESTROOM_MAP_NAME);
+        }
     }
 
     // ---------- 1~4단계: 페이지 수집 + upsert ----------
