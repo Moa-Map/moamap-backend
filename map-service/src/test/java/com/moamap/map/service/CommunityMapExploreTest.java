@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 비로그인이면 참여 정보가 없으므로 전체를 보여준다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, MapService.class, InviteCodeGenerator.class})
+@Import({JpaAuditingConfig.class, MapService.class, MapOwnerSuccession.class, InviteCodeGenerator.class})
 class CommunityMapExploreTest {
 
     private static final long USER_ID = 10L;

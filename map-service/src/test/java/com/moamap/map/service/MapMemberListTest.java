@@ -35,7 +35,7 @@ import static org.mockito.BDDMockito.given;
  * user-service 호출은 대역으로 바꿔, 그쪽이 실패해도 목록이 나가는지까지 확인한다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, MapService.class, InviteCodeGenerator.class})
+@Import({JpaAuditingConfig.class, MapService.class, MapOwnerSuccession.class, InviteCodeGenerator.class})
 class MapMemberListTest {
 
     private static final long OWNER_ID = 1L;

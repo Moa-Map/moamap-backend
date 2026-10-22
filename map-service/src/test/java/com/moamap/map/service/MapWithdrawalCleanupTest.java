@@ -26,7 +26,7 @@ import org.springframework.context.annotation.Import;
  * 탈퇴 회원의 지도 데이터 정리. 방장 위임 순서와 멤버 수, 글 삭제 범위를 실제 쿼리로 확인한다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, MapWithdrawalCleanupService.class})
+@Import({JpaAuditingConfig.class, MapWithdrawalCleanupService.class, MapOwnerSuccession.class})
 class MapWithdrawalCleanupTest {
 
     private static final Long LEAVER = 10L;

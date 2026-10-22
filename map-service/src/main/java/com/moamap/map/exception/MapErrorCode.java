@@ -18,7 +18,8 @@ public enum MapErrorCode implements ErrorCode {
     ALREADY_JOINED("MAP_005", "이미 참여한 지도입니다.", 409),
     NOT_COMMUNITY_MAP("MAP_006", "공개 지도가 아니어서 바로 참여할 수 없습니다.", 400),
     INVALID_INVITE_CODE("MAP_007", "유효하지 않은 초대 코드입니다.", 404),
-    OWNER_CANNOT_LEAVE("MAP_008", "소유자는 지도를 나갈 수 없습니다. 지도를 삭제하거나 소유권을 넘기세요.", 400),
+    // 방장은 나갈 때 다음 사람에게 자동으로 넘긴다. 넘길 사람이 없으면 지도가 방장 없이 남으므로 막는다.
+    SOLE_OWNER_CANNOT_LEAVE("MAP_008", "혼자 남은 지도는 나갈 수 없습니다. 지도를 삭제해 주세요.", 400),
     INVITE_CODE_GENERATION_FAILED("MAP_009", "초대 코드 생성에 실패했습니다. 다시 시도해 주세요.", 500),
     INVALID_FILE_TYPE("MAP_010", "허용되지 않은 파일 형식입니다.", 400),
     FILE_SIZE_EXCEEDED("MAP_011", "파일 크기가 허용치를 초과했습니다.", 400),
@@ -33,7 +34,8 @@ public enum MapErrorCode implements ErrorCode {
     DUPLICATE_PLACE_TAG("MAP_020", "같은 장소를 두 번 태그할 수 없습니다.", 400),
     RESTROOM_NOT_FOUND("MAP_021", "화장실 정보를 찾을 수 없습니다.", 404),
     // 없는 지도인지, 남의 지도인지 구분해서 알려주지 않는다. 메시지 차이로 멤버십을 캐낼 수 있기 때문이다.
-    INVALID_MAP_ORDER("MAP_022", "순서를 바꾸려면 해당 탭에서 참여 중인 지도를 중복 없이 모두 보내야 합니다.", 400);
+    INVALID_MAP_ORDER("MAP_022", "순서를 바꾸려면 해당 탭에서 참여 중인 지도를 중복 없이 모두 보내야 합니다.", 400),
+    CANNOT_LEAVE_PERSONAL_MAP("MAP_023", "나만의 지도는 나갈 수 없습니다.", 400);
 
     private final String code;
     private final String message;

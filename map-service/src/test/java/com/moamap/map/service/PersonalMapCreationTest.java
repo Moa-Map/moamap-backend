@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 이벤트 연동 없이도 이 로직만 따로 확인할 수 있어야, 나중에 문제가 생겼을 때 원인을 가릴 수 있다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, MapService.class, InviteCodeGenerator.class})
+@Import({JpaAuditingConfig.class, MapService.class, MapOwnerSuccession.class, InviteCodeGenerator.class})
 class PersonalMapCreationTest {
 
     private static final long USER_ID = 1L;

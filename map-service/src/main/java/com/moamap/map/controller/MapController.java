@@ -4,6 +4,7 @@ import com.moamap.common.response.ApiResponse;
 import com.moamap.map.dto.JoinByInviteCodeRequest;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
+import com.moamap.map.dto.MapLeaveResponse;
 import com.moamap.map.dto.MapMemberListResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
 import com.moamap.map.dto.MapMemberRoleUpdateRequest;
@@ -15,6 +16,7 @@ import com.moamap.map.dto.MapUpdateRequest;
 import com.moamap.map.dto.MyMapSummaryResponse;
 import com.moamap.map.dto.PageResponse;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.service.MapLeaveService;
 import com.moamap.map.service.MapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -50,6 +52,7 @@ public class MapController {
     private static final String USER_ID_HEADER = "X-User-Id";
 
     private final MapService mapService;
+    private final MapLeaveService mapLeaveService;
 
     @Operation(summary = "지도 생성", description = "공개(COMMUNITY) 또는 프라이빗 지도를 만든다. 프라이빗은 초대 코드가 발급된다.")
     @PostMapping
@@ -163,14 +166,18 @@ public class MapController {
         return ApiResponse.success(mapService.joinByInviteCode(request.inviteCode(), userId));
     }
 
-    @Operation(summary = "지도 나가기", description = "참여 중인 지도에서 나간다. OWNER는 나갈 수 없다.")
+    @Operation(
+        summary = "지도 나가기",
+        description = "참여 중인 지도에서 나간다. 쓴 글·댓글·장소는 그대로 남는다. "
+            + "방장이 나가면 다음 사람에게 방장이 자동으로 넘어간다(관리자 우선 → 먼저 참여한 순). 이때 newOwner에 새 방장이 담긴다. "
+            + "혼자 남은 지도의 방장은 나갈 수 없다(400, MAP_008 — 지도 삭제를 안내한다). 나만의 지도는 나갈 수 없다(400, MAP_023)."
+    )
     @DeleteMapping("/{mapId}/members/me")
-    public ApiResponse<Void> leave(
+    public ApiResponse<MapLeaveResponse> leave(
         @PathVariable Long mapId,
         @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
-        mapService.leave(mapId, userId);
-        return ApiResponse.success();
+        return ApiResponse.success(mapLeaveService.leave(mapId, userId));
     }
 
     @Operation(
