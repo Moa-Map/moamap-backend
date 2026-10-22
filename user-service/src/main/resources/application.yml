@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: user-service
+  config:
+    # 약관 목록(정본). 약관을 추가·개정할 때는 resources/terms/ 폴더(terms.yml과 .md)만 고친다.
+    import: classpath:terms/terms.yml
   # @Scheduled 작업은 기본 1개 스레드를 나눠 쓴다. Apple 토큰 폐기 재시도가 외부 호출로 오래 걸려도
   # outbox 발행이 밀리지 않도록 2개로 둔다.
   task:
