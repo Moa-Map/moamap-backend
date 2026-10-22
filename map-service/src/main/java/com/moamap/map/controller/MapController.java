@@ -92,7 +92,7 @@ public class MapController {
         return ApiResponse.success(PageResponse.from(mapService.getOfficialMaps(pageable, userId)));
     }
 
-    @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다. 지도마다 내 역할(myRole)을 함께 내려준다.")
+    @Operation(summary = "내가 참여한 지도 목록", description = "모음 화면. type으로 커뮤니티/프라이빗을 구분한다. 커뮤니티 탭은 공식 지도를 포함한다. 지도마다 내 역할(myRole)을 함께 내려준다.")
     @GetMapping("/me")
     public ApiResponse<PageResponse<MyMapSummaryResponse>> getMyMaps(
         @RequestParam MapType type,
@@ -104,7 +104,7 @@ public class MapController {
 
     @Operation(
         summary = "모음 탭 지도 순서 변경",
-        description = "모음 화면에서 지도 순서를 바꾼다. 해당 탭(type)에서 참여 중인 지도 전체를 원하는 순서대로 보내야 한다. "
+        description = "모음 화면에서 지도 순서를 바꾼다. 커뮤니티 탭은 공식 지도를 포함하며 type=OFFICIAL도 커뮤니티 탭으로 처리한다. 해당 탭(type)에서 참여 중인 지도 전체를 원하는 순서대로 보내야 한다. "
             + "하나라도 빠지거나 중복되면 전체가 거부된다. 같은 요청을 다시 보내도 결과는 같다."
     )
     @PatchMapping("/me/order")

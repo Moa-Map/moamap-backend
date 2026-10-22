@@ -213,6 +213,73 @@ class MapOrderApiTest {
             .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    @DisplayName("커뮤니티 탭 목록에 참여한 공식 지도가 포함된다")
+    void communityTabIncludesOfficial() throws Exception {
+        joinCommunityMap("취미", ME);
+        joinOfficialMap("공식 혼잡도", ME);
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "COMMUNITY").header(USER_HEADER, ME))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.content[0].name").value("공식 혼잡도"))
+            .andExpect(jsonPath("$.data.content[1].name").value("취미"));
+    }
+
+    @Test
+    @DisplayName("커뮤니티 탭 순서 변경은 커뮤니티와 공식 지도를 함께 받는다")
+    void reorderCommunityTabWithOfficial() throws Exception {
+        Long hobby = joinCommunityMap("취미", ME);
+        Long official = joinOfficialMap("공식 혼잡도", ME);
+
+        reorderExpecting(body(MapType.COMMUNITY, List.of(hobby, official)), status().isOk());
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "COMMUNITY").header(USER_HEADER, ME))
+            .andExpect(jsonPath("$.data.content[0].name").value("취미"))
+            .andExpect(jsonPath("$.data.content[1].name").value("공식 혼잡도"));
+        assertMyMapNames("감마", "베타", "알파");
+    }
+
+    @Test
+    @DisplayName("커뮤니티 탭 순서 변경에서 공식 지도를 빠뜨리면 거부한다")
+    void rejectCommunityTabWithoutOfficial() throws Exception {
+        Long hobby = joinCommunityMap("취미", ME);
+        joinOfficialMap("공식 혼잡도", ME);
+
+        mockMvc.perform(patch(ORDER_URL)
+                .header(USER_HEADER, ME)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body(MapType.COMMUNITY, List.of(hobby))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("MAP_022"));
+    }
+
+    @Test
+    @DisplayName("type이 OFFICIAL이어도 커뮤니티 탭 전체를 기준으로 검증한다")
+    void officialTypeUsesCommunityTabSet() throws Exception {
+        Long hobby = joinCommunityMap("취미", ME);
+        Long official = joinOfficialMap("공식 혼잡도", ME);
+
+        reorderExpecting(body(MapType.OFFICIAL, List.of(hobby, official)), status().isOk());
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "COMMUNITY").header(USER_HEADER, ME))
+            .andExpect(jsonPath("$.data.content[0].name").value("취미"))
+            .andExpect(jsonPath("$.data.content[1].name").value("공식 혼잡도"));
+    }
+
+    @Test
+    @DisplayName("type=OFFICIAL로 조회해도 참여한 커뮤니티와 공식 지도가 함께 나오고 프라이빗은 빠진다")
+    void officialTypeListsCommunityTabSet() throws Exception {
+        joinCommunityMap("취미", ME);
+        joinOfficialMap("공식 혼잡도", ME);
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "OFFICIAL").header(USER_HEADER, ME))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.content[0].name").value("공식 혼잡도"))
+            .andExpect(jsonPath("$.data.content[1].name").value("취미"));
+    }
+
     private void reorderExpecting(String request,
             org.springframework.test.web.servlet.ResultMatcher expected) throws Exception {
         mockMvc.perform(patch(ORDER_URL)
@@ -241,6 +308,10 @@ class MapOrderApiTest {
 
     private Long joinCommunityMap(String name, Long userId) {
         return saveAndJoin(name, MapType.COMMUNITY, userId);
+    }
+
+    private Long joinOfficialMap(String name, Long userId) {
+        return saveAndJoin(name, MapType.OFFICIAL, userId);
     }
 
     private Long saveAndJoin(String name, MapType type, Long userId) {

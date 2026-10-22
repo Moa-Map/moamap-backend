@@ -28,12 +28,12 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
      */
     @Query(value = "select new com.moamap.map.repository.JoinedMapRow(m, mm.role) "
         + "from MapEntity m join MapMember mm on mm.mapId = m.id "
-        + "where mm.userId = :userId and m.type = :type "
+        + "where mm.userId = :userId and m.type in :types "
         + "order by mm.sortOrder asc nulls last, m.createdAt desc, m.id desc",
         countQuery = "select count(mm) from MapMember mm join MapEntity m on mm.mapId = m.id "
-            + "where mm.userId = :userId and m.type = :type")
-    Page<JoinedMapRow> findJoinedByTypeInMyOrder(
-        @Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
+            + "where mm.userId = :userId and m.type in :types")
+    Page<JoinedMapRow> findJoinedByTypesInMyOrder(
+        @Param("userId") Long userId, @Param("types") Collection<MapType> types, Pageable pageable);
 
     // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.
     @Query("select m from MapEntity m where m.type = :type "
