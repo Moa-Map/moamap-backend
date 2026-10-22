@@ -1,0 +1,20 @@
+# nginx 공식 이미지가 기동 시 ${ORIGIN_VERIFY_SECRET}만 치환한다(정의된 환경변수만 치환 → $host 등은 그대로).
+server {
+    listen 80;
+    client_max_body_size 20m;
+
+    # CloudFront IP는 모든 AWS 고객이 공유한다. 우리 배포만 아는 값으로 한 번 더 거른다.
+    if ($http_x_origin_verify != "${ORIGIN_VERIFY_SECRET}") {
+        return 403;
+    }
+
+    location / {
+        proxy_pass http://gateway-service:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Origin-Verify "";
+        proxy_read_timeout 60s;
+    }
+}

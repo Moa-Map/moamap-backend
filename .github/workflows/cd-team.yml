@@ -1,0 +1,118 @@
+name: CD (team account)
+
+# 팀 계정(B) EC2 배포. develop → dev 서버, main → prod 서버(GitHub Environment "production" 승인 후).
+# 이전 계정(A)의 cd-dev.yml과 동시에 돈다 — A 정리 때 cd-dev.yml·cd-prod.yml을 지운다.
+#
+# GitHub Variables (Settings → Secrets and variables → Actions → Variables), 값은 terraform output:
+#   TEAM_AWS_CI_ROLE_ARN    ci_role_arn
+#   TEAM_ECR_REGISTRY       ecr_registry
+#   TEAM_DEV_INSTANCE_ID    server_instance_ids.dev
+#   TEAM_PROD_INSTANCE_ID   server_instance_ids.prod
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cd-team-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: ${{ vars.TEAM_ECR_REGISTRY }}
+
+jobs:
+  build-push:
+    name: build & push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway-service, user-service, map-service, place-service, notification-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TEAM_AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      # 태그가 IMMUTABLE이라 같은 SHA를 다시 push하면 실패한다(재실행, develop→main 같은 커밋).
+      - name: Check existing image
+        id: exists
+        run: |
+          if aws ecr describe-images --repository-name moamap/${{ matrix.service }} \
+               --image-ids imageTag=${{ github.sha }} >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 서버가 Graviton(arm64). runner는 amd64라 QEMU로 빌드한다.
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v3
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          build-args: SERVICE=${{ matrix.service }}
+          tags: ${{ env.ECR_REGISTRY }}/moamap/${{ matrix.service }}:${{ github.sha }}
+          push: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      TARGET_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      INSTANCE_ID: ${{ github.ref_name == 'main' && vars.TEAM_PROD_INSTANCE_ID || vars.TEAM_DEV_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TEAM_AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # deploy/ + DB 스키마 초기화 SQL을 묶어 명령에 실어 보낸다(수 KB). 서버에 git·별도 버킷이 필요 없다.
+      - name: Send deploy command
+        id: send
+        run: |
+          mkdir bundle
+          cp -r deploy/. bundle/
+          cp -r docker/postgres/init bundle/postgres-init
+          B64=$(tar czf - -C bundle . | base64 -w0)
+          CMD="set -e; mkdir -p /opt/moamap && cd /opt/moamap && echo $B64 | base64 -d | tar xzf - && bash deploy.sh $TARGET_ENV ${{ github.sha }} $ECR_REGISTRY"
+          ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $TARGET_ENV ${GITHUB_SHA::7}" \
+            --parameters "$(jq -n --arg c "$CMD" '{commands: [$c], executionTimeout: ["900"]}')" \
+            --query Command.CommandId --output text)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for deploy
+        run: |
+          for _ in $(seq 1 120); do
+            STATUS=$(aws ssm get-command-invocation --command-id ${{ steps.send.outputs.id }} \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Success) break ;;
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          aws ssm get-command-invocation --command-id ${{ steps.send.outputs.id }} \
+            --instance-id "$INSTANCE_ID" --query '[StandardOutputContent, StandardErrorContent]' --output text
+          test "$STATUS" = Success
