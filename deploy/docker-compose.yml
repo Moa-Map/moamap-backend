@@ -1,0 +1,82 @@
+# 팀 계정(B) EC2 서버용. 로컬 개발용은 저장소 루트의 docker-compose.yml.
+# .env는 deploy.sh가 만든다(config/*.env + SSM /moamap/<env>/ + 이미지 태그). 직접 편집하지 않는다.
+# dev는 COMPOSE_PROFILES=localdb로 PostgreSQL 컨테이너를 함께 띄우고, prod는 RDS를 쓴다.
+
+x-app: &app
+  env_file: .env
+  restart: unless-stopped
+  mem_limit: 512m # k8s limits와 같게. 서버 4GB + 스왑 2GB
+
+services:
+  # CloudFront만 통과시키는 문지기. X-Origin-Verify가 다르면 403.
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      ORIGIN_VERIFY_SECRET: ${ORIGIN_VERIFY_SECRET}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - gateway-service
+
+  gateway-service:
+    <<: *app
+    image: ${ECR_REGISTRY}/moamap/gateway-service:${IMAGE_TAG}
+    mem_limit: 384m
+
+  user-service:
+    <<: *app
+    image: ${ECR_REGISTRY}/moamap/user-service:${IMAGE_TAG}
+    depends_on: [redis, rabbitmq]
+
+  map-service:
+    <<: *app
+    image: ${ECR_REGISTRY}/moamap/map-service:${IMAGE_TAG}
+    depends_on: [rabbitmq]
+
+  place-service:
+    <<: *app
+    image: ${ECR_REGISTRY}/moamap/place-service:${IMAGE_TAG}
+    depends_on: [rabbitmq]
+
+  notification-service:
+    <<: *app
+    image: ${ECR_REGISTRY}/moamap/notification-service:${IMAGE_TAG}
+    depends_on: [rabbitmq]
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    mem_limit: 128m
+
+  rabbitmq:
+    image: rabbitmq:3.13
+    # 데이터는 rabbit@<hostname> 아래 저장된다. 고정하지 않으면 재생성 때 새 노드로 떠서 기존 큐를 잃는다.
+    hostname: rabbitmq
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  postgres:
+    profiles: [localdb]
+    image: postgres:16
+    restart: unless-stopped
+    mem_limit: 384m
+    environment:
+      POSTGRES_DB: moamap
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 데이터 디렉터리가 비어 있는 최초 기동에만 실행된다(서비스별 스키마 생성).
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  rabbitmq-data:
+  pgdata:
