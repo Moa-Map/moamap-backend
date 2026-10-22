@@ -128,19 +128,19 @@ class MapApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("커뮤니티 목록은 요청자가 참여 중인 지도를 제외한 공개 지도를 반환한다")
-    void communityListExcludesJoinedMaps() throws Exception {
+    @DisplayName("커뮤니티 목록은 요청자가 참여 중인 지도도 포함해 반환하고 joined로 표시한다")
+    void communityListIncludesJoinedMaps() throws Exception {
         long joinedMapId = createMap(OWNER, "힙플 지도", "PUBLIC");
         createMap(OWNER, "산책 지도", "PUBLIC");
         mockMvc.perform(post("/api/v1/maps/{mapId}/join", joinedMapId).header(USER_HEADER, OTHER)).andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/maps").header(USER_HEADER, OTHER))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.content.length()").value(1))
-            .andExpect(jsonPath("$.data.content[0].name").value("산책 지도"))
-            .andExpect(jsonPath("$.data.content[0].type").value("COMMUNITY"))
-            .andExpect(jsonPath("$.data.content[0].joined").value(false))
-            .andExpect(jsonPath("$.data.content[0].myRole").doesNotExist());
+            .andExpect(jsonPath("$.data.content.length()").value(2))
+            .andExpect(jsonPath("$.data.content[?(@.name == '힙플 지도')].joined").value(true))
+            .andExpect(jsonPath("$.data.content[?(@.name == '산책 지도')].joined").value(false))
+            .andExpect(jsonPath("$.data.content[?(@.type != 'COMMUNITY')]").isEmpty())
+            .andExpect(jsonPath("$.data.content[?(@.myRole)]").isEmpty());
     }
 
     @Test

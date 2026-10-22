@@ -22,10 +22,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
- * 탐색 탭 커뮤니티 지도 목록은 로그인 사용자가 이미 참여 중인 지도를 빼고 보여준다.
- * 비로그인이면 참여 정보가 없으므로 전체를 보여준다.
+ * 탐색 탭 커뮤니티 지도 목록은 참여 여부와 관계없이 모든 커뮤니티 지도를 보여주고,
+ * 로그인 사용자가 참여 중인 지도는 joined=true로 표시한다.
  */
 @DataJpaTest
 @Import({JpaAuditingConfig.class, MapService.class, InviteCodeGenerator.class})
@@ -58,21 +59,23 @@ class CommunityMapExploreTest {
     }
 
     @Test
-    void 로그인_사용자에게는_참여_중인_지도를_빼고_보여준다() {
+    void 로그인_사용자에게도_참여_중인_지도를_포함해_보여주고_joined로_표시한다() {
         Page<MapSummaryResponse> page = mapService.getCommunityMaps(null, MapSort.LATEST, PageRequest.of(0, 20), USER_ID);
 
-        assertThat(page.getContent()).extracting(MapSummaryResponse::name)
-            .containsExactlyInAnyOrder("미참여 맛집 지도", "미참여 캠핑 지도");
-        assertThat(page.getContent()).extracting(MapSummaryResponse::joined).containsOnly(false);
-        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getContent()).extracting(MapSummaryResponse::name, MapSummaryResponse::joined)
+            .containsExactlyInAnyOrder(
+                tuple("참여한 맛집 지도", true),
+                tuple("미참여 맛집 지도", false),
+                tuple("미참여 캠핑 지도", false));
+        assertThat(page.getTotalElements()).isEqualTo(3);
     }
 
     @Test
-    void 태그로_거를_때도_참여_중인_지도를_뺀다() {
+    void 태그로_거를_때도_참여_중인_지도를_포함한다() {
         Page<MapSummaryResponse> page = mapService.getCommunityMaps("맛집", MapSort.POPULAR, PageRequest.of(0, 20), USER_ID);
 
         assertThat(page.getContent()).extracting(MapSummaryResponse::name)
-            .containsExactly("미참여 맛집 지도");
+            .containsExactlyInAnyOrder("참여한 맛집 지도", "미참여 맛집 지도");
     }
 
     @Test
@@ -92,7 +95,7 @@ class CommunityMapExploreTest {
     }
 
     @Test
-    void 참여_지도를_빼도_인기순은_참여_인원순을_유지한다() {
+    void 인기순은_참여_인원순으로_정렬한다() {
         // 저장 순서와 인원 순서를 일부러 어긋나게 둬서, 정렬이 실제로 적용되는지 본다.
         mapRepository.save(map("인원 30 지도", List.of("맛집"), 30));
         mapRepository.save(map("인원 50 지도", List.of("맛집"), 50));
@@ -104,8 +107,8 @@ class CommunityMapExploreTest {
         Page<MapSummaryResponse> page = mapService.getCommunityMaps(null, MapSort.POPULAR, PageRequest.of(0, 3), USER_ID);
 
         assertThat(page.getContent()).extracting(MapSummaryResponse::name)
-            .containsExactly("인원 50 지도", "인원 40 지도", "인원 30 지도");
-        assertThat(page.getTotalElements()).isEqualTo(5);
+            .containsExactly("참여한 인원 100 지도", "인원 50 지도", "인원 40 지도");
+        assertThat(page.getTotalElements()).isEqualTo(7);
     }
 
     @Test
@@ -119,7 +122,8 @@ class CommunityMapExploreTest {
         Page<MapSummaryResponse> page = mapService.getCommunityMaps("맛집", MapSort.POPULAR, PageRequest.of(0, 20), USER_ID);
 
         assertThat(page.getContent()).extracting(MapSummaryResponse::name)
-            .containsExactly("인원 50 지도", "인원 30 지도", "미참여 맛집 지도");
+            .startsWith("참여한 인원 100 지도", "인원 50 지도", "인원 30 지도")
+            .containsExactlyInAnyOrder("참여한 인원 100 지도", "인원 50 지도", "인원 30 지도", "미참여 맛집 지도", "참여한 맛집 지도");
     }
 
     private static MapEntity map(String name, List<String> tags) {
