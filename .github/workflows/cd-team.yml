@@ -12,7 +12,7 @@ name: CD (team account)
 
 on:
   push:
-    branches: [develop, main, "chore/#155/team-account-infra"] # TODO(#155): 머지 전 사전 검증용, PR 전에 제거
+    branches: [develop, main]
   workflow_dispatch:
 
 permissions:
