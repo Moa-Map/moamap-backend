@@ -157,6 +157,13 @@ class MapApiIntegrationTest {
             .andExpect(jsonPath("$.data.content[?(@.name == '남의 지도')].myRole").value("MEMBER"))
             .andExpect(jsonPath("$.data.content[*].joined", org.hamcrest.Matchers.everyItem(
                 org.hamcrest.Matchers.is(true))));
+
+        createMap(OWNER, "우리끼리 지도", "PRIVATE");
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "PRIVATE").header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[?(@.name == '우리끼리 지도')].myRole").value("OWNER"))
+            .andExpect(jsonPath("$.data.content[*].myRole", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.notNullValue())));
     }
 
     @Test

@@ -123,11 +123,8 @@ public class MapService {
     public Page<MyMapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
         // 정렬은 쿼리가 고정한다(내 순서 → 최신순). Sort를 실어 보내면 order by가 중복으로 붙는다.
         Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
-        Page<MapEntity> maps = mapRepository.findJoinedByTypeInMyOrder(requesterId, type, unsorted);
-        // 지도마다 조회하지 않도록 해당 탭의 내 멤버십을 한 번에 가져와 역할을 채운다.
-        Map<Long, MapRole> myRoles = mapMemberRepository.findByUserIdAndMapType(requesterId, type).stream()
-            .collect(Collectors.toMap(MapMember::getMapId, MapMember::getRole));
-        return maps.map(map -> MyMapSummaryResponse.of(map, myRoles.get(map.getId())));
+        return mapRepository.findJoinedByTypeInMyOrder(requesterId, type, unsorted)
+            .map(MyMapSummaryResponse::from);
     }
 
     /**
