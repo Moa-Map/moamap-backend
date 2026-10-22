@@ -139,7 +139,31 @@ class MapApiIntegrationTest {
             .andExpect(jsonPath("$.data.content.length()").value(1))
             .andExpect(jsonPath("$.data.content[0].name").value("산책 지도"))
             .andExpect(jsonPath("$.data.content[0].type").value("COMMUNITY"))
-            .andExpect(jsonPath("$.data.content[0].joined").value(false));
+            .andExpect(jsonPath("$.data.content[0].joined").value(false))
+            .andExpect(jsonPath("$.data.content[0].myRole").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("내가 참여한 지도 목록은 지도별 내 역할(myRole)을 함께 반환한다")
+    void myMapsIncludeMyRole() throws Exception {
+        createMap(OWNER, "내 지도", "PUBLIC");
+        long othersMapId = createMap(OTHER, "남의 지도", "PUBLIC");
+        mockMvc.perform(post("/api/v1/maps/{mapId}/join", othersMapId).header(USER_HEADER, OWNER)).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "COMMUNITY").header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content.length()").value(2))
+            .andExpect(jsonPath("$.data.content[?(@.name == '내 지도')].myRole").value("OWNER"))
+            .andExpect(jsonPath("$.data.content[?(@.name == '남의 지도')].myRole").value("MEMBER"))
+            .andExpect(jsonPath("$.data.content[*].joined", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.is(true))));
+
+        createMap(OWNER, "우리끼리 지도", "PRIVATE");
+        mockMvc.perform(get("/api/v1/maps/me").param("type", "PRIVATE").header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[?(@.name == '우리끼리 지도')].myRole").value("OWNER"))
+            .andExpect(jsonPath("$.data.content[*].myRole", org.hamcrest.Matchers.everyItem(
+                org.hamcrest.Matchers.notNullValue())));
     }
 
     @Test

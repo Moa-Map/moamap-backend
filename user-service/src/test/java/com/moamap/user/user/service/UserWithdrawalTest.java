@@ -18,6 +18,8 @@ import com.moamap.user.event.UserWithdrawnEvent;
 import com.moamap.user.inquiry.entity.Inquiry;
 import com.moamap.user.inquiry.entity.InquiryType;
 import com.moamap.user.inquiry.repository.InquiryRepository;
+import com.moamap.user.term.entity.UserTerm;
+import com.moamap.user.term.repository.UserTermRepository;
 import com.moamap.user.outbox.OutboxEvent;
 import com.moamap.user.outbox.OutboxEventRepository;
 import com.moamap.user.outbox.OutboxRecorder;
@@ -67,6 +69,7 @@ class UserWithdrawalTest {
     @Autowired private UserRepository userRepository;
     @Autowired private OutboxEventRepository outboxEventRepository;
     @Autowired private InquiryRepository inquiryRepository;
+    @Autowired private UserTermRepository userTermRepository;
     @Autowired private AppleCredentialRepository appleCredentialRepository;
     @Autowired private AppleTokenCipher cipher;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -76,6 +79,7 @@ class UserWithdrawalTest {
     void cleanUp() {
         appleCredentialRepository.deleteAll();
         inquiryRepository.deleteAll();
+        userTermRepository.deleteAll();
         outboxEventRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -107,6 +111,18 @@ class UserWithdrawalTest {
 
         // 문의의 답변 이메일·내용도 개인정보라 회원 정보와 함께 지운다.
         assertThat(inquiryRepository.findAll()).extracting(Inquiry::getUserId).containsExactly(otherId);
+    }
+
+    @Test
+    void 탈퇴하면_그_회원의_약관_동의_기록도_지우고_남의_기록은_남긴다() {
+        Long userId = kakaoUser("111").getId();
+        Long otherId = kakaoUser("222").getId();
+        userTermRepository.save(UserTerm.agree(userId, 1L));
+        userTermRepository.save(UserTerm.agree(otherId, 1L));
+
+        withdrawalWriter.withdraw(userId);
+
+        assertThat(userTermRepository.findAll()).extracting(UserTerm::getUserId).containsExactly(otherId);
     }
 
     @Test

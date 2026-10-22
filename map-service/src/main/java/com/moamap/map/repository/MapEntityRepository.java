@@ -24,13 +24,15 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
      *
      * 정렬 기준이 MapMember에 있어 조인이 필요하다. 정렬을 쿼리에 고정하므로 Pageable의 Sort는 비워서 넘겨야
      * Spring Data가 order by를 덧붙이지 않는다.
+     * 내 역할도 같은 행에서 꺼낸다. 따로 조회하면 그 사이 탈퇴가 끼어들어 역할이 비는 행이 생길 수 있다.
      */
-    @Query(value = "select m from MapEntity m join MapMember mm on mm.mapId = m.id "
+    @Query(value = "select new com.moamap.map.repository.JoinedMapRow(m, mm.role) "
+        + "from MapEntity m join MapMember mm on mm.mapId = m.id "
         + "where mm.userId = :userId and m.type in :types "
         + "order by mm.sortOrder asc nulls last, m.createdAt desc, m.id desc",
         countQuery = "select count(mm) from MapMember mm join MapEntity m on mm.mapId = m.id "
             + "where mm.userId = :userId and m.type in :types")
-    Page<MapEntity> findJoinedByTypesInMyOrder(
+    Page<JoinedMapRow> findJoinedByTypesInMyOrder(
         @Param("userId") Long userId, @Param("types") Collection<MapType> types, Pageable pageable);
 
     // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.

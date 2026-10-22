@@ -53,6 +53,15 @@ class GatewayConfigTest {
     }
 
     @Test
+    void user_service_라우트는_약관_조회와_동의_경로를_처리한다() {
+        Route userRoute = findRoute("user-service");
+
+        assertThat(matches(userRoute, "/api/v1/terms")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/terms/4")).isTrue();
+        assertThat(matches(userRoute, "/api/v1/terms/agreements/me")).isTrue();
+    }
+
+    @Test
     void map_service_라우트는_maps_경로를_처리한다() {
         Route mapRoute = findRoute("map-service");
 
