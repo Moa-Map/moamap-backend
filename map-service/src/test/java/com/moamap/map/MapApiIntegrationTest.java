@@ -182,8 +182,8 @@ class MapApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("지도 검색은 커뮤니티·공식 지도를 인증 없이 찾고, 프라이빗 지도는 제외한다")
-    void searchReturnsPublicMapsOnly() throws Exception {
+    @DisplayName("지도 검색은 커뮤니티 지도만 인증 없이 찾고, 공식·프라이빗 지도는 제외한다")
+    void searchReturnsCommunityMapsOnly() throws Exception {
         createMap(OWNER, "성수 카페 투어", "PUBLIC");
         createMap(OWNER, "성수 비밀 모임", "PRIVATE");
         mapEntityRepository.save(
@@ -192,9 +192,9 @@ class MapApiIntegrationTest {
 
         mockMvc.perform(get("/api/v1/maps/search").param("keyword", "성수"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.totalElements").value(1))
             .andExpect(jsonPath("$.data.content[*].type", org.hamcrest.Matchers.everyItem(
-                org.hamcrest.Matchers.not("PRIVATE"))))
+                org.hamcrest.Matchers.is("COMMUNITY"))))
             .andExpect(jsonPath("$.data.content[*].joined", org.hamcrest.Matchers.everyItem(
                 org.hamcrest.Matchers.is(false))));
     }

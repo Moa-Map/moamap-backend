@@ -72,7 +72,7 @@ public class MapController {
         return ApiResponse.success(PageResponse.from(mapService.getCommunityMaps(tag, sort, pageable, userId)));
     }
 
-    @Operation(summary = "지도 검색", description = "공개 지도(커뮤니티·공식)를 이름/설명/태그로 검색한다. 로그인 없이 볼 수 있다.")
+    @Operation(summary = "지도 검색", description = "커뮤니티 지도를 이름/설명/태그로 검색한다. 로그인 없이 볼 수 있다.")
     @GetMapping("/search")
     public ApiResponse<PageResponse<MapSummaryResponse>> search(
         @RequestParam @NotBlank @Size(max = 50) String keyword,

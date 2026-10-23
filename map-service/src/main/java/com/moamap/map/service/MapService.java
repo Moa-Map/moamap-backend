@@ -46,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MapService {
 
     private static final int MAX_INVITE_CODE_TRIES = 5;
-    private static final List<MapType> SEARCHABLE_TYPES = List.of(MapType.COMMUNITY, MapType.OFFICIAL);
+    private static final List<MapType> SEARCHABLE_TYPES = List.of(MapType.COMMUNITY);
 
     private final MapEntityRepository mapRepository;
     private final MapMemberRepository mapMemberRepository;
@@ -87,7 +87,7 @@ public class MapService {
     }
 
     /**
-     * 공개 지도를 이름/설명/태그로 검색한다. 로그인하지 않아도 볼 수 있어 requesterId는 null일 수 있다.
+     * 커뮤니티 지도를 이름/설명/태그로 검색한다. 로그인하지 않아도 볼 수 있어 requesterId는 null일 수 있다.
      */
     public Page<MapSummaryResponse> search(String keyword, MapSort sort, Pageable pageable, Long requesterId) {
         Page<MapEntity> maps = mapRepository.search(
