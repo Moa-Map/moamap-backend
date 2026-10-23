@@ -17,8 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class KakaoPlaceMatcherTest {
@@ -76,6 +79,63 @@ class KakaoPlaceMatcherTest {
         MatchResult result = matcher.match(extracted("스타벅스 상도점"));
 
         assertThat(result.isMatched()).isTrue();
+    }
+
+    @Test
+    void match는_지점명만_다르면_지점명을_떼고_비교해_채택한다() {
+        // given - 네이버 공유 리스트 실측 사례. 같은 가게인데 지점 표기만 달라 포함 관계가 깨진다.
+        given(kakaoLocalClient.searchNearby(anyString(), any(), any()))
+            .willReturn(List.of(document("111", "강민주의들밥 서이천직영점", "37.49585", "126.95781")));
+
+        MatchResult result = matcher.match(extracted("강민주의들밥 직영점"));
+
+        assertThat(result.isMatched()).isTrue();
+    }
+
+    @Test
+    void match는_지점명을_떼도_상호명이_다르면_채택하지_않는다() {
+        // given - 같은 지점명("상도점")이 붙었다고 다른 가게가 매칭되면 안 된다
+        given(kakaoLocalClient.searchNearby(anyString(), any(), any()))
+            .willReturn(List.of(document("999", "신전떡볶이 상도점", "37.49585", "126.95781")));
+
+        MatchResult result = matcher.match(extracted("청년다방 상도점"));
+
+        assertThat(result.isMatched()).isFalse();
+        assertThat(result.reason()).isEqualTo(UnmatchReason.NAME_MISMATCH);
+    }
+
+    @Test
+    void match는_지점명을_뗀_상호명이_한_글자면_떼지_않는다() {
+        // given - "가"만 남기면 근처 아무 가게나 포함 관계로 걸린다
+        given(kakaoLocalClient.searchNearby(anyString(), any(), any()))
+            .willReturn(List.of(document("999", "가나다 분식", "37.49585", "126.95781")));
+
+        MatchResult result = matcher.match(extracted("가 본점"));
+
+        assertThat(result.isMatched()).isFalse();
+    }
+
+    @Test
+    void match는_1차에서_못_찾으면_지점명을_뗀_이름으로_다시_검색한다() {
+        // given - 지점명까지 붙은 이름으로는 카카오 검색 결과가 없던 실측 사례
+        given(kakaoLocalClient.searchNearby(eq("복돈이 가마솥 순대국 강남본점"), any(), any()))
+            .willReturn(List.of());
+        given(kakaoLocalClient.searchNearby(eq("복돈이 가마솥 순대국"), any(), any()))
+            .willReturn(List.of(document("111", "복돈이가마솥순대국", "37.49585", "126.95781")));
+
+        MatchResult result = matcher.match(extracted("복돈이 가마솥 순대국 강남본점"));
+
+        assertThat(result.isMatched()).isTrue();
+        assertThat(result.document().id()).isEqualTo("111");
+    }
+
+    @Test
+    void match는_뗄_지점명이_없으면_다시_검색하지_않는다() {
+        given(kakaoLocalClient.searchNearby(anyString(), any(), any())).willReturn(List.of());
+
+        matcher.match(extracted("청년다방"));
+
+        then(kakaoLocalClient).should(times(1)).searchNearby(anyString(), any(), any());
     }
 
     @Test
