@@ -51,6 +51,30 @@ class PlaceBulkCreateRequestTest {
             .toList();
     }
 
+    private PlaceBulkCreateRequest requestWithItemCount(int count) {
+        List<PlaceBulkCreateRequest.Item> items = java.util.stream.IntStream.range(0, count)
+            .mapToObj(i -> new PlaceBulkCreateRequest.Item(
+                "장소" + i, null, null, BigDecimal.valueOf(37.5), BigDecimal.valueOf(127.0), null, "id" + i,
+                PlaceSourceType.NAVER_MAP, null, null, null, null))
+            .toList();
+        return new PlaceBulkCreateRequest(10L, items);
+    }
+
+    @Test
+    void 장소가_500개면_유효하다() {
+        // 지도 공유 링크 추출 상한(500)과 맞춰, 추출 결과를 나누지 않고 한 번에 등록할 수 있어야 한다.
+        assertThat(validator.validate(requestWithItemCount(500))).isEmpty();
+    }
+
+    @Test
+    void 장소가_501개면_Size위반이_발생한다() {
+        Set<ConstraintViolation<PlaceBulkCreateRequest>> violations =
+            validator.validate(requestWithItemCount(501));
+
+        assertThat(violations).hasSize(1);
+        assertThat(violations.iterator().next().getPropertyPath()).hasToString("places");
+    }
+
     @Test
     void 항목에_photoUrls가_없어도_유효하다() {
         Set<ConstraintViolation<PlaceBulkCreateRequest>> violations =

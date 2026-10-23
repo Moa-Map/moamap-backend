@@ -137,21 +137,21 @@ class MapSharePlaceExtractionServiceTest {
     }
 
     @Test
-    void extract는_100개를_넘으면_잘라내고_truncated를_표시한다() {
+    void extract는_500개를_넘으면_잘라내고_truncated를_표시한다() {
         List<ExtractedMapPlace> many = new ArrayList<>();
-        for (int i = 0; i < 106; i++) {
+        for (int i = 0; i < 506; i++) {
             many.add(place("가게" + i));
         }
         ExtractedList list = new ExtractedList(PlaceSourceType.NAVER_MAP, "list-id", "원슐랭",
-            null, 106, many);
+            null, 506, many);
         given(kakaoPlaceMatcher.match(any())).willReturn(MatchResult.matched(document("111", "가게")));
 
         MapShareExtractResponse response = service(provider(PlaceSourceType.NAVER_MAP, "naver.me", list))
             .extract(new MapShareExtractRequest("https://naver.me/xAbC1234"));
 
         assertThat(response.truncated()).isTrue();
-        assertThat(response.extractedCount()).isEqualTo(100);
-        assertThat(response.declaredCount()).isEqualTo(106);
+        assertThat(response.extractedCount()).isEqualTo(500);
+        assertThat(response.declaredCount()).isEqualTo(506);
     }
 
     @Test

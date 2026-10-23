@@ -18,7 +18,7 @@ import jakarta.validation.constraints.Size;
 public record PlaceBulkCreateRequest(
     @NotNull Long mapId,
     @NotEmpty(message = "등록할 장소가 없습니다.")
-    @Size(max = 100, message = "한 번에 최대 100개까지 등록할 수 있습니다.")
+    @Size(max = 500, message = "한 번에 최대 500개까지 등록할 수 있습니다.")
     List<@Valid Item> places
 ) {
 
