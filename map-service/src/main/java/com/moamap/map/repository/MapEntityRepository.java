@@ -36,16 +36,6 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
     Page<JoinedMapRow> findJoinedByTypesInMyOrder(
         @Param("userId") Long userId, @Param("types") Collection<MapType> types, Pageable pageable);
 
-    // 탐색 탭용. 참여 중인 지도를 페이지네이션 전에 빼야 페이지 크기·전체 개수가 화면과 맞는다.
-    @Query("select m from MapEntity m where m.type = :type "
-        + "and m.id not in (select mm.mapId from MapMember mm where mm.userId = :userId)")
-    Page<MapEntity> findNotJoinedByType(@Param("userId") Long userId, @Param("type") MapType type, Pageable pageable);
-
-    @Query("select distinct m from MapEntity m join m.tags t where m.type = :type and t = :tag "
-        + "and m.id not in (select mm.mapId from MapMember mm where mm.userId = :userId)")
-    Page<MapEntity> findNotJoinedByTypeAndTag(@Param("userId") Long userId, @Param("type") MapType type,
-                                              @Param("tag") String tag, Pageable pageable);
-
     /**
      * 공개 지도(커뮤니티·공식)를 이름/설명/태그로 검색한다. PRIVATE은 초대 코드로만 들어가는 지도라 제외한다.
      *
