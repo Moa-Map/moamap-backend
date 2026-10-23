@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
 
@@ -104,4 +105,11 @@ public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
     @Modifying(clearAutomatically = true)
     @Query("update MapEntity m set m.placeCount = :placeCount where m.id = :mapId")
     int updatePlaceCount(@Param("mapId") Long mapId, @Param("placeCount") long placeCount);
+
+    // 공식 지도는 별도 키 없이 init.sql 시드 이름으로만 구분된다. 호출부(동기화 배치)가 트랜잭션 없이 돌아 여기서 연다.
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("update MapEntity m set m.placeCount = :placeCount "
+        + "where m.type = com.moamap.map.entity.MapType.OFFICIAL and m.name = :name")
+    int updateOfficialPlaceCount(@Param("name") String name, @Param("placeCount") long placeCount);
 }

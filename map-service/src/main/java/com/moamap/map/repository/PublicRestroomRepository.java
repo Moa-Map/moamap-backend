@@ -25,6 +25,11 @@ public interface PublicRestroomRepository extends JpaRepository<PublicRestroom, 
 
     long countByDeletedAtIsNull();
 
+    /** 공식 지도의 장소 개수. findMarkersInBounds와 같은 노출 조건(삭제·숨김 제외, 좌표 있음)으로 센다. */
+    @Query("select count(r) from PublicRestroom r where r.deletedAt is null and r.hidden = false "
+        + "and r.lat is not null and r.lng is not null")
+    long countVisibleMarkers();
+
     /**
      * 지오코딩 대기열의 첫 청크. 처리된 행은 상태가 PENDING에서 벗어나므로, 같은 조건으로 다시 호출해도
      * 자연히 남은 대기열의 앞부분을 반환한다 — 별도 오프셋 관리가 필요 없다.

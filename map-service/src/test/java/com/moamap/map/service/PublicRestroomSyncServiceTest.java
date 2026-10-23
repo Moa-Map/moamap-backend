@@ -28,6 +28,7 @@ import com.moamap.map.client.dto.PublicRestroomApiResponse.Items;
 import com.moamap.map.client.dto.PublicRestroomItem;
 import com.moamap.map.entity.GeocodeStatus;
 import com.moamap.map.entity.PublicRestroom;
+import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.PublicRestroomRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,12 +61,14 @@ class PublicRestroomSyncServiceTest {
     private PublicRestroomApiClient apiClient;
     @Mock
     private KakaoAddressClient kakaoAddressClient;
+    @Mock
+    private MapEntityRepository mapEntityRepository;
 
     private PublicRestroomSyncService service;
 
     @BeforeEach
     void setUp() {
-        service = new PublicRestroomSyncService(repository, apiClient, kakaoAddressClient, FIXED_CLOCK);
+        service = new PublicRestroomSyncService(repository, apiClient, kakaoAddressClient, mapEntityRepository, FIXED_CLOCK);
         // 기본값: 첫 실행(활성 0건) → 삭제 가드 자동 통과, 지오코딩 대기열 없음.
         // 각 테스트가 필요한 stub만 덮어쓴다.
     }
@@ -120,6 +123,17 @@ class PublicRestroomSyncServiceTest {
     private void stubNoGeocodingQueue() {
         when(repository.findByGeocodeStatusAndDeletedAtIsNullOrderByIdAsc(GeocodeStatus.PENDING))
             .thenReturn(List.of());
+    }
+
+    @Test
+    void 동기화가_끝나면_지도에_보이는_화장실_수로_공식_지도_장소_개수를_갱신한다() {
+        stubEmptyPage();
+        stubNoGeocodingQueue();
+        when(repository.countVisibleMarkers()).thenReturn(42L);
+
+        service.syncAll();
+
+        verify(mapEntityRepository).updateOfficialPlaceCount("공중화장실 지도", 42L);
     }
 
     // ==================== (A) 동기화 upsert 분기 ====================
@@ -628,7 +642,7 @@ class PublicRestroomSyncServiceTest {
 
         Clock secondRunClock = Clock.fixed(Instant.parse("2026-10-17T00:00:00Z"), ZoneOffset.UTC);
         PublicRestroomSyncService secondRunService =
-            new PublicRestroomSyncService(repository, apiClient, kakaoAddressClient, secondRunClock);
+            new PublicRestroomSyncService(repository, apiClient, kakaoAddressClient, mapEntityRepository, secondRunClock);
 
         service.syncAll();
         secondRunService.syncAll();

@@ -392,3 +392,27 @@ INSERT INTO map_entity (name, description, type, owner_id, member_count, place_c
 SELECT '공중화장실 지도', '행정안전부 공공데이터를 기반으로 전국 공중화장실의 위치와 개방 시간, 편의시설 정보를 보여주는 공식 지도입니다.',
        'OFFICIAL', 0, 0, 0, FALSE, now(), now()
 WHERE NOT EXISTS (SELECT 1 FROM map_entity WHERE type = 'OFFICIAL' AND name = '공중화장실 지도');
+
+-- 공식 지도의 장소는 place-service가 아니라 이 서비스 테이블에 있어 place_count 이벤트가 오지 않는다. 기동마다 직접 맞춘다.
+-- 화장실은 지도에 핀이 찍히는 행(마커 조회 조건과 동일)만 센다. 월간 동기화 뒤에는 PublicRestroomSyncService가 다시 갱신한다.
+UPDATE map_entity SET place_count = (SELECT count(*) FROM foot_traffic_area)
+WHERE type = 'OFFICIAL' AND name = '유동인구 지도';
+
+UPDATE map_entity SET place_count = (SELECT count(*) FROM public_restroom
+                                     WHERE deleted_at IS NULL AND hidden = FALSE AND lat IS NOT NULL AND lng IS NOT NULL)
+WHERE type = 'OFFICIAL' AND name = '공중화장실 지도';
+
+-- 공식 지도는 시스템 소유라 앱에서 태그를 달 수 없어 여기서 넣는다. map_tag에 유니크 제약이 없어 NOT EXISTS로 중복을 막는다.
+-- 앱 입력과 같은 형태로 저장한다(MapEntity.normalizeTag: '#' 없음, 소문자).
+INSERT INTO map_tag (map_id, tag)
+SELECT m.id, t.tag
+FROM map_entity m
+JOIN (VALUES ('유동인구 지도', '혼잡도'),
+             ('유동인구 지도', '유동인구'),
+             ('유동인구 지도', '서울'),
+             ('유동인구 지도', '핫플'),
+             ('공중화장실 지도', '화장실'),
+             ('공중화장실 지도', '공중화장실'),
+             ('공중화장실 지도', '편의시설')) AS t(map_name, tag) ON m.name = t.map_name
+WHERE m.type = 'OFFICIAL'
+  AND NOT EXISTS (SELECT 1 FROM map_tag mt WHERE mt.map_id = m.id AND mt.tag = t.tag);
