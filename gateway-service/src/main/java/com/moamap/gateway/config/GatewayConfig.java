@@ -24,9 +24,10 @@ public class GatewayConfig {
                 "/api/v1/notices/**", "/api/v1/admin/notices/**",
                 "/api/v1/inquiries/**", "/api/v1/admin/inquiries/**",
                 "/api/v1/banners/**", "/api/v1/admin/banners/**",
-                "/api/v1/terms/**").uri(serviceUrls.userUrl()))
-            .route("map-service", r -> r.path("/api/v1/maps/**").uri(serviceUrls.mapUrl()))
-            .route("place-service", r -> r.path("/api/v1/places/**").uri(serviceUrls.placeUrl()))
+                "/api/v1/terms/**",
+                "/api/v1/admin/reports/users/**").uri(serviceUrls.userUrl()))
+            .route("map-service", r -> r.path("/api/v1/maps/**", "/api/v1/admin/reports/maps/**").uri(serviceUrls.mapUrl()))
+            .route("place-service", r -> r.path("/api/v1/places/**", "/api/v1/admin/reports/places/**").uri(serviceUrls.placeUrl()))
             .route("notification-service", r -> r.path("/api/v1/notifications/**").uri(serviceUrls.notificationUrl()))
             // 통합 Swagger UI용 api-docs 프록시. 앞 경로(/user-service 등)를 떼고 각 서비스 기본 api-docs 경로로 전달.
             .route("user-service-docs", r -> r.path("/user-service/v3/api-docs/**")

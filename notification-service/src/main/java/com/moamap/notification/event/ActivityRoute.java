@@ -22,7 +22,12 @@ public enum ActivityRoute {
     MAP_POST_COMMENTED(Exchanges.MAP, "map.post.commented", NotificationType.MAP_POST_COMMENTED),
     MAP_ADMIN_ASSIGNED(Exchanges.MAP, "map.admin.assigned", NotificationType.MAP_ADMIN_ASSIGNED),
     MAP_OWNER_TRANSFERRED(Exchanges.MAP, "map.owner.transferred", NotificationType.MAP_OWNER_TRANSFERRED),
-    INQUIRY_ANSWERED(Exchanges.USER, "inquiry.answered", NotificationType.INQUIRY_ANSWERED);
+    INQUIRY_ANSWERED(Exchanges.USER, "inquiry.answered", NotificationType.INQUIRY_ANSWERED),
+    PLACE_REPORTED(Exchanges.PLACE, "place.reported", NotificationType.PLACE_REPORTED),
+    // 운영자 신고 알림은 신고를 받은 서비스마다 발행한다. 알림 종류는 하나지만 익스체인지별로 라우팅 키를 나눈다.
+    PLACE_REPORT_RECEIVED(Exchanges.PLACE, "place.report.received", NotificationType.REPORT_RECEIVED),
+    MAP_REPORT_RECEIVED(Exchanges.MAP, "map.report.received", NotificationType.REPORT_RECEIVED),
+    USER_REPORT_RECEIVED(Exchanges.USER, "user.report.received", NotificationType.REPORT_RECEIVED);
 
     private final String exchange;
     private final String routingKey;

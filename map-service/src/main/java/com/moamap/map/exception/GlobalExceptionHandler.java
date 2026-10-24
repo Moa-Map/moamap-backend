@@ -6,10 +6,13 @@ import com.moamap.common.response.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * map-service 공통 예외 처리. 모든 응답을 ApiResponse 포맷으로 통일한다.
@@ -43,6 +46,29 @@ public class GlobalExceptionHandler {
             .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
             .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, message));
+    }
+
+    /**
+     * JSON 형식이 깨졌거나 enum에 없는 값(예: 신고 사유)을 보낸 경우. 처리하지 않으면 500으로 떨어진다.
+     * 원인 메시지에는 내부 클래스명이 섞이므로 그대로 내보내지 않는다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
+            .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, "요청 본문 형식이 올바르지 않습니다."));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException e) {
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
+            .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, "필수 파라미터(" + e.getParameterName() + ")가 필요합니다."));
+    }
+
+    /** 파라미터 값의 형식이 틀린 경우(예: 신고 대상 종류에 없는 값). 처리하지 않으면 500으로 떨어진다. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
+            .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)

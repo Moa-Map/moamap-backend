@@ -30,7 +30,9 @@ public enum PlaceErrorCode implements ErrorCode {
     SHARE_LIST_STRUCTURE_CHANGED("PLACE_017", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502),
     OFFICIAL_MAP_NO_ACTIVITY_LOG("PLACE_018", "공식 지도는 활동 내역을 제공하지 않습니다.", 403),
     ALREADY_REPORTED_COMMENT("PLACE_019", "이미 신고한 댓글입니다.", 409),
-    CANNOT_REPORT_OWN_COMMENT("PLACE_020", "본인이 작성한 댓글은 신고할 수 없습니다.", 400);
+    CANNOT_REPORT_OWN_COMMENT("PLACE_020", "본인이 작성한 댓글은 신고할 수 없습니다.", 400),
+    CANNOT_REPORT_OWN_PLACE("PLACE_021", "본인이 등록한 장소는 신고할 수 없습니다.", 400),
+    ALREADY_REPORTED_PLACE("PLACE_022", "이미 신고한 장소입니다.", 409);
 
     private final String code;
     private final String message;

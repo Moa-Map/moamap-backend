@@ -11,4 +11,8 @@ public record ActivitySignal(String routingKey, Long recipientId, Long actorId, 
     public static final String PLACE_APPROVED = "place.approved";
     public static final String PLACE_REJECTED = "place.rejected";
     public static final String PLACE_COMMENTED = "place.commented";
+    /** 방장·관리자에게 장소 신고를 알린다. targetId는 장소 ID다. */
+    public static final String PLACE_REPORTED = "place.reported";
+    /** 운영자에게 새 신고를 알린다. targetId는 신고 ID다. */
+    public static final String REPORT_RECEIVED = "place.report.received";
 }
