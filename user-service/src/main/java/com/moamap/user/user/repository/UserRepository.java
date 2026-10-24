@@ -1,5 +1,6 @@
 package com.moamap.user.user.repository;
 
+import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.entity.User;
 import java.util.Collection;
 import java.util.List;
@@ -19,4 +20,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdForUpdate(@Param("id") Long id);
 
     List<User> findAllByIdInAndDeletedAtIsNull(Collection<Long> ids);
+
+    /** 운영자(관리자) 계정 ID. 신고 알림을 받을 사람이다. */
+    @Query("select u.id from User u where u.role = :role and u.deletedAt is null")
+    List<Long> findIdsByRole(@Param("role") Role role);
 }
