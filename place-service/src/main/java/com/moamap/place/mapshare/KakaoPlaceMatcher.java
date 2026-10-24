@@ -2,6 +2,7 @@ package com.moamap.place.mapshare;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.regex.Pattern;
 import com.moamap.place.dto.UnmatchReason;
 import com.moamap.place.kakao.KakaoLocalClient;
 import com.moamap.place.kakao.dto.KakaoPlaceDocument;
@@ -35,18 +36,40 @@ public class KakaoPlaceMatcher {
     /** 이름 비교 전에 지우는 문자: 공백, 가운데점, 하이픈, 각종 괄호. */
     private static final String NAME_NOISE = "[\\s·・\\-()\\[\\]（）]";
 
+    /** 이름 끝의 지점 표기: 공백 뒤 "…점"(을지로점·본점·직영점) 또는 "…별관". */
+    private static final Pattern BRANCH_SUFFIX = Pattern.compile("\\s+\\S*(점|별관)$");
+
+    /** 지점명을 뗀 상호명이 이보다 짧으면 근처 아무 가게나 포함 관계로 걸리므로 떼지 않는다. */
+    private static final int MIN_BASE_NAME_LENGTH = 2;
+
     private final KakaoLocalClient kakaoLocalClient;
 
+    /**
+     * 지점명까지 붙은 이름으로는 카카오 검색 결과가 없거나 다른 지점 표기만 나오는 경우가 있어,
+     * 1차에서 못 찾으면 지점명을 뗀 이름으로 한 번 더 검색한다. 검색 실패는 재시도하지 않는다.
+     */
     public MatchResult match(ExtractedMapPlace place) {
         if (place.name() == null || place.lat() == null || place.lng() == null) {
             return MatchResult.unmatched(UnmatchReason.NO_RESULT);
         }
 
+        MatchResult result = matchByQuery(place, place.name());
+        if (result.isMatched() || result.reason() == UnmatchReason.SEARCH_FAILED) {
+            return result;
+        }
+        String baseName = stripBranch(place.name());
+        if (baseName.equals(place.name().strip())) {
+            return result;
+        }
+        return matchByQuery(place, baseName);
+    }
+
+    private MatchResult matchByQuery(ExtractedMapPlace place, String query) {
         List<KakaoPlaceDocument> documents;
         try {
-            documents = kakaoLocalClient.searchNearby(place.name(), place.lng(), place.lat());
+            documents = kakaoLocalClient.searchNearby(query, place.lng(), place.lat());
         } catch (RuntimeException e) {
-            log.warn("카카오 재매칭 검색 실패: name={}", place.name(), e);
+            log.warn("카카오 재매칭 검색 실패: name={}", query, e);
             return MatchResult.unmatched(UnmatchReason.SEARCH_FAILED);
         }
         if (documents.isEmpty()) {
@@ -82,14 +105,30 @@ public class KakaoPlaceMatcher {
      * 정규화 후 완전일치 또는 한쪽이 다른 쪽을 포함하면 같은 장소로 본다.
      * 포함까지 허용하는 이유는 지점명 표기가 서비스마다 다르기 때문이다
      * ("청년다방" vs "청년다방 서울숭실대점").
+     * 양쪽에 서로 다른 지점명이 붙으면 포함 관계가 깨지므로("○○ 직영점" vs "○○ 서이천직영점")
+     * 지점명을 뗀 상호명끼리도 비교한다.
      */
     static boolean nameMatches(String extractedName, String kakaoName) {
+        return contains(extractedName, kakaoName) || contains(stripBranch(extractedName), stripBranch(kakaoName));
+    }
+
+    private static boolean contains(String extractedName, String kakaoName) {
         String a = normalize(extractedName);
         String b = normalize(kakaoName);
         if (a.isEmpty() || b.isEmpty()) {
             return false;
         }
         return a.contains(b) || b.contains(a);
+    }
+
+    /** 이름 끝의 지점 표기를 뗀다. 뗄 게 없거나 남는 상호명이 너무 짧으면 원래 이름을 그대로 반환한다. */
+    static String stripBranch(String name) {
+        if (name == null) {
+            return null;
+        }
+        String trimmed = name.strip();
+        String base = BRANCH_SUFFIX.matcher(trimmed).replaceFirst("");
+        return normalize(base).length() < MIN_BASE_NAME_LENGTH ? trimmed : base;
     }
 
     static String normalize(String name) {

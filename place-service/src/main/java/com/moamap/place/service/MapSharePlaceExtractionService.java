@@ -35,7 +35,7 @@ import org.springframework.stereotype.Service;
 public class MapSharePlaceExtractionService {
 
     /** 한 번에 처리하는 장소 수 상한. 초과분은 잘라내고 truncated로 알린다. */
-    private static final int MAX_PLACES = 100;
+    private static final int MAX_PLACES = 500;
 
     /** 카카오 재매칭 동시 실행 수. 한 요청이 카카오 API 쿼터를 다 태우지 않게 묶는다. */
     private static final int MATCH_PARALLELISM = 8;

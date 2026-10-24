@@ -28,7 +28,7 @@ public class MapShareExtractionController {
             즐겨찾기 리스트 공유 링크에서 장소를 추출하고, 카카오 장소와 재매칭해 matched/unmatched로 나눠 반환한다.
             url에는 앱 공유로 들어온 문구가 섞인 텍스트를 그대로 넣어도 된다(서버가 첫 URL을 뽑아 쓴다).
             matched 항목에 mapId를 더하면 POST /api/v1/places/bulk 요청 항목이 된다.
-            한 번에 최대 100개까지 처리하며, 초과 시 truncated=true로 알린다.
+            한 번에 최대 500개까지 처리하며, 초과 시 truncated=true로 알린다.
             """
     )
     public ApiResponse<MapShareExtractResponse> extract(
