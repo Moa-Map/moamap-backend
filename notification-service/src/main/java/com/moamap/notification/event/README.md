@@ -33,7 +33,7 @@
 | `place.commented` | `place.events` | 내 장소에 댓글 | 장소 등록자 | 댓글 작성자 | 장소 | 지도 |
 | `map.post.commented` | `map.events` | 내 게시글에 댓글 | 게시글 작성자 | 댓글 작성자 | 게시글 | 지도 |
 | `map.admin.assigned` | `map.events` | 지도 관리자로 지정됨 | 지정된 멤버 | 지정한 사람 | 지도 | 지도 |
-| `map.owner.transferred` | `map.events` | 방장 승계 | 새 방장 | (저장 안 함) | 지도 | 지도 |
+| `map.owner.transferred` | `map.events` | 방장 승계 (이전 방장이 나가거나 탈퇴) | 새 방장 | (저장 안 함) | 지도 | 지도 |
 | `inquiry.answered` | `user.events` | 문의 답변 완료 | 문의자 | (저장 안 함) | 문의 | — |
 
 목록은 `ActivityRoute`가 정본이다. 새 알림은 `NotificationType`과 `ActivityRoute`에 한 줄씩 더한다.
