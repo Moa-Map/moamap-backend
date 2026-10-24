@@ -19,6 +19,10 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     Page<Place> findByMapIdAndStatusAndDeletedAtIsNull(Long mapId, PlaceStatus status, Pageable pageable);
 
+    /** 요청한 사람이 차단한 사용자가 등록한 장소를 뺀 목록. */
+    Page<Place> findByMapIdAndStatusAndDeletedAtIsNullAndCreatedByNotIn(Long mapId, PlaceStatus status,
+        Collection<Long> blockedUserIds, Pageable pageable);
+
     Page<Place> findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(
         Long mapId, PlaceStatus status, Long createdBy, Pageable pageable);
 

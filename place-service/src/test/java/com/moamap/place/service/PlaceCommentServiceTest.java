@@ -18,6 +18,7 @@ import com.moamap.place.map.dto.MapMemberResponse;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.repository.PlaceCommentRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +52,9 @@ class PlaceCommentServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private UserBlockClient userBlockClient;
 
     @InjectMocks
     private PlaceCommentService placeCommentService;
@@ -160,7 +164,7 @@ class PlaceCommentServiceTest {
             .willReturn(new PageImpl<>(List.of(comment), pageable, 1));
 
         // when
-        PageResponse<PlaceCommentResponse> result = placeCommentService.findAllByPlaceId(1L, pageable);
+        PageResponse<PlaceCommentResponse> result = placeCommentService.findAllByPlaceId(1L, null, pageable);
 
         // then
         assertThat(result.content()).hasSize(1);
@@ -174,7 +178,7 @@ class PlaceCommentServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> placeCommentService.findAllByPlaceId(1L, pageable))
+        assertThatThrownBy(() -> placeCommentService.findAllByPlaceId(1L, null, pageable))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.PLACE_NOT_FOUND);

@@ -18,6 +18,7 @@ import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import com.moamap.map.repository.MapPostCommentRepository;
 import com.moamap.map.repository.MapPostRepository;
+import com.moamap.map.user.UserBlockClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,12 +55,15 @@ class MapPostCommentServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private UserBlockClient userBlockClient;
+
     private MapPostCommentService commentService;
 
     @BeforeEach
     void setUp() {
         commentService = new MapPostCommentService(commentRepository, mapPostRepository,
-            new MapPostAccessPolicy(mapRepository, mapMemberRepository), eventPublisher);
+            new MapPostAccessPolicy(mapRepository, mapMemberRepository), eventPublisher, userBlockClient);
     }
 
     private MapEntity map(MapType type) {
