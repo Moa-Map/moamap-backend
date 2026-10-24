@@ -35,7 +35,10 @@ public enum MapErrorCode implements ErrorCode {
     RESTROOM_NOT_FOUND("MAP_021", "화장실 정보를 찾을 수 없습니다.", 404),
     // 없는 지도인지, 남의 지도인지 구분해서 알려주지 않는다. 메시지 차이로 멤버십을 캐낼 수 있기 때문이다.
     INVALID_MAP_ORDER("MAP_022", "순서를 바꾸려면 해당 탭에서 참여 중인 지도를 중복 없이 모두 보내야 합니다.", 400),
-    CANNOT_LEAVE_PERSONAL_MAP("MAP_023", "나만의 지도는 나갈 수 없습니다.", 400);
+    CANNOT_LEAVE_PERSONAL_MAP("MAP_023", "나만의 지도는 나갈 수 없습니다.", 400),
+    OFFICIAL_MAP_NOT_REPORTABLE("MAP_024", "공식 지도는 신고할 수 없습니다. 문의하기로 알려 주세요.", 400),
+    CANNOT_REPORT_OWN_CONTENT("MAP_025", "내가 만든 지도나 쓴 글은 신고할 수 없습니다.", 400),
+    ALREADY_REPORTED("MAP_026", "이미 신고했습니다.", 409);
 
     private final String code;
     private final String message;
