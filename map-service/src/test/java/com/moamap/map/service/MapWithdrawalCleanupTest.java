@@ -30,7 +30,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
  */
 @DataJpaTest
 @RecordApplicationEvents
-@Import({JpaAuditingConfig.class, MapWithdrawalCleanupService.class})
+@Import({JpaAuditingConfig.class, MapWithdrawalCleanupService.class, MapOwnerSuccession.class})
 class MapWithdrawalCleanupTest {
 
     private static final Long LEAVER = 10L;

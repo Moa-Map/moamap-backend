@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.moamap.common.exception.BusinessException;
@@ -56,6 +57,7 @@ public class MapService {
     private final UserClient userClient;
     private final PlaceClient placeClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final MapOwnerSuccession ownerSuccession;
 
     @Transactional
     public MapDetailResponse create(MapCreateRequest request, Long ownerId) {
@@ -214,16 +216,35 @@ public class MapService {
         return assembleDetail(map, userId, MapRole.MEMBER);
     }
 
+    /**
+     * 지도에서 나간다. 방장이면 다음 사람에게 방장을 넘기고 나간다(회원 탈퇴와 같은 규칙, MapOwnerSuccession).
+     *
+     * 탈퇴와 달리 쓴 글·댓글·장소는 그대로 남기고, 넘길 사람이 없으면 지도를 지우지 않고 막는다.
+     * 나가기는 실수로 누를 수 있어, 되돌릴 수 없는 지도 삭제는 직접 하도록 한다.
+     *
+     * 지도 행을 잠가, 방장과 후계자가 동시에 나가도 지도에 없는 사람이 방장이 되지 않게 한다.
+     *
+     * @return 방장이 나가서 새로 방장이 된 사람의 ID. 방장이 아니었으면 비어 있다
+     */
     @Transactional
-    public void leave(Long mapId, Long userId) {
-        MapEntity map = getMapOrThrow(mapId);
+    public Optional<Long> leave(Long mapId, Long userId) {
+        MapEntity map = mapRepository.findByIdForUpdate(mapId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_NOT_FOUND));
         MapMember member = mapMemberRepository.findByMapIdAndUserId(mapId, userId)
             .orElseThrow(() -> new BusinessException(MapErrorCode.NOT_MAP_MEMBER));
-        if (member.getRole() == MapRole.OWNER) {
-            throw new BusinessException(MapErrorCode.OWNER_CANNOT_LEAVE);
+
+        if (member.getRole() != MapRole.OWNER) {
+            mapMemberRepository.delete(member);
+            map.decreaseMemberCount();
+            return Optional.empty();
         }
-        mapMemberRepository.delete(member);
-        map.decreaseMemberCount();
+        if (map.isPersonal()) {
+            throw new BusinessException(MapErrorCode.CANNOT_LEAVE_PERSONAL_MAP);
+        }
+        MapMember newOwner = ownerSuccession.handOver(map, member)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.SOLE_OWNER_CANNOT_LEAVE));
+        log.info("방장이 지도를 나가 방장을 넘겼습니다. mapId={}, newOwnerId={}", mapId, newOwner.getUserId());
+        return Optional.of(newOwner.getUserId());
     }
 
     /**

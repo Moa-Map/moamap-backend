@@ -158,7 +158,7 @@ public class MapEntity extends BaseTimeEntity {
     }
 
     /**
-     * 방장 위임. 지금은 방장이 탈퇴할 때만 쓴다.
+     * 방장 위임. 방장이 지도를 나가거나 탈퇴할 때 쓴다(MapOwnerSuccession).
      *
      * 나만의 지도는 주인당 하나라는 유일 인덱스(uk_map_personal_owner)가 있고, 애초에 남에게 넘길 지도가 아니다.
      */
