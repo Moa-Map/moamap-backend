@@ -11,6 +11,7 @@ import com.moamap.place.dto.PlaceCommentResponse;
 import com.moamap.place.dto.PlaceCommentUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
+import com.moamap.place.event.ActivitySignal;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +48,9 @@ class PlaceCommentServiceTest {
 
     @Mock
     private MapClient mapClient;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PlaceCommentService placeCommentService;
@@ -75,6 +80,21 @@ class PlaceCommentServiceTest {
         assertThat(response.imageUrls()).containsExactly("https://img/1.jpg");
         verify(placeCommentRepository).save(any(PlaceComment.class));
         verify(placeRepository).updateCommentSummary(1L, new BigDecimal("5.00"), 1);
+    }
+
+    @Test
+    void create는_장소_등록자에게_댓글_알림_신호를_발행한다() {
+        // given
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
+        given(placeCommentRepository.averageRatingByPlaceId(any())).willReturn(5.0);
+
+        // when
+        placeCommentService.create(1L, 2L, createRequest());
+
+        // then
+        verify(eventPublisher).publishEvent(new ActivitySignal(ActivitySignal.PLACE_COMMENTED, 1L, 2L, 1L, 10L));
     }
 
     @Test
@@ -177,6 +197,7 @@ class PlaceCommentServiceTest {
         assertThat(response.rating()).isEqualTo(4);
         assertThat(response.content()).isEqualTo("수정된 댓글");
         verify(placeRepository).updateCommentSummary(1L, new BigDecimal("4.00"), 1);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

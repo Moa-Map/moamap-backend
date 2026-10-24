@@ -18,6 +18,7 @@ import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.ActivitySignal;
 import com.moamap.place.event.PlaceCountChangeSignal;
 import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
@@ -797,7 +798,7 @@ class PlaceServiceTest {
     }
 
     @Test
-    void reject는_이벤트를_발행하지_않는다() {
+    void reject는_장소_개수_신호를_발행하지_않는다() {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
@@ -807,7 +808,35 @@ class PlaceServiceTest {
         placeService.reject(1L, 2L);
 
         // then
-        verifyNoInteractions(eventPublisher);
+        verify(eventPublisher, never()).publishEvent(any(PlaceCountChangeSignal.class));
+    }
+
+    @Test
+    void approve는_등록자에게_승인_알림_신호를_발행한다() {
+        // given
+        Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        placeService.approve(1L, 2L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ActivitySignal(ActivitySignal.PLACE_APPROVED, 1L, 2L, 1L, 10L));
+    }
+
+    @Test
+    void reject는_등록자에게_반려_알림_신호를_발행한다() {
+        // given
+        Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+
+        // when
+        placeService.reject(1L, 2L);
+
+        // then
+        verify(eventPublisher).publishEvent(new ActivitySignal(ActivitySignal.PLACE_REJECTED, 1L, 2L, 1L, 10L));
     }
 
     @Test
