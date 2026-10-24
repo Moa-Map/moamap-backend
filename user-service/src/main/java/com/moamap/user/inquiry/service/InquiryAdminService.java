@@ -1,6 +1,7 @@
 package com.moamap.user.inquiry.service;
 
 import com.moamap.common.exception.BusinessException;
+import com.moamap.user.event.InquiryAnsweredEvent;
 import com.moamap.user.exception.UserErrorCode;
 import com.moamap.user.inquiry.dto.InquiryDetailResponse;
 import com.moamap.user.inquiry.dto.InquirySummaryResponse;
@@ -8,8 +9,10 @@ import com.moamap.user.inquiry.entity.Inquiry;
 import com.moamap.user.inquiry.entity.InquiryStatus;
 import com.moamap.user.inquiry.entity.InquiryType;
 import com.moamap.user.inquiry.repository.InquiryRepository;
+import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.user.service.AdminGuard;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +36,7 @@ public class InquiryAdminService {
 
     private final InquiryRepository inquiryRepository;
     private final AdminGuard adminGuard;
+    private final OutboxRecorder outboxRecorder;
 
     /** 최신 접수순. 상태·유형은 넘어온 것만 조건으로 건다. 클라이언트가 보낸 정렬은 무시한다. */
     public Page<InquirySummaryResponse> getInquiries(Long adminId, InquiryStatus status, InquiryType type,
@@ -52,7 +56,13 @@ public class InquiryAdminService {
     public InquiryDetailResponse changeStatus(Long adminId, Long inquiryId, InquiryStatus status) {
         adminGuard.requireAdmin(adminId);
         Inquiry inquiry = getOrThrow(inquiryId);
-        inquiry.changeStatus(status, Instant.now());
+        boolean newlyAnswered = inquiry.getStatus() != InquiryStatus.ANSWERED && status == InquiryStatus.ANSWERED;
+        Instant now = Instant.now();
+        inquiry.changeStatus(status, now);
+        if (newlyAnswered) {
+            outboxRecorder.record(String.valueOf(inquiryId), InquiryAnsweredEvent.TYPE,
+                    new InquiryAnsweredEvent(UUID.randomUUID().toString(), inquiry.getUserId(), inquiryId, now));
+        }
         // 응답에 바뀐 수정 시각을 담으려면 지금 반영해야 한다(@PreUpdate는 flush 때 실행된다).
         inquiryRepository.flush();
         return InquiryDetailResponse.from(inquiry);
