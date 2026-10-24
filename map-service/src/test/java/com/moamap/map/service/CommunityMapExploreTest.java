@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.tuple;
  * 로그인 사용자가 참여 중인 지도는 joined=true로 표시한다.
  */
 @DataJpaTest
-@Import({JpaAuditingConfig.class, MapService.class, InviteCodeGenerator.class})
+@Import({JpaAuditingConfig.class, MapService.class, MapOwnerSuccession.class, InviteCodeGenerator.class})
 class CommunityMapExploreTest {
 
     private static final long USER_ID = 10L;

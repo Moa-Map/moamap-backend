@@ -1,8 +1,6 @@
 package com.moamap.map.service;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
@@ -31,16 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MapWithdrawalCleanupService {
 
-    /** 방장을 넘겨받을 순서. 관리자가 먼저, 같은 역할이면 먼저 참여한 사람. 참여 시각이 같으면 ID 순으로 정한다. */
-    private static final Comparator<MapMember> SUCCESSION_ORDER = Comparator
-        .comparing((MapMember member) -> member.getRole() == MapRole.ADMIN ? 0 : 1)
-        .thenComparing(MapMember::getCreatedAt)
-        .thenComparing(MapMember::getId);
-
     private final MapEntityRepository mapRepository;
     private final MapMemberRepository mapMemberRepository;
     private final MapPostRepository mapPostRepository;
     private final MapPostCommentRepository mapPostCommentRepository;
+    private final MapOwnerSuccession ownerSuccession;
 
     @Transactional
     public void cleanUp(Long userId) {
@@ -53,7 +46,8 @@ public class MapWithdrawalCleanupService {
     }
 
     private void leave(MapMember membership) {
-        Optional<MapEntity> found = mapRepository.findById(membership.getMapId());
+        // 같은 지도에서 나가기가 동시에 처리되면 방장 위임이 꼬일 수 있어 지도 행을 잠근다(MapService.leave와 같다).
+        Optional<MapEntity> found = mapRepository.findByIdForUpdate(membership.getMapId());
         if (found.isEmpty()) {
             // 지도는 없는데 참여 기록만 남은 경우. 정리만 한다.
             mapMemberRepository.delete(membership);
@@ -69,24 +63,10 @@ public class MapWithdrawalCleanupService {
     }
 
     private void handOverOrDelete(MapEntity map, MapMember owner) {
-        Optional<MapMember> successor = map.isPersonal() ? Optional.empty() : nextOwner(map, owner);
-        if (successor.isEmpty()) {
-            delete(map);
-            return;
-        }
-        MapMember next = successor.get();
-        next.changeRole(MapRole.OWNER);
-        map.transferOwnership(next.getUserId());
-        mapMemberRepository.delete(owner);
-        map.decreaseMemberCount();
-        log.info("탈퇴한 방장의 지도를 위임했습니다. mapId={}, newOwnerId={}", map.getId(), next.getUserId());
-    }
-
-    private Optional<MapMember> nextOwner(MapEntity map, MapMember owner) {
-        List<MapMember> others = mapMemberRepository.findByMapId(map.getId()).stream()
-            .filter(member -> !member.getUserId().equals(owner.getUserId()))
-            .toList();
-        return others.stream().min(SUCCESSION_ORDER);
+        Optional<MapMember> successor = map.isPersonal() ? Optional.empty() : ownerSuccession.handOver(map, owner);
+        successor.ifPresentOrElse(
+            next -> log.info("탈퇴한 방장의 지도를 위임했습니다. mapId={}, newOwnerId={}", map.getId(), next.getUserId()),
+            () -> delete(map));
     }
 
     /**

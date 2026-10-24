@@ -5,15 +5,22 @@ import java.util.List;
 import java.util.Optional;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapType;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
+
+    /** 나가기·방장 위임처럼 같은 지도의 참여자를 동시에 바꾸는 작업을 한 줄로 세운다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from MapEntity m where m.id = :id")
+    Optional<MapEntity> findByIdForUpdate(@Param("id") Long id);
 
     Page<MapEntity> findByType(MapType type, Pageable pageable);
 
