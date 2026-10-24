@@ -85,7 +85,7 @@ class PlaceCommentControllerTest {
     void getAll은_페이지_결과를_반환한다() throws Exception {
         // given
         PageResponse<PlaceCommentResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
-        given(placeCommentService.findAllByPlaceId(eq(1L), any())).willReturn(page);
+        given(placeCommentService.findAllByPlaceId(eq(1L), any(), any())).willReturn(page);
 
         // when & then
         mockMvc.perform(get("/api/v1/places/{placeId}/comments", 1L))

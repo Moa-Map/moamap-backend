@@ -43,9 +43,10 @@ class UserReportControllerTest {
             "{}",
             "{\"reason\":\"UNKNOWN\"}",
             "{\"reason\":\"OTHER\"}",
-            "{\"reason\":\"OTHER\",\"detail\":\"  \"}"
+            "{\"reason\":\"OTHER\",\"detail\":\"  \"}",
+            "{\"reason\":\"BLOCKED\"}"
     })
-    void 사유가_없거나_잘못됐거나_기타인데_내용이_없으면_400이다(String body) throws Exception {
+    void 사유가_없거나_잘못됐거나_서버_전용이거나_기타인데_내용이_없으면_400이다(String body) throws Exception {
         mockMvc.perform(post("/api/v1/users/2/reports").header("X-User-Id", 1L)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());

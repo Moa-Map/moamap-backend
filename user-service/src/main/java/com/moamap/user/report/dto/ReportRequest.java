@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "신고 요청")
 public record ReportRequest(
 
-        @Schema(description = "신고 사유", example = "ABUSE")
+        @Schema(description = "신고 사유. BLOCKED는 서버 전용이라 보낼 수 없다.", example = "ABUSE")
         @NotNull(message = "신고 사유는 필수입니다.")
         ReportReason reason,
 
@@ -17,6 +17,12 @@ public record ReportRequest(
         @Size(max = 200, message = "부가 설명은 200자를 넘을 수 없습니다.")
         String detail
 ) {
+
+    @Schema(hidden = true)
+    @AssertTrue(message = "고를 수 없는 신고 사유입니다.")
+    public boolean isSelectableReason() {
+        return reason != ReportReason.BLOCKED;
+    }
 
     @Schema(hidden = true)
     @AssertTrue(message = "기타 사유는 내용을 적어야 합니다.")

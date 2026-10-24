@@ -11,6 +11,7 @@ import com.moamap.place.entity.PlaceCommentReport;
 import com.moamap.place.entity.PlaceLike;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.map.MapClient;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.repository.PlaceCommentReportRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import com.moamap.place.repository.PlaceLikeRepository;
@@ -41,6 +42,7 @@ class PlaceWithdrawalCleanupTest {
     @Autowired private PlaceCommentReportRepository placeCommentReportRepository;
     @Autowired private TestEntityManager em;
     @MockitoBean private MapClient mapClient;
+    @MockitoBean private UserBlockClient userBlockClient;
 
     private int kakaoPlaceSeq;
 

@@ -1,6 +1,7 @@
 package com.moamap.place.repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import com.moamap.place.entity.PlaceComment;
@@ -16,6 +17,10 @@ public interface PlaceCommentRepository extends JpaRepository<PlaceComment, Long
     Optional<PlaceComment> findByIdAndDeletedAtIsNull(Long id);
 
     Page<PlaceComment> findByPlaceIdAndDeletedAtIsNull(Long placeId, Pageable pageable);
+
+    /** 요청한 사람이 차단한 사용자의 댓글을 뺀 목록. */
+    Page<PlaceComment> findByPlaceIdAndDeletedAtIsNullAndUserIdNotIn(Long placeId, Collection<Long> blockedUserIds,
+        Pageable pageable);
 
     long countByPlaceIdAndDeletedAtIsNull(Long placeId);
 
