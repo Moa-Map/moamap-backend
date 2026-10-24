@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.moamap.user.block.repository.UserBlockRepository;
 import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.entity.User;
 import com.moamap.user.user.repository.UserRepository;
@@ -23,6 +24,7 @@ class InternalUserControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private UserRepository userRepository;
+    @MockitoBean private UserBlockRepository userBlockRepository;
 
     @Test
     void 운영자면_true다() throws Exception {
@@ -52,6 +54,15 @@ class InternalUserControllerTest {
         mockMvc.perform(get("/internal/users/admins"))
                 .andExpect(jsonPath("$.data[0]").value(7))
                 .andExpect(jsonPath("$.data[1]").value(8));
+    }
+
+    @Test
+    void 내가_차단한_사람_ID_목록을_준다() throws Exception {
+        given(userBlockRepository.findBlockedIdsByBlockerId(1L)).willReturn(List.of(5L, 6L));
+
+        mockMvc.perform(get("/internal/users/1/blocked-ids"))
+                .andExpect(jsonPath("$.data[0]").value(5))
+                .andExpect(jsonPath("$.data[1]").value(6));
     }
 
     private static User user(Role role, boolean withdrawn) {

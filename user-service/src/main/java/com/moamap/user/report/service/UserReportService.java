@@ -6,6 +6,7 @@ import com.moamap.user.exception.UserErrorCode;
 import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.report.dto.ReportRequest;
 import com.moamap.user.report.dto.ReportResponse;
+import com.moamap.user.report.entity.ReportReason;
 import com.moamap.user.report.entity.UserReport;
 import com.moamap.user.report.repository.UserReportRepository;
 import com.moamap.user.user.entity.Role;
@@ -52,6 +53,18 @@ public class UserReportService {
         }
         notifyOperators(report);
         return ReportResponse.from(report);
+    }
+
+    /**
+     * 차단을 운영자에게 알린다. 이미 그 사람을 신고했다면 운영자가 알고 있으므로 새로 남기지 않는다.
+     * 차단과 같은 트랜잭션에서 남긴다(UserBlockService) — 차단은 됐는데 운영자 통보만 빠지는 일이 없게 한다.
+     */
+    public void reportBlocked(Long blockerId, Long blockedId) {
+        if (userReportRepository.existsByTargetUserIdAndReporterId(blockedId, blockerId)) {
+            return;
+        }
+        notifyOperators(userReportRepository.saveAndFlush(
+                UserReport.of(blockedId, blockerId, ReportReason.BLOCKED, null)));
     }
 
     private void notifyOperators(UserReport report) {

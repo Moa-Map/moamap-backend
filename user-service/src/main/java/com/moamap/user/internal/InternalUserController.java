@@ -1,6 +1,7 @@
 package com.moamap.user.internal;
 
 import com.moamap.common.response.ApiResponse;
+import com.moamap.user.block.repository.UserBlockRepository;
 import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalUserController {
 
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
 
     /** 운영자(관리자)인가. 탈퇴한 회원은 운영자가 아니다. */
     @GetMapping("/{userId}/admin")
@@ -39,6 +41,12 @@ public class InternalUserController {
     @GetMapping("/admins")
     public ApiResponse<List<Long>> adminIds() {
         return ApiResponse.success(userRepository.findIdsByRole(Role.ADMIN));
+    }
+
+    /** 이 사용자가 차단한 사람 ID. 다른 서비스가 목록에서 이 사람들의 콘텐츠를 뺀다. */
+    @GetMapping("/{userId}/blocked-ids")
+    public ApiResponse<List<Long>> blockedIds(@PathVariable Long userId) {
+        return ApiResponse.success(userBlockRepository.findBlockedIdsByBlockerId(userId));
     }
 
     public record AdminCheckResponse(boolean admin) {
