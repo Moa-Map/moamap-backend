@@ -1,9 +1,7 @@
 package com.moamap.place.repository;
 
 import java.math.BigDecimal;
-import java.util.List;
-import com.moamap.place.dto.ReportedCommentResponse;
-import com.moamap.place.entity.CommentReportReason;
+import com.moamap.place.entity.ReportReason;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.entity.PlaceCommentReport;
@@ -13,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,11 +69,11 @@ class PlaceCommentReportRepositoryTest {
         Place place = savePlace(MAP_ID, "스타벅스 강남점", "26338954");
         PlaceComment comment = saveComment(place.getId(), "광고글");
         placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(comment.getId(), 3L, CommentReportReason.SPAM, null));
+            PlaceCommentReport.of(comment.getId(), 3L, ReportReason.SPAM, null));
 
         // when & then
         assertThatThrownBy(() -> placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(comment.getId(), 3L, CommentReportReason.ABUSE, "사유를 바꿔서 또 신고")))
+            PlaceCommentReport.of(comment.getId(), 3L, ReportReason.ABUSE, "사유를 바꿔서 또 신고")))
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -89,9 +85,9 @@ class PlaceCommentReportRepositoryTest {
 
         // when
         placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(comment.getId(), 3L, CommentReportReason.SPAM, null));
+            PlaceCommentReport.of(comment.getId(), 3L, ReportReason.SPAM, null));
         placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(comment.getId(), 4L, CommentReportReason.ABUSE, null));
+            PlaceCommentReport.of(comment.getId(), 4L, ReportReason.ABUSE, null));
 
         // then
         assertThat(placeCommentReportRepository.existsByPlaceCommentIdAndReporterId(comment.getId(), 3L)).isTrue();
@@ -114,106 +110,5 @@ class PlaceCommentReportRepositoryTest {
         // then
         PlaceComment found = placeCommentRepository.findById(comment.getId()).orElseThrow();
         assertThat(found.getReportCount()).isEqualTo(2);
-    }
-
-    @Test
-    void 신고_목록은_신고가_쌓인_댓글만_많이_신고된_순으로_준다() {
-        // given
-        Place place = savePlace(MAP_ID, "스타벅스 강남점", "26338954");
-        PlaceComment onceReported = saveComment(place.getId(), "한 번 신고됨");
-        PlaceComment twiceReported = saveComment(place.getId(), "두 번 신고됨");
-        saveComment(place.getId(), "신고 안 됨");
-
-        placeCommentRepository.increaseReportCount(onceReported.getId());
-        placeCommentRepository.increaseReportCount(twiceReported.getId());
-        placeCommentRepository.increaseReportCount(twiceReported.getId());
-        entityManager.clear();
-
-        // when
-        Page<ReportedCommentResponse> page =
-            placeCommentRepository.findReportedByMapId(MAP_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(page.getContent())
-            .extracting(ReportedCommentResponse::content, ReportedCommentResponse::reportCount)
-            .containsExactly(
-                org.assertj.core.groups.Tuple.tuple("두 번 신고됨", 2),
-                org.assertj.core.groups.Tuple.tuple("한 번 신고됨", 1));
-        assertThat(page.getContent()).extracting(ReportedCommentResponse::placeName)
-            .containsOnly("스타벅스 강남점");
-    }
-
-    @Test
-    void 신고_목록은_다른_지도의_댓글을_포함하지_않는다() {
-        // given
-        Place mine = savePlace(MAP_ID, "우리 지도 장소", "26338954");
-        Place others = savePlace(OTHER_MAP_ID, "남의 지도 장소", "26338955");
-        PlaceComment mineComment = saveComment(mine.getId(), "우리 지도 댓글");
-        PlaceComment othersComment = saveComment(others.getId(), "남의 지도 댓글");
-        placeCommentRepository.increaseReportCount(mineComment.getId());
-        placeCommentRepository.increaseReportCount(othersComment.getId());
-        entityManager.clear();
-
-        // when
-        Page<ReportedCommentResponse> page =
-            placeCommentRepository.findReportedByMapId(MAP_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(page.getContent()).extracting(ReportedCommentResponse::content)
-            .containsExactly("우리 지도 댓글");
-    }
-
-    @Test
-    void 신고_목록은_삭제된_댓글을_포함하지_않는다() {
-        // given
-        Place place = savePlace(MAP_ID, "스타벅스 강남점", "26338954");
-        PlaceComment deleted = saveComment(place.getId(), "지워진 댓글");
-        PlaceComment alive = saveComment(place.getId(), "살아있는 댓글");
-        placeCommentRepository.increaseReportCount(deleted.getId());
-        placeCommentRepository.increaseReportCount(alive.getId());
-        deleted.delete();
-        placeCommentRepository.saveAndFlush(deleted);
-        entityManager.clear();
-
-        // when
-        Page<ReportedCommentResponse> page =
-            placeCommentRepository.findReportedByMapId(MAP_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(page.getContent()).extracting(ReportedCommentResponse::content)
-            .containsExactly("살아있는 댓글");
-    }
-
-    @Test
-    void 신고가_없으면_빈_목록을_준다() {
-        // given
-        Place place = savePlace(MAP_ID, "스타벅스 강남점", "26338954");
-        saveComment(place.getId(), "평범한 댓글");
-
-        // when
-        Page<ReportedCommentResponse> page =
-            placeCommentRepository.findReportedByMapId(MAP_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(page.getContent()).isEmpty();
-        assertThat(page.getTotalElements()).isZero();
-    }
-
-    @Test
-    void 신고_목록은_페이지네이션이_동작한다() {
-        // given
-        Place place = savePlace(MAP_ID, "스타벅스 강남점", "26338954");
-        List.of("첫째", "둘째", "셋째").forEach(content ->
-            placeCommentRepository.increaseReportCount(saveComment(place.getId(), content).getId()));
-        entityManager.clear();
-
-        // when
-        Page<ReportedCommentResponse> firstPage =
-            placeCommentRepository.findReportedByMapId(MAP_ID, PageRequest.of(0, 2));
-
-        // then
-        assertThat(firstPage.getContent()).hasSize(2);
-        assertThat(firstPage.getTotalElements()).isEqualTo(3);
-        assertThat(firstPage.getTotalPages()).isEqualTo(2);
     }
 }

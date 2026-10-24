@@ -1,7 +1,7 @@
 package com.moamap.place.dto;
 
 import java.time.LocalDateTime;
-import com.moamap.place.entity.CommentReportReason;
+import com.moamap.place.entity.ReportReason;
 import com.moamap.place.entity.PlaceCommentReport;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "댓글 신고 접수 결과")
 public record PlaceCommentReportResponse(
     @Schema(description = "신고한 댓글 ID", example = "12") Long commentId,
-    @Schema(description = "접수된 신고 사유", example = "ABUSE") CommentReportReason reason,
+    @Schema(description = "접수된 신고 사유", example = "ABUSE") ReportReason reason,
     @Schema(description = "접수 시각") LocalDateTime reportedAt
 ) {
 

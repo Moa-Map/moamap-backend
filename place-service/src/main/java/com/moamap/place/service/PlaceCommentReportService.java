@@ -2,32 +2,30 @@ package com.moamap.place.service;
 
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
-import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceCommentReportRequest;
 import com.moamap.place.dto.PlaceCommentReportResponse;
-import com.moamap.place.dto.ReportedCommentResponse;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.entity.PlaceCommentReport;
+import com.moamap.place.event.ReportFiled;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
-import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.repository.PlaceCommentReportRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import com.moamap.place.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 댓글 신고.
+ * 댓글 신고. 운영자가 받는다(방장·관리자에게는 가지 않는다 — 방장·관리자는 장소 신고만 받는다).
  *
+ * 그 댓글을 볼 수 있는 사람이면 신고할 수 있다(MapViewPolicy). 커뮤니티 지도를 둘러보는 사람도 신고할 수 있어야 한다.
  * 신고가 쌓여도 서버가 자동으로 숨기거나 지우지 않는다. 임계치를 정할 근거 데이터가 아직 없고,
  * 복구 수단 없이 자동 삭제를 넣으면 소수의 악의적 신고로 정상 댓글이 되돌릴 수 없게 사라진다.
- * 지금은 신고를 쌓아 지도 방장·관리자에게 보여주고, 지울지는 사람이 판단한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +38,8 @@ public class PlaceCommentReportService {
     private final PlaceCommentReportRepository placeCommentReportRepository;
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
+    private final MapViewPolicy mapViewPolicy;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public PlaceCommentReportResponse report(Long placeId, Long commentId, Long userId,
@@ -47,7 +47,7 @@ public class PlaceCommentReportService {
         requireLogin(userId);
         PlaceComment comment = getCommentOrThrow(placeId, commentId);
         Place place = getPlaceOrThrow(placeId);
-        requireMapMember(place.getMapId(), userId);
+        mapViewPolicy.requireViewable(mapClient.getMemberInfo(place.getMapId(), userId));
 
         if (comment.isWrittenBy(userId)) {
             throw new BusinessException(PlaceErrorCode.CANNOT_REPORT_OWN_COMMENT);
@@ -67,16 +67,8 @@ public class PlaceCommentReportService {
             throw e;
         }
         placeCommentRepository.increaseReportCount(commentId);
+        eventPublisher.publishEvent(ReportFiled.toOperators(report.getId(), place.getMapId(), userId));
         return PlaceCommentReportResponse.from(report);
-    }
-
-    /**
-     * 신고가 쌓인 댓글 목록. 지도의 방장·관리자만 볼 수 있다.
-     */
-    public PageResponse<ReportedCommentResponse> findReported(Long mapId, Long userId, Pageable pageable) {
-        requireLogin(userId);
-        requireManager(mapId, userId);
-        return PageResponse.from(placeCommentRepository.findReportedByMapId(mapId, pageable));
     }
 
     // 길이 초과 등 다른 무결성 위반까지 "이미 신고함"으로 뭉개지 않도록, 해당 제약 위반일 때만 변환한다.
@@ -91,19 +83,6 @@ public class PlaceCommentReportService {
     private void requireLogin(Long userId) {
         if (userId == null) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
-        }
-    }
-
-    private void requireMapMember(Long mapId, Long userId) {
-        if (mapClient.getMemberInfo(mapId, userId).role() == MapMemberRole.NONE) {
-            throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
-        }
-    }
-
-    private void requireManager(Long mapId, Long userId) {
-        MapMemberRole role = mapClient.getMemberInfo(mapId, userId).role();
-        if (role != MapMemberRole.OWNER && role != MapMemberRole.ADMIN) {
-            throw new BusinessException(PlaceErrorCode.NOT_REVIEWER);
         }
     }
 

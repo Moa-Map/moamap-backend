@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.math.BigDecimal;
-import com.moamap.place.entity.CommentReportReason;
+import com.moamap.place.entity.ReportReason;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.entity.PlaceCommentReport;
@@ -89,7 +89,7 @@ class PlaceWithdrawalCleanupTest {
         Place myPlace = place(LEAVER);
         PlaceComment othersComment = comment(myPlace, OTHER, 3);
         PlaceCommentReport report = placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(othersComment.getId(), LEAVER, CommentReportReason.SPAM, null));
+            PlaceCommentReport.of(othersComment.getId(), LEAVER, ReportReason.SPAM, null));
 
         cleanUpAndReload(LEAVER);
 
