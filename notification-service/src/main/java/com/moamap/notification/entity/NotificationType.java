@@ -20,7 +20,11 @@ public enum NotificationType {
     MAP_POST_COMMENTED(NotificationTargetType.MAP_POST, "%s님이 내 게시글에 댓글을 남겼어요.", "내 게시글에 새 댓글이 달렸어요."),
     MAP_ADMIN_ASSIGNED(NotificationTargetType.MAP, "%s님이 나를 지도 관리자로 지정했어요.", "지도 관리자로 지정됐어요."),
     MAP_OWNER_TRANSFERRED(NotificationTargetType.MAP, null, "지도의 새 방장이 됐어요. 이전 방장이 지도를 떠났어요."),
-    INQUIRY_ANSWERED(NotificationTargetType.INQUIRY, null, "문의하신 내용에 답변이 완료됐어요.");
+    INQUIRY_ANSWERED(NotificationTargetType.INQUIRY, null, "문의하신 내용에 답변이 완료됐어요."),
+    /** 방장·관리자에게. 신고자는 보여주지 않는다(보복 방지). */
+    PLACE_REPORTED(NotificationTargetType.PLACE, null, "내 지도의 장소가 신고됐어요. 확인해 주세요."),
+    /** 운영자에게. 모든 신고(장소·댓글·로그·지도·사용자)에 대해 보낸다. */
+    REPORT_RECEIVED(NotificationTargetType.REPORT, null, "새 신고가 접수됐어요. 24시간 안에 확인해 주세요.");
 
     private final NotificationTargetType targetType;
     /** 행동한 사람의 닉네임을 넣는 문구. null이면 행동한 사람을 보여주지 않는 종류다. */

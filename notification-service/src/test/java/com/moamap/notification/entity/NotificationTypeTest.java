@@ -25,7 +25,7 @@ class NotificationTypeTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = NotificationType.class, names = {"PLACE_APPROVED", "PLACE_REJECTED", "MAP_OWNER_TRANSFERRED", "INQUIRY_ANSWERED"})
+    @EnumSource(value = NotificationType.class, names = {"PLACE_APPROVED", "PLACE_REJECTED", "MAP_OWNER_TRANSFERRED", "INQUIRY_ANSWERED", "PLACE_REPORTED", "REPORT_RECEIVED"})
     void 행동한_사람을_보여주지_않는_종류는_닉네임이_있어도_기본_문구다(NotificationType type) {
         assertThat(type.showsActor()).isFalse();
         assertThat(type.messageFor("모아")).isEqualTo(type.getDefaultMessage());

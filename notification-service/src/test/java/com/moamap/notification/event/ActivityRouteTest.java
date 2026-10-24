@@ -14,9 +14,10 @@ class ActivityRouteTest {
     }
 
     @Test
-    void 모든_알림_종류는_정확히_하나의_이벤트에서_만들어진다() {
+    void 모든_알림_종류는_하나_이상의_이벤트에서_만들어진다() {
+        // 새 신고 알림(REPORT_RECEIVED)처럼 여러 서비스가 같은 종류를 보낼 수 있다.
         assertThat(Arrays.stream(ActivityRoute.values()).map(ActivityRoute::getNotificationType))
-                .containsExactlyInAnyOrder(NotificationType.values());
+                .contains(NotificationType.values());
     }
 
     @Test

@@ -35,6 +35,10 @@
 | `map.admin.assigned` | `map.events` | 지도 관리자로 지정됨 | 지정된 멤버 | 지정한 사람 | 지도 | 지도 |
 | `map.owner.transferred` | `map.events` | 방장 승계 (이전 방장이 나가거나 탈퇴) | 새 방장 | (저장 안 함) | 지도 | 지도 |
 | `inquiry.answered` | `user.events` | 문의 답변 완료 | 문의자 | (저장 안 함) | 문의 | — |
+| `place.reported` | `place.events` | 내 지도의 장소가 신고됨 (그 장소의 첫 신고) | 방장·관리자 | (저장 안 함, 신고자 비공개) | 장소 | 지도 |
+| `place.report.received` | `place.events` | 새 신고 (장소·장소 댓글) | 운영자 | (저장 안 함) | 신고 | 지도 |
+| `map.report.received` | `map.events` | 새 신고 (지도·로그·로그 댓글) | 운영자 | (저장 안 함) | 신고 | 지도 |
+| `user.report.received` | `user.events` | 새 신고 (사용자) | 운영자 | (저장 안 함) | 신고 | — |
 
 목록은 `ActivityRoute`가 정본이다. 새 알림은 `NotificationType`과 `ActivityRoute`에 한 줄씩 더한다.
 
