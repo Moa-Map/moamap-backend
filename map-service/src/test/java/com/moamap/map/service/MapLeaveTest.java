@@ -13,6 +13,7 @@ import com.moamap.map.entity.MapPost;
 import com.moamap.map.entity.MapPostComment;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.place.PlaceClient;
 import com.moamap.map.repository.MapEntityRepository;
@@ -27,11 +28,14 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
  * 지도 나가기를 실제 DB로 확인한다. 방장 위임 순서는 회원 탈퇴와 같아야 한다(MapWithdrawalCleanupTest).
  */
 @DataJpaTest
+@RecordApplicationEvents
 @Import({JpaAuditingConfig.class, MapService.class, MapOwnerSuccession.class})
 class MapLeaveTest {
 
@@ -48,6 +52,7 @@ class MapLeaveTest {
     @Autowired private MapPostRepository mapPostRepository;
     @Autowired private MapPostCommentRepository mapPostCommentRepository;
     @Autowired private TestEntityManager em;
+    @Autowired private ApplicationEvents events;
 
     @MockitoBean private InviteCodeGenerator inviteCodeGenerator;
     @MockitoBean private UserClient userClient;
@@ -109,6 +114,29 @@ class MapLeaveTest {
 
         assertThat(leaveAndReload(map, EARLY_MEMBER)).contains(LATE_MEMBER);
         assertThat(mapRepository.findById(map.getId()).orElseThrow().getMemberCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 방장이_나가서_넘어가면_새_방장에게_알림을_보낸다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+
+        leaveAndReload(map, OWNER);
+
+        assertThat(events.stream(ActivitySignal.class)).containsExactly(
+            new ActivitySignal(ActivitySignal.MAP_OWNER_TRANSFERRED, EARLY_MEMBER, null, map.getId(), map.getId()));
+    }
+
+    @Test
+    void 멤버가_나가거나_혼자_남은_방장이_막히면_알림을_보내지_않는다() {
+        MapEntity shared = map(OWNER, MapType.COMMUNITY);
+        join(shared, EARLY_MEMBER, MapRole.MEMBER);
+        MapEntity solo = map(LATE_ADMIN, MapType.COMMUNITY);
+
+        leaveAndReload(shared, EARLY_MEMBER);
+        assertErrorCode(() -> mapService.leave(solo.getId(), LATE_ADMIN), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
+
+        assertThat(events.stream(ActivitySignal.class)).isEmpty();
     }
 
     @Test

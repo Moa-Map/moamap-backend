@@ -8,6 +8,7 @@ import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
@@ -18,6 +19,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 청사진 3-1(가) 결정 규칙 표를 행 단위로 검증한다.
@@ -45,6 +48,9 @@ class MapServiceTest {
 
     @Mock
     private InviteCodeGenerator inviteCodeGenerator;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private MapService mapService;
@@ -124,6 +130,8 @@ class MapServiceTest {
         assertThat(response.userId()).isEqualTo(TARGET_ID);
         assertThat(response.role()).isEqualTo(MapRole.ADMIN);
         assertThat(target.getRole()).isEqualTo(MapRole.ADMIN);
+        verify(eventPublisher).publishEvent(
+            new ActivitySignal(ActivitySignal.MAP_ADMIN_ASSIGNED, TARGET_ID, OWNER_ID, MAP_ID, MAP_ID));
     }
 
     @Test
@@ -138,6 +146,7 @@ class MapServiceTest {
 
         assertThat(response.role()).isEqualTo(MapRole.ADMIN);
         assertThat(target.getRole()).isEqualTo(MapRole.ADMIN);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -152,6 +161,7 @@ class MapServiceTest {
 
         assertThat(response.role()).isEqualTo(MapRole.MEMBER);
         assertThat(target.getRole()).isEqualTo(MapRole.MEMBER);
+        verifyNoInteractions(eventPublisher);
     }
 
     private MapEntity communityMap(Long ownerId) {

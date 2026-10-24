@@ -3,6 +3,8 @@ package com.moamap.user.inquiry.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.user.exception.UserErrorCode;
 import com.moamap.user.inquiry.dto.InquiryCreateRequest;
@@ -10,6 +12,9 @@ import com.moamap.user.inquiry.dto.InquiryDetailResponse;
 import com.moamap.user.inquiry.dto.InquirySummaryResponse;
 import com.moamap.user.inquiry.entity.InquiryStatus;
 import com.moamap.user.inquiry.entity.InquiryType;
+import com.moamap.user.outbox.OutboxEvent;
+import com.moamap.user.outbox.OutboxEventRepository;
+import com.moamap.user.outbox.OutboxRecorder;
 import com.moamap.user.user.entity.Role;
 import com.moamap.user.user.entity.User;
 import com.moamap.user.user.exception.UserNotFoundException;
@@ -22,6 +27,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
@@ -32,13 +38,16 @@ import org.springframework.test.util.ReflectionTestUtils;
  * 문의 등록·관리를 실제 DB로 확인한다. 도배 제한, 개인정보 노출 범위, 관리자 권한 순서를 본다.
  */
 @DataJpaTest
-@Import({InquiryService.class, InquiryAdminService.class, AdminGuard.class})
+@Import({InquiryService.class, InquiryAdminService.class, AdminGuard.class, OutboxRecorder.class,
+        JacksonAutoConfiguration.class})
 class InquiryServiceTest {
 
     @Autowired private InquiryService inquiryService;
     @Autowired private InquiryAdminService inquiryAdminService;
     @Autowired private UserRepository userRepository;
     @Autowired private EntityManager em;
+    @Autowired private OutboxEventRepository outboxEventRepository;
+    @Autowired private ObjectMapper objectMapper;
 
     private Long adminId;
     private Long userId;
@@ -158,6 +167,32 @@ class InquiryServiceTest {
         assertThat(answered.answeredAt()).isNotNull();
         assertThat(reopened.status()).isEqualTo(InquiryStatus.IN_PROGRESS);
         assertThat(reopened.answeredAt()).isNull();
+    }
+
+    @Test
+    void 답변_완료로_바꾸면_문의한_회원에게_보낼_답변_알림_이벤트를_남긴다() throws Exception {
+        Long inquiryId = inquiryService.create(userId, request(InquiryType.OTHER, "user@example.com", "문의")).inquiryId();
+
+        inquiryAdminService.changeStatus(adminId, inquiryId, InquiryStatus.ANSWERED);
+
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).extracting(OutboxEvent::getEventType).containsExactly("inquiry.answered");
+        JsonNode payload = objectMapper.readTree(events.get(0).getPayload());
+        assertThat(payload.get("eventId").asText()).isNotBlank();
+        assertThat(payload.get("recipientId").asLong()).isEqualTo(userId);
+        assertThat(payload.get("targetId").asLong()).isEqualTo(inquiryId);
+        assertThat(payload.get("occurredAt").isNull()).isFalse();
+    }
+
+    @Test
+    void 답변_완료가_아닌_상태로_바꾸거나_이미_답변_완료면_알림_이벤트를_남기지_않는다() {
+        Long inquiryId = inquiryService.create(userId, request(InquiryType.OTHER, "user@example.com", "문의")).inquiryId();
+
+        inquiryAdminService.changeStatus(adminId, inquiryId, InquiryStatus.IN_PROGRESS);
+        inquiryAdminService.changeStatus(adminId, inquiryId, InquiryStatus.ANSWERED);
+        inquiryAdminService.changeStatus(adminId, inquiryId, InquiryStatus.ANSWERED);
+
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
     }
 
     @Test

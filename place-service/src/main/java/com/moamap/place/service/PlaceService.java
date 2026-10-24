@@ -19,6 +19,7 @@ import com.moamap.place.dto.PlaceResponse;
 import com.moamap.place.dto.PlaceUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.ActivitySignal;
 import com.moamap.place.event.PlaceCountChangeSignal;
 import com.moamap.place.event.PlaceCountEventPublisher;
 import com.moamap.place.exception.PlaceErrorCode;
@@ -291,6 +292,8 @@ public class PlaceService {
         checkPending(place);
         place.approve(userId);
         eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.PLACE_APPROVED, place.getCreatedBy(), userId, id, place.getMapId()));
         return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
@@ -300,6 +303,8 @@ public class PlaceService {
         requireReviewer(place.getMapId(), userId);
         checkPending(place);
         place.reject(userId);
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.PLACE_REJECTED, place.getCreatedBy(), userId, id, place.getMapId()));
         return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 

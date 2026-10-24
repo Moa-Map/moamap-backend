@@ -19,7 +19,7 @@ public enum NotificationType {
     PLACE_COMMENTED(NotificationTargetType.PLACE, "%s님이 내 장소에 댓글을 남겼어요.", "내 장소에 새 댓글이 달렸어요."),
     MAP_POST_COMMENTED(NotificationTargetType.MAP_POST, "%s님이 내 게시글에 댓글을 남겼어요.", "내 게시글에 새 댓글이 달렸어요."),
     MAP_ADMIN_ASSIGNED(NotificationTargetType.MAP, "%s님이 나를 지도 관리자로 지정했어요.", "지도 관리자로 지정됐어요."),
-    MAP_OWNER_TRANSFERRED(NotificationTargetType.MAP, null, "이전 방장이 탈퇴해 지도의 방장이 됐어요."),
+    MAP_OWNER_TRANSFERRED(NotificationTargetType.MAP, null, "지도의 새 방장이 됐어요. 이전 방장이 지도를 떠났어요."),
     INQUIRY_ANSWERED(NotificationTargetType.INQUIRY, null, "문의하신 내용에 답변이 완료됐어요.");
 
     private final NotificationTargetType targetType;

@@ -24,6 +24,7 @@ import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
@@ -32,6 +33,7 @@ import com.moamap.map.user.UserClient;
 import com.moamap.map.user.dto.UserProfileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -54,6 +56,7 @@ public class MapService {
     private final InviteCodeGenerator inviteCodeGenerator;
     private final UserClient userClient;
     private final PlaceClient placeClient;
+    private final ApplicationEventPublisher eventPublisher;
     private final MapOwnerSuccession ownerSuccession;
 
     @Transactional
@@ -300,6 +303,10 @@ public class MapService {
 
         if (target.getRole() != requestedRole) {
             target.changeRole(requestedRole);
+            if (requestedRole == MapRole.ADMIN) {
+                eventPublisher.publishEvent(
+                    new ActivitySignal(ActivitySignal.MAP_ADMIN_ASSIGNED, targetUserId, requesterId, mapId, mapId));
+            }
         }
         return MapMemberRoleUpdateResponse.of(mapId, targetUserId, requestedRole);
     }

@@ -7,10 +7,12 @@ import com.moamap.map.dto.PageResponse;
 import com.moamap.map.entity.MapPost;
 import com.moamap.map.entity.MapPostComment;
 import com.moamap.map.entity.MapRole;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapPostCommentRepository;
 import com.moamap.map.repository.MapPostRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,14 +31,17 @@ public class MapPostCommentService {
     private final MapPostCommentRepository commentRepository;
     private final MapPostRepository mapPostRepository;
     private final MapPostAccessPolicy accessPolicy;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public MapPostCommentResponse create(Long mapId, Long postId, MapPostCommentCreateRequest request, Long userId) {
         accessPolicy.requireWritable(mapId, userId);
         MapPost post = getPostOrThrow(mapId, postId);
 
-        return MapPostCommentResponse.from(
-            commentRepository.save(MapPostComment.create(post.getId(), userId, request.content())));
+        MapPostComment comment = commentRepository.save(MapPostComment.create(post.getId(), userId, request.content()));
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.MAP_POST_COMMENTED, post.getUserId(), userId, postId, mapId));
+        return MapPostCommentResponse.from(comment);
     }
 
     public PageResponse<MapPostCommentResponse> findAll(Long mapId, Long postId, Pageable pageable, Long userId) {

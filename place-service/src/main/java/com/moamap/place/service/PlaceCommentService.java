@@ -11,12 +11,14 @@ import com.moamap.place.dto.PlaceCommentResponse;
 import com.moamap.place.dto.PlaceCommentUpdateRequest;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
+import com.moamap.place.event.ActivitySignal;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.repository.PlaceRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +31,7 @@ public class PlaceCommentService {
     private final PlaceCommentRepository placeCommentRepository;
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public PlaceCommentResponse create(Long placeId, Long userId, PlaceCommentCreateRequest request) {
@@ -47,6 +50,8 @@ public class PlaceCommentService {
             .build();
         placeCommentRepository.save(comment);
         refreshPlaceCommentSummary(placeId);
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.PLACE_COMMENTED, place.getCreatedBy(), userId, placeId, place.getMapId()));
         return PlaceCommentResponse.from(comment);
     }
 
