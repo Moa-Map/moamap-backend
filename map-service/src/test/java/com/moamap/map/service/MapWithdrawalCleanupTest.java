@@ -12,6 +12,7 @@ import com.moamap.map.entity.MapPostComment;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
 import com.moamap.map.entity.PlaceTag;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import com.moamap.map.repository.MapPostCommentRepository;
@@ -21,11 +22,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
  * 탈퇴 회원의 지도 데이터 정리. 방장 위임 순서와 멤버 수, 글 삭제 범위를 실제 쿼리로 확인한다.
  */
 @DataJpaTest
+@RecordApplicationEvents
 @Import({JpaAuditingConfig.class, MapWithdrawalCleanupService.class})
 class MapWithdrawalCleanupTest {
 
@@ -40,6 +44,7 @@ class MapWithdrawalCleanupTest {
     @Autowired private MapPostRepository mapPostRepository;
     @Autowired private MapPostCommentRepository mapPostCommentRepository;
     @Autowired private TestEntityManager em;
+    @Autowired private ApplicationEvents events;
 
     private int inviteCodeSeq;
 
@@ -80,6 +85,26 @@ class MapWithdrawalCleanupTest {
         assertThat(mapRepository.findById(map.getId()).orElseThrow().getOwnerId()).isEqualTo(EARLY_MEMBER);
         assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.OWNER);
         assertThat(roleOf(map, LATE_MEMBER)).isEqualTo(MapRole.MEMBER);
+    }
+
+    @Test
+    void 방장을_넘겨받은_멤버에게_방장_승계_알림_신호를_발행한다() {
+        MapEntity map = map(LEAVER, MapType.COMMUNITY);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+
+        cleanUpAndReload(LEAVER);
+
+        assertThat(events.stream(ActivitySignal.class)).containsExactly(
+            new ActivitySignal(ActivitySignal.MAP_OWNER_TRANSFERRED, EARLY_MEMBER, null, map.getId(), map.getId()));
+    }
+
+    @Test
+    void 지도를_지우면_방장_승계_알림_신호를_발행하지_않는다() {
+        map(LEAVER, MapType.PRIVATE);
+
+        cleanUpAndReload(LEAVER);
+
+        assertThat(events.stream(ActivitySignal.class)).isEmpty();
     }
 
     @Test

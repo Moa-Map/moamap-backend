@@ -7,12 +7,14 @@ import java.util.Optional;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
 import com.moamap.map.entity.MapRole;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import com.moamap.map.repository.MapPostCommentRepository;
 import com.moamap.map.repository.MapPostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ public class MapWithdrawalCleanupService {
     private final MapMemberRepository mapMemberRepository;
     private final MapPostRepository mapPostRepository;
     private final MapPostCommentRepository mapPostCommentRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void cleanUp(Long userId) {
@@ -79,6 +82,9 @@ public class MapWithdrawalCleanupService {
         map.transferOwnership(next.getUserId());
         mapMemberRepository.delete(owner);
         map.decreaseMemberCount();
+        // 행동한 사람은 탈퇴한 회원이라 보여줄 수 없다. 알림 문구도 이전 방장을 드러내지 않는다.
+        eventPublisher.publishEvent(new ActivitySignal(
+            ActivitySignal.MAP_OWNER_TRANSFERRED, next.getUserId(), null, map.getId(), map.getId()));
         log.info("탈퇴한 방장의 지도를 위임했습니다. mapId={}, newOwnerId={}", map.getId(), next.getUserId());
     }
 

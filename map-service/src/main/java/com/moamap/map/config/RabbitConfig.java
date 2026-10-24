@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * map-service는 소비자다. place-service가 선언한 place.events 익스체인지에 큐를 바인딩하고,
- * 실패 메시지를 위한 DLQ를 둔다(청사진 2-2).
+ * 실패 메시지를 위한 DLQ를 둔다(청사진 2-2). 알림 이벤트는 map.events로 발행한다.
  */
 @Configuration
 public class RabbitConfig {
@@ -54,6 +54,14 @@ public class RabbitConfig {
     @Bean
     public Binding placeCountBinding(Queue placeCountQueue, TopicExchange placeEventsExchange) {
         return BindingBuilder.bind(placeCountQueue).to(placeEventsExchange).with(ROUTING_KEY);
+    }
+
+    /**
+     * 알림 이벤트 발행(ActivityEventPublisher). 발행자로서 익스체인지만 선언하고 큐는 notification-service가 관리한다.
+     */
+    @Bean
+    public TopicExchange mapEventsExchange() {
+        return new TopicExchange("map.events", true, false);
     }
 
     /**

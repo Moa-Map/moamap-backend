@@ -12,6 +12,7 @@ import com.moamap.map.entity.MapPost;
 import com.moamap.map.entity.MapPostComment;
 import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.MapType;
+import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -49,12 +51,15 @@ class MapPostCommentServiceTest {
     @Mock
     private MapMemberRepository mapMemberRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private MapPostCommentService commentService;
 
     @BeforeEach
     void setUp() {
         commentService = new MapPostCommentService(commentRepository, mapPostRepository,
-            new MapPostAccessPolicy(mapRepository, mapMemberRepository));
+            new MapPostAccessPolicy(mapRepository, mapMemberRepository), eventPublisher);
     }
 
     private MapEntity map(MapType type) {
@@ -90,6 +95,19 @@ class MapPostCommentServiceTest {
 
         assertThat(response.content()).isEqualTo("저도 가봤어요");
         assertThat(response.userId()).isEqualTo(3L);
+    }
+
+    @Test
+    void 댓글을_달면_게시글_작성자에게_알림_신호를_발행한다() {
+        given(mapRepository.findById(10L)).willReturn(Optional.of(map(MapType.COMMUNITY)));
+        given(mapMemberRepository.findByMapIdAndUserId(10L, 3L))
+            .willReturn(Optional.of(MapMember.of(10L, 3L, MapRole.MEMBER)));
+        given(mapPostRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(post()));
+        willAnswer(i -> i.getArgument(0)).given(commentRepository).save(any(MapPostComment.class));
+
+        commentService.create(10L, 7L, new MapPostCommentCreateRequest("저도 가봤어요"), 3L);
+
+        verify(eventPublisher).publishEvent(new ActivitySignal(ActivitySignal.MAP_POST_COMMENTED, 2L, 3L, 7L, 10L));
     }
 
     @Test
