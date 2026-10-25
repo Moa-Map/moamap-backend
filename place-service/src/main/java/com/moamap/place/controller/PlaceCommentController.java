@@ -65,12 +65,13 @@ public class PlaceCommentController {
     }
 
     @GetMapping
-    @Operation(summary = "댓글 목록 조회", description = "삭제되지 않은 댓글 목록을 페이지네이션으로 조회한다.")
+    @Operation(summary = "댓글 목록 조회", description = "삭제되지 않은 댓글 목록을 페이지네이션으로 조회한다. 내가 차단한 사용자의 댓글은 빠진다.")
     public ApiResponse<PageResponse<PlaceCommentResponse>> getAll(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long placeId,
+        @Parameter(hidden = true) @RequestHeader(value = "X-User-Id", required = false) Long userId,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ApiResponse.success(placeCommentService.findAllByPlaceId(placeId, pageable));
+        return ApiResponse.success(placeCommentService.findAllByPlaceId(placeId, userId, pageable));
     }
 
     @PatchMapping("/{commentId}")

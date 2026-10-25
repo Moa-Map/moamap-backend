@@ -18,6 +18,8 @@ import com.moamap.user.event.UserWithdrawnEvent;
 import com.moamap.user.inquiry.entity.Inquiry;
 import com.moamap.user.inquiry.entity.InquiryType;
 import com.moamap.user.inquiry.repository.InquiryRepository;
+import com.moamap.user.block.entity.UserBlock;
+import com.moamap.user.block.repository.UserBlockRepository;
 import com.moamap.user.term.entity.UserTerm;
 import com.moamap.user.term.repository.UserTermRepository;
 import com.moamap.user.outbox.OutboxEvent;
@@ -70,6 +72,7 @@ class UserWithdrawalTest {
     @Autowired private OutboxEventRepository outboxEventRepository;
     @Autowired private InquiryRepository inquiryRepository;
     @Autowired private UserTermRepository userTermRepository;
+    @Autowired private UserBlockRepository userBlockRepository;
     @Autowired private AppleCredentialRepository appleCredentialRepository;
     @Autowired private AppleTokenCipher cipher;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -80,6 +83,7 @@ class UserWithdrawalTest {
         appleCredentialRepository.deleteAll();
         inquiryRepository.deleteAll();
         userTermRepository.deleteAll();
+        userBlockRepository.deleteAll();
         outboxEventRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -123,6 +127,21 @@ class UserWithdrawalTest {
         withdrawalWriter.withdraw(userId);
 
         assertThat(userTermRepository.findAll()).extracting(UserTerm::getUserId).containsExactly(otherId);
+    }
+
+    @Test
+    void 탈퇴하면_그_회원이_한_차단과_받은_차단을_지우고_남끼리의_차단은_남긴다() {
+        Long userId = kakaoUser("111").getId();
+        Long otherId = kakaoUser("222").getId();
+        Long thirdId = kakaoUser("333").getId();
+        userBlockRepository.save(UserBlock.of(userId, otherId));
+        userBlockRepository.save(UserBlock.of(otherId, userId));
+        userBlockRepository.save(UserBlock.of(otherId, thirdId));
+
+        withdrawalWriter.withdraw(userId);
+
+        assertThat(userBlockRepository.findAll()).singleElement()
+                .satisfies(block -> assertThat(block.getBlockedId()).isEqualTo(thirdId));
     }
 
     @Test

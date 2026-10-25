@@ -18,6 +18,7 @@ import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapEntityRepository;
 import com.moamap.map.repository.MapMemberRepository;
 import com.moamap.map.repository.MapPostRepository;
+import com.moamap.map.user.UserBlockClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,13 +48,16 @@ class MapPostServiceTest {
     @Mock
     private MapMemberRepository mapMemberRepository;
 
+    @Mock
+    private UserBlockClient userBlockClient;
+
     private MapPostService mapPostService;
 
     @BeforeEach
     void setUp() {
         // 권한 규칙을 목으로 대체하면 검증 대상이 사라지므로 실제 정책을 끼운다.
         mapPostService = new MapPostService(mapPostRepository,
-            new MapPostAccessPolicy(mapRepository, mapMemberRepository));
+            new MapPostAccessPolicy(mapRepository, mapMemberRepository), userBlockClient);
     }
 
     private MapEntity map(MapType type) {

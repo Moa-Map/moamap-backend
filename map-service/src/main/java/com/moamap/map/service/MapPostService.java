@@ -14,9 +14,11 @@ import com.moamap.map.entity.MapRole;
 import com.moamap.map.entity.PlaceTag;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapPostRepository;
+import com.moamap.map.user.UserBlockClient;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class MapPostService {
 
     private final MapPostRepository mapPostRepository;
     private final MapPostAccessPolicy accessPolicy;
+    private final UserBlockClient userBlockClient;
 
     @Transactional
     public MapPostResponse create(Long mapId, MapPostCreateRequest request, Long userId) {
@@ -55,10 +58,14 @@ public class MapPostService {
         }
     }
 
+    /** 요청한 사람이 차단한 사용자의 로그는 빼고 준다. */
     public PageResponse<MapPostResponse> findAll(Long mapId, Pageable pageable, Long userId) {
         accessPolicy.requireReadable(mapId, userId);
-        return PageResponse.from(
-            mapPostRepository.findByMapIdAndDeletedAtIsNull(mapId, pageable).map(MapPostResponse::from));
+        List<Long> blockedIds = userBlockClient.findBlockedIds(userId);
+        Page<MapPost> posts = blockedIds.isEmpty()
+            ? mapPostRepository.findByMapIdAndDeletedAtIsNull(mapId, pageable)
+            : mapPostRepository.findByMapIdAndDeletedAtIsNullAndUserIdNotIn(mapId, blockedIds, pageable);
+        return PageResponse.from(posts.map(MapPostResponse::from));
     }
 
     public MapPostResponse findById(Long mapId, Long postId, Long userId) {

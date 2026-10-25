@@ -1,5 +1,6 @@
 package com.moamap.map.repository;
 
+import java.util.Collection;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import com.moamap.map.entity.MapPostComment;
@@ -13,6 +14,10 @@ import org.springframework.data.repository.query.Param;
 public interface MapPostCommentRepository extends JpaRepository<MapPostComment, Long> {
 
     Page<MapPostComment> findByMapPostIdAndDeletedAtIsNull(Long mapPostId, Pageable pageable);
+
+    /** 요청한 사람이 차단한 사용자의 댓글을 뺀 목록. */
+    Page<MapPostComment> findByMapPostIdAndDeletedAtIsNullAndUserIdNotIn(Long mapPostId,
+        Collection<Long> blockedUserIds, Pageable pageable);
 
     Optional<MapPostComment> findByIdAndDeletedAtIsNull(Long id);
 

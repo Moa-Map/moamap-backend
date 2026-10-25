@@ -29,6 +29,7 @@ import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceCountByCreator;
 import com.moamap.place.repository.PlaceLikeRepository;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.user.UserClient;
 import com.moamap.place.user.dto.UserProfileResponse;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -70,6 +72,9 @@ class PlaceServiceTest {
 
     @Mock
     private UserClient userClient;
+
+    @Mock
+    private UserBlockClient userBlockClient;
 
     @Mock
     private PlaceBulkRegistrar placeBulkRegistrar;
@@ -285,6 +290,21 @@ class PlaceServiceTest {
         assertThat(result.content().get(0).name()).isEqualTo("승인된 장소");
         assertThat(result.totalElements()).isEqualTo(1);
         verifyNoInteractions(mapClient);
+    }
+
+    @Test
+    void findAllByMapId는_내가_차단한_사람이_등록한_장소를_뺀_조회를_쓴다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(userBlockClient.findBlockedIds(7L)).willReturn(List.of(5L));
+        given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNullAndCreatedByNotIn(
+            10L, PlaceStatus.APPROVED, List.of(5L), pageable)).willReturn(Page.empty(pageable));
+
+        // when
+        placeService.findAllByMapId(10L, 7L, pageable);
+
+        // then
+        verify(placeRepository, never()).findByMapIdAndStatusAndDeletedAtIsNull(any(), any(), any());
     }
 
     /**
