@@ -1,17 +1,14 @@
 package com.moamap.place.service;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
-import com.moamap.place.dto.PageResponse;
 import com.moamap.place.dto.PlaceCommentReportRequest;
 import com.moamap.place.dto.PlaceCommentReportResponse;
-import com.moamap.place.dto.ReportedCommentResponse;
-import com.moamap.place.entity.CommentReportReason;
+import com.moamap.place.entity.ReportReason;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
+import com.moamap.place.event.ReportFiled;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
 import com.moamap.place.map.dto.MapMemberResponse;
@@ -20,14 +17,13 @@ import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceCommentReportRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import com.moamap.place.repository.PlaceRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,6 +54,12 @@ class PlaceCommentReportServiceTest {
     @Mock
     private MapClient mapClient;
 
+    @Spy
+    private MapViewPolicy mapViewPolicy = new MapViewPolicy();
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private PlaceCommentReportService placeCommentReportService;
 
@@ -70,12 +72,15 @@ class PlaceCommentReportServiceTest {
     }
 
     private PlaceCommentReportRequest request() {
-        return new PlaceCommentReportRequest(CommentReportReason.SPAM, "다른 가게 홍보입니다.");
+        return new PlaceCommentReportRequest(ReportReason.SPAM, "다른 가게 홍보입니다.");
     }
 
     private void givenMember(MapMemberRole role) {
-        given(mapClient.getMemberInfo(MAP_ID, REPORTER_ID))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, role));
+        givenMember(MapType.COMMUNITY, role);
+    }
+
+    private void givenMember(MapType mapType, MapMemberRole role) {
+        given(mapClient.getMemberInfo(MAP_ID, REPORTER_ID)).willReturn(new MapMemberResponse(mapType, role));
     }
 
     @Test
@@ -93,9 +98,22 @@ class PlaceCommentReportServiceTest {
 
         // then
         assertThat(response.commentId()).isEqualTo(COMMENT_ID);
-        assertThat(response.reason()).isEqualTo(CommentReportReason.SPAM);
+        assertThat(response.reason()).isEqualTo(ReportReason.SPAM);
         assertThat(response.reportedAt()).isNotNull();
         verify(placeCommentReportRepository).saveAndFlush(any());
+        verify(placeCommentRepository).increaseReportCount(COMMENT_ID);
+        // 운영자에게만 알린다(방장·관리자 알림 대상 장소가 없다).
+        verify(eventPublisher).publishEvent(ReportFiled.toOperators(null, MAP_ID, REPORTER_ID));
+    }
+
+    @Test
+    void 커뮤니티_지도는_멤버가_아니어도_댓글을_신고할_수_있다() {
+        given(placeCommentRepository.findByIdAndDeletedAtIsNull(COMMENT_ID)).willReturn(Optional.of(comment()));
+        given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
+        givenMember(MapType.COMMUNITY, MapMemberRole.NONE);
+
+        placeCommentReportService.report(PLACE_ID, COMMENT_ID, REPORTER_ID, request());
+
         verify(placeCommentRepository).increaseReportCount(COMMENT_ID);
     }
 
@@ -131,11 +149,11 @@ class PlaceCommentReportServiceTest {
     }
 
     @Test
-    void 비멤버는_신고할_수_없다() {
+    void 프라이빗_지도는_멤버가_아니면_신고할_수_없다() {
         // given
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(COMMENT_ID)).willReturn(Optional.of(comment()));
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        givenMember(MapMemberRole.NONE);
+        givenMember(MapType.PRIVATE, MapMemberRole.NONE);
 
         // when & then
         assertThatThrownBy(() -> placeCommentReportService.report(PLACE_ID, COMMENT_ID, REPORTER_ID, request()))
@@ -201,66 +219,5 @@ class PlaceCommentReportServiceTest {
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getErrorCode())
             .isEqualTo(PlaceErrorCode.COMMENT_NOT_FOUND);
-    }
-
-    @Test
-    void 신고_목록은_지도_OWNER가_조회할_수_있다() {
-        // given
-        givenReportedPage();
-        givenMember(MapMemberRole.OWNER);
-
-        // when
-        PageResponse<ReportedCommentResponse> response =
-            placeCommentReportService.findReported(MAP_ID, REPORTER_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(response.content()).hasSize(1);
-        assertThat(response.content().get(0).reportCount()).isEqualTo(3);
-    }
-
-    @Test
-    void 신고_목록은_지도_ADMIN이_조회할_수_있다() {
-        // given
-        givenReportedPage();
-        givenMember(MapMemberRole.ADMIN);
-
-        // when
-        PageResponse<ReportedCommentResponse> response =
-            placeCommentReportService.findReported(MAP_ID, REPORTER_ID, PageRequest.of(0, 20));
-
-        // then
-        assertThat(response.content()).hasSize(1);
-    }
-
-    @Test
-    void 신고_목록은_일반_멤버가_조회할_수_없다() {
-        // given
-        givenMember(MapMemberRole.MEMBER);
-
-        // when & then
-        assertThatThrownBy(() ->
-            placeCommentReportService.findReported(MAP_ID, REPORTER_ID, PageRequest.of(0, 20)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(PlaceErrorCode.NOT_REVIEWER);
-        verify(placeCommentRepository, never()).findReportedByMapId(any(), any());
-    }
-
-    @Test
-    void 신고_목록은_비로그인이_조회할_수_없다() {
-        // when & then
-        assertThatThrownBy(() -> placeCommentReportService.findReported(MAP_ID, null, PageRequest.of(0, 20)))
-            .isInstanceOf(BusinessException.class)
-            .extracting(e -> ((BusinessException) e).getErrorCode())
-            .isEqualTo(CommonErrorCode.UNAUTHORIZED);
-        verifyNoInteractions(mapClient);
-    }
-
-    private void givenReportedPage() {
-        Pageable pageable = PageRequest.of(0, 20);
-        ReportedCommentResponse row = new ReportedCommentResponse(
-            COMMENT_ID, PLACE_ID, "스타벅스 강남점", AUTHOR_ID, "광고글", 3, 3, LocalDateTime.now());
-        given(placeCommentRepository.findReportedByMapId(MAP_ID, pageable))
-            .willReturn(new PageImpl<>(List.of(row), pageable, 1));
     }
 }

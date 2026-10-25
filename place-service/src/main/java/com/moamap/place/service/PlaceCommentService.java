@@ -3,6 +3,7 @@ package com.moamap.place.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.List;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.common.exception.CommonErrorCode;
 import com.moamap.place.dto.PageResponse;
@@ -14,11 +15,13 @@ import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.event.ActivitySignal;
 import com.moamap.place.exception.PlaceErrorCode;
 import com.moamap.place.map.MapClient;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.repository.PlaceRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +34,7 @@ public class PlaceCommentService {
     private final PlaceCommentRepository placeCommentRepository;
     private final PlaceRepository placeRepository;
     private final MapClient mapClient;
+    private final UserBlockClient userBlockClient;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -55,10 +59,14 @@ public class PlaceCommentService {
         return PlaceCommentResponse.from(comment);
     }
 
-    public PageResponse<PlaceCommentResponse> findAllByPlaceId(Long placeId, Pageable pageable) {
+    /** 요청한 사람이 차단한 사용자의 댓글은 빼고 준다. */
+    public PageResponse<PlaceCommentResponse> findAllByPlaceId(Long placeId, Long userId, Pageable pageable) {
         getPlaceOrThrow(placeId);
-        return PageResponse.from(placeCommentRepository.findByPlaceIdAndDeletedAtIsNull(placeId, pageable)
-            .map(PlaceCommentResponse::from));
+        List<Long> blockedIds = userBlockClient.findBlockedIds(userId);
+        Page<PlaceComment> comments = blockedIds.isEmpty()
+            ? placeCommentRepository.findByPlaceIdAndDeletedAtIsNull(placeId, pageable)
+            : placeCommentRepository.findByPlaceIdAndDeletedAtIsNullAndUserIdNotIn(placeId, blockedIds, pageable);
+        return PageResponse.from(comments.map(PlaceCommentResponse::from));
     }
 
     @Transactional

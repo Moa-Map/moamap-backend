@@ -2,9 +2,8 @@ package com.moamap.place.entity;
 
 import java.time.LocalDateTime;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -43,9 +42,9 @@ public class PlaceCommentReport {
     @Column(name = "reporter_id", nullable = false)
     private Long reporterId;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = ReportReasonConverter.class)
     @Column(nullable = false, length = 20)
-    private CommentReportReason reason;
+    private ReportReason reason;
 
     /** 사유만으로 부족할 때 신고자가 덧붙이는 설명. 선택 입력이다. */
     @Column(length = 200)
@@ -54,7 +53,7 @@ public class PlaceCommentReport {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    private PlaceCommentReport(Long placeCommentId, Long reporterId, CommentReportReason reason, String detail) {
+    private PlaceCommentReport(Long placeCommentId, Long reporterId, ReportReason reason, String detail) {
         this.placeCommentId = placeCommentId;
         this.reporterId = reporterId;
         this.reason = reason;
@@ -63,7 +62,7 @@ public class PlaceCommentReport {
     }
 
     public static PlaceCommentReport of(Long placeCommentId, Long reporterId,
-            CommentReportReason reason, String detail) {
+            ReportReason reason, String detail) {
         return new PlaceCommentReport(placeCommentId, reporterId, reason, detail);
     }
 }

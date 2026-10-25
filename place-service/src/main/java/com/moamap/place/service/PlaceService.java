@@ -29,6 +29,7 @@ import com.moamap.place.map.dto.MapMemberRole;
 import com.moamap.place.map.dto.MapType;
 import com.moamap.place.repository.PlaceLikeRepository;
 import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.user.UserClient;
 import com.moamap.place.user.dto.UserProfileResponse;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class PlaceService {
     private final PlaceLikeRepository placeLikeRepository;
     private final MapClient mapClient;
     private final UserClient userClient;
+    private final UserBlockClient userBlockClient;
     private final PlaceBulkRegistrar placeBulkRegistrar;
     private final ApplicationEventPublisher eventPublisher;
     private final PlaceCountEventPublisher placeCountEventPublisher;
@@ -195,9 +197,14 @@ public class PlaceService {
         return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 
+    /** 요청한 사람이 차단한 사용자가 등록한 장소는 빼고 준다. */
     public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Long userId, Pageable pageable) {
-        return toPageResponse(
-            placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable), userId);
+        List<Long> blockedIds = userBlockClient.findBlockedIds(userId);
+        Page<Place> places = blockedIds.isEmpty()
+            ? placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable)
+            : placeRepository.findByMapIdAndStatusAndDeletedAtIsNullAndCreatedByNotIn(
+                mapId, PlaceStatus.APPROVED, blockedIds, pageable);
+        return toPageResponse(places, userId);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.moamap.map.service;
 
+import java.util.List;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.map.dto.MapPostCommentCreateRequest;
 import com.moamap.map.dto.MapPostCommentResponse;
@@ -11,8 +12,10 @@ import com.moamap.map.event.ActivitySignal;
 import com.moamap.map.exception.MapErrorCode;
 import com.moamap.map.repository.MapPostCommentRepository;
 import com.moamap.map.repository.MapPostRepository;
+import com.moamap.map.user.UserBlockClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,7 @@ public class MapPostCommentService {
     private final MapPostRepository mapPostRepository;
     private final MapPostAccessPolicy accessPolicy;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserBlockClient userBlockClient;
 
     @Transactional
     public MapPostCommentResponse create(Long mapId, Long postId, MapPostCommentCreateRequest request, Long userId) {
@@ -48,8 +52,12 @@ public class MapPostCommentService {
         accessPolicy.requireReadable(mapId, userId);
         getPostOrThrow(mapId, postId);
 
-        return PageResponse.from(commentRepository.findByMapPostIdAndDeletedAtIsNull(postId, pageable)
-            .map(MapPostCommentResponse::from));
+        // 요청한 사람이 차단한 사용자의 댓글은 빼고 준다.
+        List<Long> blockedIds = userBlockClient.findBlockedIds(userId);
+        Page<MapPostComment> comments = blockedIds.isEmpty()
+            ? commentRepository.findByMapPostIdAndDeletedAtIsNull(postId, pageable)
+            : commentRepository.findByMapPostIdAndDeletedAtIsNullAndUserIdNotIn(postId, blockedIds, pageable);
+        return PageResponse.from(comments.map(MapPostCommentResponse::from));
     }
 
     @Transactional

@@ -6,6 +6,7 @@ import com.moamap.common.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -34,6 +35,16 @@ public class GlobalExceptionHandler {
             .orElse(CommonErrorCode.INVALID_INPUT_VALUE.getMessage());
         return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
             .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, message));
+    }
+
+    /**
+     * JSON 형식이 깨졌거나 enum에 없는 값(예: 신고 사유)을 보낸 경우. 처리하지 않으면 500으로 떨어진다.
+     * 원인 메시지에는 내부 클래스명이 섞이므로 그대로 내보내지 않는다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(CommonErrorCode.INVALID_INPUT_VALUE.getStatus())
+            .body(ApiResponse.error(CommonErrorCode.INVALID_INPUT_VALUE, "요청 본문 형식이 올바르지 않습니다."));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)

@@ -1,5 +1,6 @@
 package com.moamap.map.repository;
 
+import java.util.Collection;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +15,10 @@ import org.springframework.data.repository.query.Param;
 public interface MapPostRepository extends JpaRepository<MapPost, Long> {
 
     Page<MapPost> findByMapIdAndDeletedAtIsNull(Long mapId, Pageable pageable);
+
+    /** 요청한 사람이 차단한 사용자의 로그를 뺀 목록. */
+    Page<MapPost> findByMapIdAndDeletedAtIsNullAndUserIdNotIn(Long mapId, Collection<Long> blockedUserIds,
+        Pageable pageable);
 
     Optional<MapPost> findByIdAndDeletedAtIsNull(Long id);
 

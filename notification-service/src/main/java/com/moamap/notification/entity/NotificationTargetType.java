@@ -7,5 +7,7 @@ public enum NotificationTargetType {
     PLACE,
     MAP,
     MAP_POST,
-    INQUIRY
+    INQUIRY,
+    /** 운영자 신고 목록. targetId는 신고 ID다. */
+    REPORT
 }

@@ -11,4 +11,6 @@ public record ActivitySignal(String routingKey, Long recipientId, Long actorId, 
     public static final String MAP_POST_COMMENTED = "map.post.commented";
     public static final String MAP_ADMIN_ASSIGNED = "map.admin.assigned";
     public static final String MAP_OWNER_TRANSFERRED = "map.owner.transferred";
+    /** 운영자에게 새 신고를 알린다. targetId는 신고 ID다. */
+    public static final String REPORT_RECEIVED = "map.report.received";
 }

@@ -4,13 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.math.BigDecimal;
-import com.moamap.place.entity.CommentReportReason;
+import com.moamap.place.entity.ReportReason;
 import com.moamap.place.entity.Place;
 import com.moamap.place.entity.PlaceComment;
 import com.moamap.place.entity.PlaceCommentReport;
 import com.moamap.place.entity.PlaceLike;
 import com.moamap.place.entity.PlaceSourceType;
 import com.moamap.place.map.MapClient;
+import com.moamap.place.user.UserBlockClient;
 import com.moamap.place.repository.PlaceCommentReportRepository;
 import com.moamap.place.repository.PlaceCommentRepository;
 import com.moamap.place.repository.PlaceLikeRepository;
@@ -41,6 +42,7 @@ class PlaceWithdrawalCleanupTest {
     @Autowired private PlaceCommentReportRepository placeCommentReportRepository;
     @Autowired private TestEntityManager em;
     @MockitoBean private MapClient mapClient;
+    @MockitoBean private UserBlockClient userBlockClient;
 
     private int kakaoPlaceSeq;
 
@@ -89,7 +91,7 @@ class PlaceWithdrawalCleanupTest {
         Place myPlace = place(LEAVER);
         PlaceComment othersComment = comment(myPlace, OTHER, 3);
         PlaceCommentReport report = placeCommentReportRepository.saveAndFlush(
-            PlaceCommentReport.of(othersComment.getId(), LEAVER, CommentReportReason.SPAM, null));
+            PlaceCommentReport.of(othersComment.getId(), LEAVER, ReportReason.SPAM, null));
 
         cleanUpAndReload(LEAVER);
 
