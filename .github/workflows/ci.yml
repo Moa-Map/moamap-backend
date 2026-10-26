@@ -1,10 +1,9 @@
 name: CI
 
+# develop·main push의 테스트는 cd.yml이 배포 전에 돌린다(중복 실행 방지).
 on:
   pull_request:
     branches: [ develop ]
-  push:
-    branches: [ develop, main ]
 
 # 같은 PR에 새 커밋이 올라오면 이전 실행은 취소해 러너를 아낀다.
 concurrency:

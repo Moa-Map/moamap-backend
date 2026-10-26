@@ -233,7 +233,7 @@ deploy/                  ← 서버에 올라가는 파일
 ├── nginx/               비밀 헤더 검사, 게이트웨이 DNS 재조회
 ├── config/*.env         비밀 아닌 환경별 설정 (비밀은 SSM)
 └── deploy.sh            SSM → .env → pull → up → 헬스체크
-.github/workflows/cd-team.yml
+.github/workflows/cd.yml
 ```
 
 ---
@@ -306,7 +306,7 @@ done
 - SSM 값을 바꾸면 **다음 배포부터** 반영됩니다. 바로 반영하려면 워크플로를 다시 실행합니다.
 - Terraform이 만든 값을 콘솔·CLI로 바꾸면 다음 `apply` 때 되돌아갑니다.
 
-## 3. 배포 설정 (`.github/workflows/cd-team.yml`)
+## 3. 배포 설정 (`.github/workflows/cd.yml`)
 
 GitHub → Settings → Secrets and variables → Actions → **Variables**:
 
@@ -320,7 +320,7 @@ GitHub → Settings → Secrets and variables → Actions → **Variables**:
 
 Settings → Environments → **production** → Required reviewers 지정, Deployment branches는 `main`만.
 
-develop push → dev, main push → prod(승인 후). 수동 실행은 Actions → CD (team account) → Run workflow.
+develop push → dev, main push → prod(승인 후). 수동 실행은 Actions → CD → Run workflow.
 
 ```bash
 # 서버 확인 (SSH 대신 SSM, 로컬에 session-manager-plugin 필요)

@@ -1,7 +1,6 @@
-name: CD (team account)
+name: CD
 
 # 팀 계정(B) EC2 배포. develop → dev 서버, main → prod 서버(GitHub Environment "production" 승인 후).
-# 이전 계정(A)의 cd-dev.yml과 동시에 돈다 — A 정리 때 cd-dev.yml·cd-prod.yml을 지운다.
 #
 # GitHub Variables (Settings → Secrets and variables → Actions → Variables), 값은 terraform output:
 #   TEAM_AWS_CI_ROLE_ARN            ci_role_arn           (빌드 + dev 배포)
@@ -13,6 +12,12 @@ name: CD (team account)
 on:
   push:
     branches: [develop, main]
+    # 이미지·배포 번들에 들어가지 않는 파일만 바뀌면 배포하지 않는다. deploy/·docker/는 번들에 들어가므로 제외하지 않는다.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'infra/**'
+      - 'k8s/**'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +26,7 @@ permissions:
 
 # 배포 대상 서버 기준으로 묶는다. dev로 가는 브랜치가 여러 개여도 한 번에 하나만 배포한다.
 concurrency:
-  group: cd-team-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+  group: cd-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
   cancel-in-progress: false
 
 env:
@@ -29,7 +34,27 @@ env:
   ECR_REGISTRY: ${{ vars.TEAM_ECR_REGISTRY }}
 
 jobs:
+  # 테스트를 통과한 커밋만 배포한다. develop·main push의 테스트는 여기서만 돌고, ci.yml은 PR만 맡는다.
+  test:
+    name: build & test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - run: ./gradlew build --no-daemon
+
   build-push:
+    needs: test
     name: build & push (${{ matrix.service }})
     # 서버가 Graviton(arm64). arm64 러너에서 네이티브로 빌드한다(public 저장소 무료, QEMU 에뮬레이션보다 수 배 빠름).
     # private 전환 시 arm64 러너가 유료가 될 수 있다 → ubuntu-latest + docker/setup-qemu-action으로 되돌린다.
