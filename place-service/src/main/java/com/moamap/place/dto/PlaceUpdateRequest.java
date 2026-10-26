@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * 부분 수정(PATCH) 요청. 필드를 안 보내면(null) 기존 값을 유지하고, 값을 보낸 필드만 바꾼다.
- * tags는 보내면 기존 목록을 통째로 교체한다(부분 추가/삭제가 아님).
+ * tags·photoUrls는 보내면 기존 목록을 통째로 교체한다(부분 추가/삭제가 아님). 빈 목록이면 모두 지운다.
  */
 public record PlaceUpdateRequest(
     String name,
@@ -16,6 +16,7 @@ public record PlaceUpdateRequest(
     BigDecimal lng,
     String category,
     String description,
-    List<@Size(max = 30) String> tags
+    List<@Size(max = 30) String> tags,
+    @Size(max = 5) List<@Size(max = 1000) String> photoUrls
 ) {
 }

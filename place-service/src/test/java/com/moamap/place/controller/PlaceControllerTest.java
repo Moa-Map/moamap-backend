@@ -202,7 +202,7 @@ class PlaceControllerTest {
     @Test
     void update는_성공하면_200과_수정된_장소를_반환한다() throws Exception {
         // given
-        PlaceUpdateRequest request = new PlaceUpdateRequest("새 이름", null, null, null, null, null, null, null);
+        PlaceUpdateRequest request = new PlaceUpdateRequest("새 이름", null, null, null, null, null, null, null, null);
         given(placeService.update(eq(1L), eq(1L), any())).willReturn(response());
 
         // when & then
@@ -212,6 +212,21 @@ class PlaceControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"));
+    }
+
+    @Test
+    void update는_사진이_5장을_넘으면_400을_반환한다() throws Exception {
+        // given
+        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, null,
+            List.of("https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg", "https://a/4.jpg", "https://a/5.jpg",
+                "https://a/6.jpg"));
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/places/{id}", 1L)
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
     }
 
     @Test

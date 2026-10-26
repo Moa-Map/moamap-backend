@@ -104,7 +104,7 @@ class PlaceRepositoryTest {
         entityManager.clear();
         Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
-        managed.update(null, null, null, null, null, null, null, List.of("new1"));
+        managed.update(null, null, null, null, null, null, null, List.of("new1"), null);
         placeRepository.saveAndFlush(managed);
         entityManager.clear();
 
@@ -119,7 +119,7 @@ class PlaceRepositoryTest {
         entityManager.clear();
         Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
-        managed.update("새 이름", null, null, null, null, null, null, null);
+        managed.update("새 이름", null, null, null, null, null, null, null, null);
         placeRepository.saveAndFlush(managed);
         entityManager.clear();
 
