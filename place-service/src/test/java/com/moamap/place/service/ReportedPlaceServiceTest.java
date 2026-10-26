@@ -92,7 +92,7 @@ class ReportedPlaceServiceTest {
     }
 
     private void givenRole(MapMemberRole role) {
-        given(mapClient.getMemberInfo(MAP_ID, MANAGER)).willReturn(new MapMemberResponse(MapType.COMMUNITY, role));
+        given(mapClient.getMemberInfo(MAP_ID, MANAGER)).willReturn(new MapMemberResponse(MapType.COMMUNITY, role, true));
     }
 
     private Place place(Long mapId, String name, List<String> photoUrls) {

@@ -54,7 +54,8 @@ public class MapController {
     private final MapService mapService;
     private final MapLeaveService mapLeaveService;
 
-    @Operation(summary = "지도 생성", description = "공개(COMMUNITY) 또는 프라이빗 지도를 만든다. 프라이빗은 초대 코드가 발급된다.")
+    @Operation(summary = "지도 생성", description = "공개(COMMUNITY) 또는 프라이빗 지도를 만든다. 프라이빗은 초대 코드가 발급된다. "
+        + "allowUrlImport로 일반 멤버가 URL(인스타그램·지도 공유 링크)로 장소를 추가할 수 있는지 정한다. 방장·관리자는 설정과 관계없이 추가할 수 있다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MapDetailResponse> create(
@@ -128,7 +129,7 @@ public class MapController {
         return ApiResponse.success(mapService.getDetail(mapId, userId));
     }
 
-    @Operation(summary = "지도 수정", description = "OWNER 또는 ADMIN만 수정할 수 있다.")
+    @Operation(summary = "지도 수정", description = "OWNER 또는 ADMIN만 수정할 수 있다. allowUrlImport를 보내지 않으면 지금 설정을 유지한다.")
     @PatchMapping("/{mapId}")
     public ApiResponse<MapDetailResponse> update(
         @PathVariable Long mapId,

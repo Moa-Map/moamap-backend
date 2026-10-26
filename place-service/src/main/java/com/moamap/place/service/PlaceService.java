@@ -67,6 +67,7 @@ public class PlaceService {
         }
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         PlaceStatus status = resolveInitialStatus(memberInfo);
+        checkUrlImportAllowed(memberInfo, request.sourceType().isFromUrl());
         checkDuplicate(request.mapId(), request.kakaoPlaceId());
 
         Place place = Place.builder()
@@ -119,6 +120,7 @@ public class PlaceService {
         // 지도 권한·유형은 맵 단위라 루프 밖에서 한 번만 확인한다.
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         PlaceStatus status = resolveInitialStatus(memberInfo);
+        checkUrlImportAllowed(memberInfo, request.places().stream().anyMatch(item -> item.sourceType().isFromUrl()));
 
         List<PlaceBulkCreateResponse.Result> results = new ArrayList<>(request.places().size());
         int created = 0;
@@ -184,6 +186,18 @@ public class PlaceService {
             case MEMBER -> PlaceStatus.PENDING;
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
+    }
+
+    /**
+     * URL로 가져온 장소는 지도가 허용할 때만 일반 멤버가 등록할 수 있다. 방장·관리자는 설정과 관계없이 등록한다.
+     *
+     * 출처는 요청이 밝힌 sourceType으로 판단한다. 출처를 숨겨 보내도 직접 검색으로 고를 수 있는 같은 카카오 장소가
+     * 등록될 뿐이라, 이 설정을 넘어 할 수 있는 일이 늘어나지는 않는다.
+     */
+    private void checkUrlImportAllowed(MapMemberResponse memberInfo, boolean fromUrl) {
+        if (fromUrl && !memberInfo.allowUrlImport() && !isReviewer(memberInfo.role())) {
+            throw new BusinessException(PlaceErrorCode.URL_IMPORT_NOT_ALLOWED);
+        }
     }
 
     private void checkDuplicate(Long mapId, String kakaoPlaceId) {

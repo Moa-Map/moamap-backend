@@ -32,7 +32,8 @@ public enum PlaceErrorCode implements ErrorCode {
     ALREADY_REPORTED_COMMENT("PLACE_019", "이미 신고한 댓글입니다.", 409),
     CANNOT_REPORT_OWN_COMMENT("PLACE_020", "본인이 작성한 댓글은 신고할 수 없습니다.", 400),
     CANNOT_REPORT_OWN_PLACE("PLACE_021", "본인이 등록한 장소는 신고할 수 없습니다.", 400),
-    ALREADY_REPORTED_PLACE("PLACE_022", "이미 신고한 장소입니다.", 409);
+    ALREADY_REPORTED_PLACE("PLACE_022", "이미 신고한 장소입니다.", 409),
+    URL_IMPORT_NOT_ALLOWED("PLACE_023", "이 지도는 URL로 장소를 추가할 수 없습니다. 직접 검색해서 추가해 주세요.", 403);
 
     private final String code;
     private final String message;

@@ -82,7 +82,7 @@ class PlaceBulkCreateTest {
     void setUp() {
         placeRepository.deleteAll();
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
     }
 
     // 이 테스트는 NOT_SUPPORTED라 실제로 커밋한다. 공유 컨텍스트의 H2에 행을 남기면
@@ -231,7 +231,7 @@ class PlaceBulkCreateTest {
     @Test
     void createBulk는_COMMUNITY_일반_멤버면_PENDING으로_등록한다() {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, true));
 
         placeService.createBulk(new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111"))), USER_ID);
 
@@ -242,7 +242,7 @@ class PlaceBulkCreateTest {
     @Test
     void createBulk는_멤버가_아니면_전체를_거부한다() {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, true));
 
         PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111")));
 

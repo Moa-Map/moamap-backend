@@ -469,6 +469,59 @@ class MapApiIntegrationTest {
             .andExpect(jsonPath("$.error.code").value("MAP_015"));
     }
 
+    @Test
+    @DisplayName("공개 지도도 URL로 장소 추가 허용을 켜서 만들 수 있고, 상세와 멤버 역할 조회에 함께 내려간다")
+    void createCommunityMapAllowingUrlImport() throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", "인스타 맛집 모음");
+        body.put("visibility", "PUBLIC");
+        body.put("allowUrlImport", true);
+        String response = mockMvc.perform(post("/api/v1/maps")
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.allowUrlImport").value(true))
+            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long mapId = objectMapper.readTree(response).path("data").path("id").asLong();
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}/members/{userId}", mapId, OTHER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.role").value("NONE"))
+            .andExpect(jsonPath("$.data.allowUrlImport").value(true));
+    }
+
+    @Test
+    @DisplayName("URL로 장소 추가 허용을 보내지 않고 지도를 만들면 꺼진 상태다")
+    void createMapWithoutUrlImportDefaultsToOff() throws Exception {
+        long mapId = createMap(OWNER, "기본값 지도", "PRIVATE");
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.allowUrlImport").value(false));
+    }
+
+    @Test
+    @DisplayName("지도 수정에서 URL로 장소 추가 허용을 바꿀 수 있고, 보내지 않으면 지금 값을 유지한다")
+    void updateUrlImportKeepsValueWhenOmitted() throws Exception {
+        long mapId = createMap(OWNER, "설정 변경 지도", "PUBLIC");
+
+        mockMvc.perform(patch("/api/v1/maps/{mapId}", mapId)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("name", "설정 변경 지도", "allowUrlImport", true))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.allowUrlImport").value(true));
+
+        mockMvc.perform(patch("/api/v1/maps/{mapId}", mapId)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("name", "이름만 바꾼 지도"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.name").value("이름만 바꾼 지도"))
+            .andExpect(jsonPath("$.data.allowUrlImport").value(true));
+    }
+
     private String roleBody(String role) throws Exception {
         return objectMapper.writeValueAsString(Map.of("role", role));
     }

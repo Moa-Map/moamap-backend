@@ -75,6 +75,13 @@ public class MapEntity extends BaseTimeEntity {
     @Column(name = "personal", nullable = false, columnDefinition = "boolean not null default false")
     private boolean personal;
 
+    /**
+     * 일반 멤버가 URL(인스타그램 게시물·지도 공유 링크)로 장소를 추가할 수 있는지. 방장·관리자는 이 값과 관계없이 추가할 수 있다.
+     * 설정이 생기기 전부터 있던 지도는 누구나 URL로 추가할 수 있었으므로, 컬럼을 붙일 때 기존 행은 true로 채운다.
+     */
+    @Column(name = "url_import_allowed", nullable = false, columnDefinition = "boolean not null default true")
+    private boolean urlImportAllowed;
+
     /** 추천 후보 조회의 조건이 되는 컬럼이라 tag에 인덱스를 둔다. */ 
     @ElementCollection
     @CollectionTable(
@@ -116,6 +123,10 @@ public class MapEntity extends BaseTimeEntity {
         this.description = description;
         this.imageUrl = imageUrl;
         this.tags = normalizeTags(tags);
+    }
+
+    public void changeUrlImportAllowed(boolean allowed) {
+        this.urlImportAllowed = allowed;
     }
 
     /** 추천의 태그 매칭이 문자열 완전 일치라, "맛집"과 "#맛집"이 갈리면 그대로 매칭 실패가 된다. */
