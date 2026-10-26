@@ -75,6 +75,13 @@ public class MapEntity extends BaseTimeEntity {
     @Column(name = "personal", nullable = false, columnDefinition = "boolean not null default false")
     private boolean personal;
 
+    /**
+     * 커뮤니티 지도에서 일반 멤버가 등록한 장소를 방장·관리자 승인 없이 바로 승인할지 여부.
+     * 프라이빗 지도는 원래 모두 바로 승인이라 쓰지 않고 false로 둔다. place-service가 멤버 역할 조회로 받아 간다.
+     */
+    @Column(name = "member_auto_approval", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean memberAutoApproval;
+
     /** 추천 후보 조회의 조건이 되는 컬럼이라 tag에 인덱스를 둔다. */ 
     @ElementCollection
     @CollectionTable(
@@ -116,6 +123,14 @@ public class MapEntity extends BaseTimeEntity {
         this.description = description;
         this.imageUrl = imageUrl;
         this.tags = normalizeTags(tags);
+    }
+
+    /** null은 "안 바꿈"으로 본다 — 이 필드를 모르는 클라이언트의 수정 요청이 켜 둔 값을 끄지 않게. */
+    public void changeMemberAutoApproval(Boolean memberAutoApproval) {
+        if (memberAutoApproval == null || isPrivate()) {
+            return;
+        }
+        this.memberAutoApproval = memberAutoApproval;
     }
 
     /** 추천의 태그 매칭이 문자열 완전 일치라, "맛집"과 "#맛집"이 갈리면 그대로 매칭 실패가 된다. */

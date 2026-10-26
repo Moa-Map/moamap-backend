@@ -57,4 +57,28 @@ class MapEntityTest {
 
         assertThat(map.getTags()).containsExactly("cafe");
     }
+
+    @Test
+    void 멤버_자동_승인은_기본값이_false다() {
+        assertThat(mapWithTags(List.of()).isMemberAutoApproval()).isFalse();
+    }
+
+    @Test
+    void 멤버_자동_승인에_null을_주면_기존_값을_유지한다() {
+        MapEntity map = mapWithTags(List.of());
+        map.changeMemberAutoApproval(true);
+
+        map.changeMemberAutoApproval(null);
+
+        assertThat(map.isMemberAutoApproval()).isTrue();
+    }
+
+    @Test
+    void 프라이빗_지도는_멤버_자동_승인을_켤_수_없다() {
+        MapEntity map = MapEntity.create("지도", "설명", null, MapType.PRIVATE, 1L, List.of(), "ABC123");
+
+        map.changeMemberAutoApproval(true);
+
+        assertThat(map.isMemberAutoApproval()).isFalse();
+    }
 }

@@ -10,6 +10,7 @@ public record MapCreateRequest(
     @Size(max = 500) String description,
     @Size(max = 1000) String imageUrl,
     @NotNull MapVisibility visibility,
-    List<@Size(max = 30) String> tags
+    List<@Size(max = 30) String> tags,
+    Boolean memberAutoApproval
 ) {
 }

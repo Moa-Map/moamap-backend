@@ -82,7 +82,7 @@ class PlaceBulkCreateTest {
     void setUp() {
         placeRepository.deleteAll();
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
     }
 
     // 이 테스트는 NOT_SUPPORTED라 실제로 커밋한다. 공유 컨텍스트의 H2에 행을 남기면
@@ -231,7 +231,7 @@ class PlaceBulkCreateTest {
     @Test
     void createBulk는_COMMUNITY_일반_멤버면_PENDING으로_등록한다() {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         placeService.createBulk(new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111"))), USER_ID);
 
@@ -240,9 +240,20 @@ class PlaceBulkCreateTest {
     }
 
     @Test
+    void createBulk는_COMMUNITY_일반_멤버라도_멤버_자동_승인_지도면_APPROVED로_등록한다() {
+        given(mapClient.getMemberInfo(anyLong(), anyLong()))
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, true));
+
+        placeService.createBulk(new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111"))), USER_ID);
+
+        assertThat(placeRepository.findAll()).extracting(Place::getStatus)
+            .containsExactly(PlaceStatus.APPROVED);
+    }
+
+    @Test
     void createBulk는_멤버가_아니면_전체를_거부한다() {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
 
         PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111")));
 

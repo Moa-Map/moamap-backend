@@ -108,18 +108,20 @@ class PlaceServiceTest {
 
     private static Stream<Arguments> createStatusCases() {
         return Stream.of(
-            Arguments.of(MapType.PRIVATE, MapMemberRole.MEMBER, PlaceStatus.APPROVED),
-            Arguments.of(MapType.COMMUNITY, MapMemberRole.OWNER, PlaceStatus.APPROVED),
-            Arguments.of(MapType.COMMUNITY, MapMemberRole.ADMIN, PlaceStatus.APPROVED),
-            Arguments.of(MapType.COMMUNITY, MapMemberRole.MEMBER, PlaceStatus.PENDING)
+            Arguments.of(MapType.PRIVATE, MapMemberRole.MEMBER, false, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.OWNER, false, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.ADMIN, false, PlaceStatus.APPROVED),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.MEMBER, false, PlaceStatus.PENDING),
+            Arguments.of(MapType.COMMUNITY, MapMemberRole.MEMBER, true, PlaceStatus.APPROVED)
         );
     }
 
-    @ParameterizedTest(name = "{0} 지도 + {1} 역할 → {2}")
+    @ParameterizedTest(name = "{0} 지도 + {1} 역할 + 멤버 자동 승인 {2} → {3}")
     @MethodSource("createStatusCases")
-    void create는_지도유형과_역할에_따라_초기_상태를_결정한다(MapType mapType, MapMemberRole role, PlaceStatus expectedStatus) {
+    void create는_지도유형과_역할에_따라_초기_상태를_결정한다(MapType mapType, MapMemberRole role, boolean memberAutoApproval,
+                                                     PlaceStatus expectedStatus) {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(mapType, role));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(mapType, role, memberAutoApproval));
         given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -132,7 +134,7 @@ class PlaceServiceTest {
     @Test
     void create는_role이_NONE이면_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
@@ -145,7 +147,7 @@ class PlaceServiceTest {
     @Test
     void create는_OFFICIAL_지도면_role과_무관하게_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.create(createRequest(), 1L))
@@ -169,7 +171,7 @@ class PlaceServiceTest {
     @Test
     void create는_같은_지도에_동일한_kakaoPlaceId가_있으면_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(true);
 
         // when & then
@@ -183,7 +185,7 @@ class PlaceServiceTest {
     @Test
     void create는_사전체크를_통과해도_DB_유니크_제약_위반이면_DUPLICATE_PLACE_예외로_변환한다() {
         // given: 동시 요청 race condition으로 checkDuplicate는 통과했지만 실제 insert 시점엔 이미 다른 트랜잭션이 커밋한 상황을 재현
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(false);
         ConstraintViolationException cause = new ConstraintViolationException(
             "duplicate key value violates unique constraint", null, "uk_places_map_kakao_place");
@@ -200,7 +202,7 @@ class PlaceServiceTest {
     @Test
     void create는_다른_무결성_제약_위반이면_DUPLICATE_PLACE로_바꾸지_않고_그대로_전파한다() {
         // given: 유니크 제약이 아닌 다른 제약(예: 길이 초과) 위반은 중복으로 오인하면 안 된다
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(false);
         ConstraintViolationException cause = new ConstraintViolationException(
             "value too long for type character varying(100)", null, "places_name_check");
@@ -215,7 +217,7 @@ class PlaceServiceTest {
     @Test
     void create는_요청에_담긴_태그를_그대로_저장한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
         PlaceCreateRequest request = new PlaceCreateRequest(
             "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
@@ -233,7 +235,7 @@ class PlaceServiceTest {
     @Test
     void create는_태그가_없으면_빈_리스트로_저장한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -354,7 +356,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_방장_관리자가_요청하면_PENDING_목록을_반환한다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
         given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING, pageable)).willReturn(
             new PageImpl<>(List.of(
                 Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
@@ -378,7 +380,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_관리자가_요청하면_지도_전체_PENDING_목록을_반환한다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN, false));
         given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING, pageable)).willReturn(
             new PageImpl<>(List.of(
                 Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
@@ -400,7 +402,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_user_service_조회가_실패해도_닉네임_없이_목록을_반환한다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
         given(placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(10L, PlaceStatus.PENDING, pageable)).willReturn(
             new PageImpl<>(List.of(
                 Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build()
@@ -421,7 +423,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_일반_멤버가_요청하면_본인이_등록한_PENDING만_반환한다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(10L, PlaceStatus.PENDING, 3L, pageable))
             .willReturn(new PageImpl<>(List.of(
                 Place.builder().name("본인이 등록한 대기중인 장소").mapId(10L).createdBy(3L).status(PlaceStatus.PENDING).build()
@@ -441,7 +443,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_지도_멤버가_아니면_NOT_MAP_MEMBER_BusinessException을_던진다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L, pageable))
@@ -457,7 +459,7 @@ class PlaceServiceTest {
     void findPendingByMapId는_role이_null이면_fail_closed로_NOT_MAP_MEMBER_BusinessException을_던진다() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, null));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, null, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.findPendingByMapId(10L, 3L, pageable))
@@ -490,7 +492,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
@@ -514,7 +516,7 @@ class PlaceServiceTest {
             .tags(new ArrayList<>(List.of("기존태그")))
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null, null);
 
         // when
@@ -537,7 +539,7 @@ class PlaceServiceTest {
             .tags(new ArrayList<>(List.of("old1", "old2")))
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, List.of("new1"));
 
         // when
@@ -552,7 +554,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
@@ -568,7 +570,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
@@ -584,7 +586,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
@@ -600,7 +602,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
             BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
 
@@ -632,7 +634,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).kakaoPlaceId("26338954").build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when
         placeService.delete(1L, 1L);
@@ -651,7 +653,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.delete(1L, 2L))
@@ -686,7 +688,7 @@ class PlaceServiceTest {
             .status(PlaceStatus.PENDING)
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN, false));
 
         // when
         PlaceResponse response = placeService.approve(1L, 2L);
@@ -707,7 +709,7 @@ class PlaceServiceTest {
             .status(PlaceStatus.PENDING)
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.approve(1L, 3L))
@@ -727,7 +729,7 @@ class PlaceServiceTest {
             .status(PlaceStatus.APPROVED)
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when & then
         assertThatThrownBy(() -> placeService.approve(1L, 2L))
@@ -750,7 +752,7 @@ class PlaceServiceTest {
             .status(PlaceStatus.PENDING)
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when
         PlaceResponse response = placeService.reject(1L, 2L);
@@ -769,7 +771,7 @@ class PlaceServiceTest {
     @Test
     void create는_초기_상태가_APPROVED이면_PlaceCountChangeSignal을_발행한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -782,7 +784,7 @@ class PlaceServiceTest {
     @Test
     void create는_초기_상태가_PENDING이면_이벤트를_발행하지_않는다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeRepository.saveAndFlush(any(Place.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -795,7 +797,7 @@ class PlaceServiceTest {
     @Test
     void create는_중복_예외가_나면_이벤트를_발행하지_않는다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(10L, "26338954")).willReturn(true);
 
         // when & then
@@ -808,7 +810,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when
         placeService.approve(1L, 2L);
@@ -822,7 +824,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when
         placeService.reject(1L, 2L);
@@ -836,7 +838,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when
         placeService.approve(1L, 2L);
@@ -850,7 +852,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
 
         // when
         placeService.reject(1L, 2L);
@@ -865,7 +867,7 @@ class PlaceServiceTest {
         Place place = Place.builder().name("삭제될 장소").mapId(10L).createdBy(1L)
             .kakaoPlaceId("26338954").status(PlaceStatus.APPROVED).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when
         placeService.delete(1L, 1L);
@@ -879,7 +881,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("대기중인 장소").mapId(10L).createdBy(1L).status(PlaceStatus.PENDING).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when
         placeService.delete(1L, 1L);
@@ -893,7 +895,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("반려된 장소").mapId(10L).createdBy(1L).status(PlaceStatus.REJECTED).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when
         placeService.delete(1L, 1L);
@@ -907,7 +909,7 @@ class PlaceServiceTest {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", null, null, null, null, null, null, null);
 
         // when
@@ -926,7 +928,7 @@ class PlaceServiceTest {
     @Test
     void createBulk는_APPROVED이고_생성건수가_있으면_루프_종료_후_publishNow를_한번만_호출한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.APPROVED)))
             .willReturn(100L, 101L);
         PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L,
@@ -943,7 +945,7 @@ class PlaceServiceTest {
     @Test
     void createBulk는_PENDING이면_publishNow를_호출하지_않는다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.PENDING))).willReturn(100L);
         PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L, List.of(bulkItem("장소1", "111")));
 
@@ -989,7 +991,7 @@ class PlaceServiceTest {
     @Test
     void createBulk는_APPROVED여도_생성건수가_0이면_publishNow를_호출하지_않는다() {
         // given: 모든 건이 중복이라 created == 0인 상황
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.APPROVED)))
             .willThrow(new BusinessException(PlaceErrorCode.DUPLICATE_PLACE));
         PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L, List.of(bulkItem("장소1", "111")));

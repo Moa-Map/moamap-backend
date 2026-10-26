@@ -95,7 +95,7 @@ class PlaceActivityServiceTest {
         MapType mapType, MapMemberRole role, PlaceErrorCode expectedErrorCode, Boolean expectedIncludeReviews
     ) {
         // given
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(mapType, role));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(mapType, role, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         if (expectedErrorCode != null) {
@@ -122,7 +122,7 @@ class PlaceActivityServiceTest {
     @Test
     void OFFICIAL_지도는_role이_OWNER여도_OFFICIAL_MAP_NO_ACTIVITY_LOG로_차단한다() {
         // given: OFFICIAL 판정이 멤버십 판정보다 먼저라는 것을, role이 NONE이 아닌 경우로도 확인
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         // when & then
@@ -139,7 +139,7 @@ class PlaceActivityServiceTest {
         // "비멤버는 쿼리 전에 거부된다"는 이 테스트의 본래 의도는 여전히 멤버십 검증이 남아있는
         // PRIVATE 지도로 옮겨 보존한다.
         // given
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.NONE, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         // when & then
@@ -156,7 +156,7 @@ class PlaceActivityServiceTest {
         // 리뷰/별점(includeReviews=true)까지 함께 새어나가면 안 된다. 표 A 파라미터라이즈드
         // 테스트는 값 매칭(eq)으로만 확인하므로, 여기서는 ArgumentCaptor로 실제 전달값을
         // 직접 캡처해 이 불변조건을 별도로 고정한다.
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
         Pageable pageable = PageRequest.of(0, 20);
         given(placeActivityRepository.findActivities(eq(MAP_ID), anyBoolean(), eq(pageable)))
             .willReturn(new PageImpl<>(List.<Object[]>of(), pageable, 0));
@@ -174,7 +174,7 @@ class PlaceActivityServiceTest {
     @Test
     void 리포지토리가_돌려준_페이지를_PageResponse로_그대로_감싼다() {
         // given
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         Object[] row = {"PLACE_ADDED", java.time.LocalDateTime.of(2026, 7, 27, 9, 0), 1L, 31L, "연남동 카페", null, null};
         given(placeActivityRepository.findActivities(MAP_ID, true, pageable))
@@ -205,7 +205,7 @@ class PlaceActivityServiceTest {
     @Test
     void role이_null이면_판정_불가로_간주해_NOT_MAP_MEMBER로_거부한다() {
         // given: map-service 응답의 role 필드명이 바뀌어 역직렬화가 null을 채운 상황을 흉내
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, null));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, null, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         // when & then: role이 NONE이 아니라고 해서(=null) 통과시키면 프라이빗 지도 로그가
@@ -220,7 +220,7 @@ class PlaceActivityServiceTest {
     @Test
     void mapType이_null이면_판정_불가로_간주해_NOT_MAP_MEMBER로_거부한다() {
         // given: mapType 필드명이 바뀌어 역직렬화가 null을 채운 상황을 흉내
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(null, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(null, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         // when & then: mapType이 OFFICIAL이 아니라고 해서(=null) PRIVATE/COMMUNITY처럼
@@ -236,7 +236,7 @@ class PlaceActivityServiceTest {
     @Test
     void mapType과_role이_둘_다_null이면_NOT_MAP_MEMBER로_거부한다() {
         // given: map-service 응답 자체가 텅 빈 채로 역직렬화된 최악의 상황
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(null, null));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(null, null, false));
         Pageable pageable = PageRequest.of(0, 20);
 
         // when & then
@@ -250,7 +250,7 @@ class PlaceActivityServiceTest {
     @Test
     void mapId와_userId를_그대로_mapClient에_전달한다() {
         // given
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         Pageable pageable = PageRequest.of(0, 20);
         given(placeActivityRepository.findActivities(any(), anyBoolean(), any()))
             .willReturn(new PageImpl<>(List.<Object[]>of(), pageable, 0));
@@ -280,7 +280,7 @@ class PlaceActivityServiceTest {
     @Test
     void 불변조건11_같은_actorId가_여러_행에_나와도_UserClient_호출은_1회다() {
         // given: 같은 사용자가 같은 지도에서 여러 번 활동한 페이지
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 7L, 31L, "연남동 카페"),
@@ -302,7 +302,7 @@ class PlaceActivityServiceTest {
     @Test
     void 불변조건12_UserClient에_전달되는_id는_중복없고_null없다() {
         // given
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 1L, 31L, "연남동 카페"),
@@ -329,7 +329,7 @@ class PlaceActivityServiceTest {
     @Test
     void 불변조건13_행위자가_없으면_UserClient를_호출하지_않는다() {
         // given: content가 비어 있는 경우
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         given(placeActivityRepository.findActivities(MAP_ID, true, pageable))
             .willReturn(new PageImpl<>(List.<Object[]>of(), pageable, 0));
@@ -346,7 +346,7 @@ class PlaceActivityServiceTest {
         // given: 전부 deleted_by가 없던 시절의 과거 삭제 데이터인 경우
         // 회귀 방지(06_architect_blueprint_nickname.md 9장): actorId가 전부 null이라 UserClient
         // 호출을 건너뛰는 최적화 경로에서, 폴백("알 수 없음") 채우기까지 함께 건너뛰던 버그가 있었다.
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.<Object[]>of(
             row("PLACE_DELETED", LocalDateTime.of(2026, 7, 27, 9, 0), null, 31L, "폐업한 카페")
@@ -369,7 +369,7 @@ class PlaceActivityServiceTest {
     void 불변조건14_UserClient가_예외를_던져도_조회는_200으로_성공하고_닉네임은_알수없음으로_채워진다() {
         // given: UserClient 자체는 예외를 던지지 않는 게 원칙(표 E)이지만, 방어적으로
         // PlaceActivityService도 이 경로에서 예외가 전체 요청을 죽이지 않아야 한다.
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.<Object[]>of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 7L, 31L, "연남동 카페")
@@ -407,7 +407,7 @@ class PlaceActivityServiceTest {
     @Test
     void 매핑정확성_서로_다른_actorId에_각각_맞는_닉네임이_붙고_뒤섞이지_않는다() {
         // given: 1L, 2L 두 행위자가 섞인 페이지
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 1L, 31L, "연남동 카페"),
@@ -435,7 +435,7 @@ class PlaceActivityServiceTest {
     @Test
     void 매핑정확성_UserClient_응답에_없는_actorId는_닉네임이_알수없음으로_채워진다() {
         // given: 표 F(개정) - 응답 배열에 없음(없는 사용자/탈퇴자) -> "알 수 없음"
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.<Object[]>of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 999L, 31L, "연남동 카페")
@@ -456,7 +456,7 @@ class PlaceActivityServiceTest {
     void 매핑정확성_한_페이지에_성공과_실패가_섞이면_각각_실제_닉네임과_알수없음이_정확히_들어간다() {
         // given: 09장 사양 변경 - 조회 성공 행(actorId=1L), 응답 배열에 없는 행(actorId=999L),
         // actorId 자체가 null인 행(과거 삭제 데이터)이 한 페이지에 섞여 있는 경우
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.OWNER, false));
         Pageable pageable = PageRequest.of(0, 20);
         List<Object[]> rows = List.of(
             row("PLACE_ADDED", LocalDateTime.of(2026, 7, 27, 9, 0), 1L, 31L, "연남동 카페"),

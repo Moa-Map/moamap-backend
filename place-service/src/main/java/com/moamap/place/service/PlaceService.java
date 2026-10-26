@@ -178,10 +178,10 @@ public class PlaceService {
         if (memberInfo.mapType() == MapType.PRIVATE) {
             return PlaceStatus.APPROVED;
         }
-        // COMMUNITY: 방장/관리자는 바로 승인, 일반 멤버는 승인 대기.
+        // COMMUNITY: 방장/관리자는 바로 승인, 일반 멤버는 지도가 멤버 자동 승인을 켰을 때만 바로 승인.
         return switch (memberInfo.role()) {
             case OWNER, ADMIN -> PlaceStatus.APPROVED;
-            case MEMBER -> PlaceStatus.PENDING;
+            case MEMBER -> memberInfo.memberAutoApproval() ? PlaceStatus.APPROVED : PlaceStatus.PENDING;
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
     }
