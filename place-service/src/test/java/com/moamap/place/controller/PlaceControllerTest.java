@@ -230,6 +230,18 @@ class PlaceControllerTest {
     }
 
     @Test
+    void update는_사진_URL이_비어있으면_400을_반환한다() throws Exception {
+        // when & then
+        mockMvc.perform(patch("/api/v1/places/{id}", 1L)
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"photoUrls": [null, ""]}
+                    """))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void delete는_성공하면_success_envelope을_반환한다() throws Exception {
         // when & then
         mockMvc.perform(delete("/api/v1/places/{id}", 1L).header("X-User-Id", 1L))

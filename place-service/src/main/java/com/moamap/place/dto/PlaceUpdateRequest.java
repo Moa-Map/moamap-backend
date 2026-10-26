@@ -2,6 +2,7 @@ package com.moamap.place.dto;
 
 import java.math.BigDecimal;
 import java.util.List;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -17,6 +18,6 @@ public record PlaceUpdateRequest(
     String category,
     String description,
     List<@Size(max = 30) String> tags,
-    @Size(max = 5) List<@Size(max = 1000) String> photoUrls
+    @Size(max = 5) List<@NotBlank @Size(max = 1000) String> photoUrls
 ) {
 }

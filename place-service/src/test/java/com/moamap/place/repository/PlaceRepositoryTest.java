@@ -127,6 +127,22 @@ class PlaceRepositoryTest {
         assertThat(found.getTags()).containsExactly("유지됨");
     }
 
+    @Test
+    void update로_사진을_줄여_교체하면_실제_DB에도_순서대로_반영된다() {
+        Place saved = placeRepository.saveAndFlush(
+            placeBuilder().photoUrls(new ArrayList<>(List.of("https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg")))
+                .build());
+        entityManager.clear();
+        Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+
+        managed.update(null, null, null, null, null, null, null, null, List.of("https://a/3.jpg"));
+        placeRepository.saveAndFlush(managed);
+        entityManager.clear();
+
+        Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+        assertThat(found.getPhotoUrls()).containsExactly("https://a/3.jpg");
+    }
+
     /*
      * 장소 사진(photoUrls)은 tags와 달리 "인덱스 0 = 대표 사진" 계약이 있어 순서가 결정적으로
      * 보존되어야 한다(청사진 5장). @OrderColumn(sort_order) 없이 순수 @ElementCollection(bag)만
