@@ -94,7 +94,7 @@ class PlacePhotoServiceTest {
     @MethodSource("issuableCases")
     void issueUploadUrls는_PRIVATE_COMMUNITY_지도의_모든_역할에게_발급을_허용한다(MapType mapType, MapMemberRole role) {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(mapType, role));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(mapType, role, true));
         stubPresign();
 
         // when
@@ -109,7 +109,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_OFFICIAL_지도면_역할과_무관하게_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.OFFICIAL, MapMemberRole.OWNER, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L, file("image/jpeg", 1024L)), 1L))
@@ -122,7 +122,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_role이_NONE이면_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L, file("image/jpeg", 1024L)), 1L))
@@ -147,7 +147,7 @@ class PlacePhotoServiceTest {
     @ValueSource(strings = {"image/gif", "application/pdf", "text/plain"})
     void issueUploadUrls는_허용되지_않은_contentType이_있으면_BusinessException을_던진다(String invalidContentType) {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L, file(invalidContentType, 1024L)), 1L))
@@ -160,7 +160,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_contentType_대소문자와_무관하게_화이트리스트를_통과한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         stubPresign();
 
         // when
@@ -174,7 +174,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_fileSize가_0이하인_파일이_있으면_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L, file("image/jpeg", 0L)), 1L))
@@ -187,7 +187,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_fileSize가_5MB를_초과하는_파일이_있으면_BusinessException을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L, file("image/jpeg", MAX_FILE_SIZE + 1)), 1L))
@@ -200,7 +200,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_fileSize가_정확히_5MB이면_허용한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         stubPresign();
 
         // when
@@ -214,7 +214,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_발급에_성공하면_uploadUrl_objectKey_fileUrl_expiresInSeconds를_그대로_응답에_담는다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         given(objectStoragePresigner.presign(eq("places/10"), eq("image/png"), anyLong()))
             .willReturn(new PresignedUploadUrl(
                 "https://upload.example.com/signed",
@@ -267,7 +267,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_파일이_5개여도_getMemberInfo를_정확히_1번만_호출한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         stubPresign();
 
         // when
@@ -289,7 +289,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_3개_중_2번째_파일이_위반이면_발급을_0건도_하지_않고_전체_400을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         // when & then: 1번째는 정상이지만 2번째가 위반 → 1번째도 발급되지 않아야 한다(원자성)
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L,
@@ -306,7 +306,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_fileSize_위반이_섞여있어도_발급을_0건도_하지_않고_전체_400을_던진다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         // when & then
         assertThatThrownBy(() -> placePhotoService.issueUploadUrls(request(10L,
@@ -325,7 +325,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_files_1개면_응답도_1개다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         stubPresign();
 
         // when
@@ -339,7 +339,7 @@ class PlacePhotoServiceTest {
     @Test
     void issueUploadUrls는_files_5개면_응답도_5개이고_요청_순서와_같은_순서로_대응한다() {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
         given(objectStoragePresigner.presign(eq("places/10"), eq("image/jpeg"), anyLong()))
             .willReturn(new PresignedUploadUrl("url-0", "key-0", "file-0", 300L));
         given(objectStoragePresigner.presign(eq("places/10"), eq("image/png"), anyLong()))

@@ -57,7 +57,7 @@ class PlaceLikeServiceTest {
 
     private void givenMember(MapMemberRole role) {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, role));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, role, true));
     }
 
     private DataIntegrityViolationException constraintViolation(String constraintName) {

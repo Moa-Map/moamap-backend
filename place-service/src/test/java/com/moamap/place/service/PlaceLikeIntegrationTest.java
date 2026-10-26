@@ -80,7 +80,7 @@ class PlaceLikeIntegrationTest {
 
     private void givenMember(Long userId) {
         given(mapClient.getMemberInfo(MAP_ID, userId))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, true));
     }
 
     @Test

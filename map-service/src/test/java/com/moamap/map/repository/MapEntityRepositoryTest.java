@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,6 +19,27 @@ class MapEntityRepositoryTest {
 
     @Autowired
     private MapEntityRepository mapEntityRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    /*
+     * 운영 DB는 ddl-auto update로 컬럼을 붙인다. 그때 이미 있던 지도는 컬럼 기본값으로 채워지므로,
+     * 값을 지정하지 않고 넣은 행이 URL 추가 허용(true)으로 읽히는지 확인한다.
+     */
+    @Test
+    void URL_추가_허용_값을_지정하지_않은_기존_지도는_허용으로_읽힌다() {
+        jdbcTemplate.update("""
+            insert into map_entity (name, type, owner_id, member_count, created_at, updated_at)
+            values ('설정 이전 지도', 'COMMUNITY', 1, 1, current_timestamp, current_timestamp)
+            """);
+
+        MapEntity legacy = mapEntityRepository.findAll().stream()
+            .filter(map -> map.getName().equals("설정 이전 지도"))
+            .findFirst().orElseThrow();
+
+        assertThat(legacy.isUrlImportAllowed()).isTrue();
+    }
 
     @Test
     void 존재하는_지도의_placeCount를_갱신하면_영향받은_행_수_1을_반환하고_값이_반영된다() {

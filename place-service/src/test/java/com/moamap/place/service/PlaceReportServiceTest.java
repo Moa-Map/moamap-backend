@@ -164,7 +164,7 @@ class PlaceReportServiceTest {
     }
 
     private void given(MapType mapType, MapMemberRole role, Long userId) {
-        BDDMockito.given(mapClient.getMemberInfo(MAP_ID, userId)).willReturn(new MapMemberResponse(mapType, role));
+        BDDMockito.given(mapClient.getMemberInfo(MAP_ID, userId)).willReturn(new MapMemberResponse(mapType, role, true));
     }
 
     private static ReportRequest request(ReportReason reason) {

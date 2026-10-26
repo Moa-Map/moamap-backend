@@ -67,6 +67,8 @@ public class PlaceController {
             지도에 장소를 등록한다. 지도 내 역할에 따라 상태가 결정된다: PRIVATE 멤버·COMMUNITY OWNER/ADMIN은 즉시 APPROVED,
             COMMUNITY MEMBER는 PENDING(승인 대기). OFFICIAL 지도이거나 멤버가 아니면 403.
             인스타그램 추출 후보(PlaceCandidateResponse)를 등록할 때는 후보 값에 sourceType("INSTAGRAM")과 mapId를 추가로 채운다.
+            URL로 가져온 장소(sourceType이 KAKAO_SEARCH가 아닌 값)는 지도의 'URL로 장소 추가 허용'이 꺼져 있으면
+            일반 멤버가 등록할 수 없다(403 PLACE_023). 방장·관리자는 설정과 관계없이 등록할 수 있다.
             """
     )
     public ApiResponse<PlaceResponse> create(
@@ -83,6 +85,7 @@ public class PlaceController {
             여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
             전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
             지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            URL로 가져온 장소가 하나라도 있고 지도가 URL 추가를 허용하지 않으면, 일반 멤버의 요청은 한 건도 등록하지 않고 403(PLACE_023)으로 거절한다.
             사진(photoUrls)도 단건 등록과 동일하게 항목별 최대 5장까지 담을 수 있다. 발급 방법은 사진 업로드 URL 발급 API를 참고한다.
             """
     )

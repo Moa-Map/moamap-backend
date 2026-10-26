@@ -79,7 +79,7 @@ class PlaceServiceConcurrencyTest {
     @Test
     void 같은_장소를_동시에_등록해도_한_건만_저장된다() throws InterruptedException {
         // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, true));
 
         int threadCount = 10;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);

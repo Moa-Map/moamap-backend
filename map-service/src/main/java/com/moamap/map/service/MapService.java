@@ -68,6 +68,7 @@ public class MapService {
             request.name(), request.description(), request.imageUrl(),
             type, ownerId, request.tags(), inviteCode
         );
+        map.changeUrlImportAllowed(request.allowUrlImport());
         mapRepository.save(map);
         mapMemberRepository.save(MapMember.of(map.getId(), ownerId, MapRole.OWNER));
 
@@ -162,6 +163,9 @@ public class MapService {
         MapRole role = roleOf(mapId, requesterId);
         requireManagePermission(role);
         map.update(request.name(), request.description(), request.imageUrl(), request.tags());
+        if (request.allowUrlImport() != null) {
+            map.changeUrlImportAllowed(request.allowUrlImport());
+        }
         return assembleDetail(map, requesterId, role);
     }
 
@@ -278,7 +282,7 @@ public class MapService {
      */
     public MapMemberRoleResponse getMemberRole(Long mapId, Long userId) {
         MapEntity map = getMapOrThrow(mapId);
-        return MapMemberRoleResponse.of(map.getType(), roleOf(mapId, userId));
+        return MapMemberRoleResponse.of(map, roleOf(mapId, userId));
     }
 
     @Transactional
