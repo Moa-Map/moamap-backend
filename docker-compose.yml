@@ -1,0 +1,40 @@
+# 로컬 개발용 PostgreSQL. `docker compose up -d`로 기동.
+# DB는 하나(moamap), 서비스별로 스키마를 나눠 쓴다.
+services:
+  postgres:
+    image: postgres:16
+    container_name: moamap-postgres
+    environment:
+      POSTGRES_DB: moamap
+      POSTGRES_USER: moamap
+      POSTGRES_PASSWORD: moamap
+    ports:
+      - "5432:5432"
+    volumes:
+      - moamap-pgdata:/var/lib/postgresql/data
+      # init 스크립트는 데이터 디렉터리가 비어 있는 최초 기동에만 실행된다.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+
+  # 리프레시 토큰 저장용 Redis. TTL로 만료 토큰을 자동 삭제한다.
+  redis:
+    image: redis:7
+    container_name: moamap-redis
+    ports:
+      - "6379:6379"
+
+  # place-service ↔ map-service 이벤트 브로커 (place count 동기화 등에 사용).
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: moamap-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: moamap
+      RABBITMQ_DEFAULT_PASS: moamap
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - moamap-rabbitmq-data:/var/lib/rabbitmq
+
+volumes:
+  moamap-pgdata:
+  moamap-rabbitmq-data:

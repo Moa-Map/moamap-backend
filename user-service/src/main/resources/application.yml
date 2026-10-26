@@ -1,0 +1,113 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  config:
+    # 약관 목록(정본). 약관을 추가·개정할 때는 resources/terms/ 폴더(terms.yml과 .md)만 고친다.
+    import: classpath:terms/terms.yml
+  # @Scheduled 작업은 기본 1개 스레드를 나눠 쓴다. Apple 토큰 폐기 재시도가 외부 호출로 오래 걸려도
+  # outbox 발행이 밀리지 않도록 2개로 둔다.
+  task:
+    scheduling:
+      pool:
+        size: 2
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: user_service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
+    # 브로커가 메시지를 받았는지 확인받는다. 발행 실패를 즉시 알아채 다음 주기에 다시 시도할 수 있다.
+    publisher-confirm-type: correlated
+
+  http:
+    client:
+      # 외부 HTTP 호출(카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
+      connect-timeout: 2s
+      read-timeout: 3s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+
+jwt:
+  # dev 기본 시크릿. 운영은 반드시 환경변수로 교체.
+  secret: ${JWT_SECRET:moamap-local-dev-jwt-secret-change-me-32bytes+}
+  access-token-expiration-minutes: ${JWT_ACCESS_EXP_MIN:30}
+  refresh-token-expiration-days: ${JWT_REFRESH_EXP_DAYS:14}
+
+kakao:
+  # 카카오 앱 ID(토큰 검증용). 실제 값은 환경변수로 주입.
+  app-id: ${KAKAO_APP_ID:0}
+  token-info-uri: https://kapi.kakao.com/v1/user/access_token_info
+  user-info-uri: https://kapi.kakao.com/v2/user/me
+  # 아래는 개발용 카카오 콜백(dev-login)에서만 사용
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8081/api/v1/auth/test/kakao/callback}
+  token-uri: https://kauth.kakao.com/oauth/token
+
+# 개발용 카카오 로그인 콜백 활성화 플래그. 운영에서는 반드시 false(기본값)로 두어 엔드포인트 자체가 뜨지 않게 한다.
+dev-login:
+  enabled: ${DEV_LOGIN_ENABLED:false}
+
+storage:
+  # AWS S3 연동. 자격증명은 설정으로 받지 않는다 — DefaultCredentialsProvider(EC2 인스턴스 프로파일 / ~/.aws)가 찾는다.
+  # bucket이 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
+  region: ${OBJECT_STORAGE_REGION:ap-northeast-2}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+  public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
+
+outbox:
+  # 보관함을 훑는 주기. 가입 직후 지도가 만들어지기까지의 지연이 이 값에 좌우된다.
+  poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
+  # 발행이 끝난 기록을 남겨두는 기간(일). 지나면 정리 배치가 지운다.
+  retention-days: ${OUTBOX_RETENTION_DAYS:7}
+
+# Google 로그인. client-ids는 ID token aud로 허용할 OAuth 클라이언트 ID(쉼표 구분).
+# Android는 aud가 Web(server) client ID로 오므로 Web ID를 반드시 포함한다.
+google:
+  enabled: ${GOOGLE_ENABLED:false}
+  client-ids: ${GOOGLE_CLIENT_IDS:}
+
+# Apple 인증은 명시적으로 활성화한 환경에서만 사용한다. client-id는 iOS 앱의 Bundle ID.
+apple:
+  enabled: ${APPLE_ENABLED:false}
+  client-id: ${APPLE_CLIENT_ID:}
+  token:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    # Apple에서 발급받은 .p8 내용. 실제 값은 배포 Secret으로 주입한다.
+    private-key: ${APPLE_PRIVATE_KEY:}
+  credentials:
+    active-key-version: ${APPLE_CREDENTIAL_ACTIVE_KEY_VERSION:v1}
+    # AES-256 키(32바이트)의 Base64 인코딩. Apple 개인키와 다른 키다.
+    # 교체 시 이전 버전도 keys 아래에 남겨야 기존 암호문을 읽을 수 있다.
+    keys:
+      v1: ${APPLE_CREDENTIAL_KEY_V1:}
+  revocation:
+    # 기동 후 첫 재시도까지 기다리는 시간. 막 뜬 서버가 바쁠 때 Apple을 부르지 않는다.
+    initial-delay-ms: ${APPLE_REVOCATION_INITIAL_DELAY_MS:60000}
+    # 탈퇴 회원의 Apple 토큰 폐기를 재시도할 대상이 있는지 훑는 주기.
+    poll-interval-ms: ${APPLE_REVOCATION_POLL_INTERVAL_MS:300000}

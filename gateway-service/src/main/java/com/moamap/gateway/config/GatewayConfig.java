@@ -1,0 +1,61 @@
+package com.moamap.gateway.config;
+
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsWebFilter;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+
+@Configuration
+@RequiredArgsConstructor
+public class GatewayConfig {
+
+    private final ServiceUrlProperties serviceUrls;
+
+    // prefix 보고 서비스로 넘김. 경로는 그대로 전달(재작성 안 함).
+    @Bean
+    public RouteLocator routeLocator(RouteLocatorBuilder builder) {
+        return builder.routes()
+            .route("user-service", r -> r.path("/api/v1/auth/**", "/api/v1/users/**",
+                "/api/v1/notices/**", "/api/v1/admin/notices/**",
+                "/api/v1/inquiries/**", "/api/v1/admin/inquiries/**",
+                "/api/v1/banners/**", "/api/v1/admin/banners/**",
+                "/api/v1/terms/**",
+                "/api/v1/admin/reports/users/**").uri(serviceUrls.userUrl()))
+            .route("map-service", r -> r.path("/api/v1/maps/**", "/api/v1/admin/reports/maps/**").uri(serviceUrls.mapUrl()))
+            .route("place-service", r -> r.path("/api/v1/places/**", "/api/v1/admin/reports/places/**").uri(serviceUrls.placeUrl()))
+            .route("notification-service", r -> r.path("/api/v1/notifications/**").uri(serviceUrls.notificationUrl()))
+            // 통합 Swagger UI용 api-docs 프록시. 앞 경로(/user-service 등)를 떼고 각 서비스 기본 api-docs 경로로 전달.
+            .route("user-service-docs", r -> r.path("/user-service/v3/api-docs/**")
+                .filters(f -> f.stripPrefix(1))
+                .uri(serviceUrls.userUrl()))
+            .route("map-service-docs", r -> r.path("/map-service/v3/api-docs/**")
+                .filters(f -> f.stripPrefix(1))
+                .uri(serviceUrls.mapUrl()))
+            .route("place-service-docs", r -> r.path("/place-service/v3/api-docs/**")
+                .filters(f -> f.stripPrefix(1))
+                .uri(serviceUrls.placeUrl()))
+            .route("notification-service-docs", r -> r.path("/notification-service/v3/api-docs/**")
+                .filters(f -> f.stripPrefix(1))
+                .uri(serviceUrls.notificationUrl()))
+            .build();
+    }
+
+    @Bean
+    public CorsWebFilter corsWebFilter() {
+        CorsConfiguration config = new CorsConfiguration();
+        // 배포 땐 실제 프론트 도메인으로 좁히기
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("*"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(false);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return new CorsWebFilter(source);
+    }
+}

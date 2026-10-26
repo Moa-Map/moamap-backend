@@ -1,0 +1,101 @@
+package com.moamap.user.auth.service;
+
+import com.moamap.user.auth.apple.AppleCredentialStore;
+import com.moamap.user.auth.dto.TokenResponse;
+import com.moamap.user.auth.exception.RefreshTokenNotFoundException;
+import com.moamap.user.auth.jwt.JwtProperties;
+import com.moamap.user.event.UserRegisteredEvent;
+import com.moamap.user.outbox.OutboxRecorder;
+import com.moamap.user.auth.jwt.JwtProvider;
+import com.moamap.user.auth.oauth.OAuthUserInfo;
+import com.moamap.user.refreshtoken.RefreshTokenStore;
+import com.moamap.user.user.entity.User;
+import com.moamap.user.user.repository.UserRepository;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final RefreshTokenStore refreshTokenStore;
+    private final JwtProvider jwtProvider;
+    private final JwtProperties jwtProperties;
+    private final OutboxRecorder outboxRecorder;
+
+    /** 제공자별 인증이 끝난 사용자 정보로 회원과 가입 이벤트를 같은 트랜잭션에 저장한다. */
+    @Transactional
+    public TokenResponse login(OAuthUserInfo info) {
+        Optional<User> existing = userRepository.findByProviderAndProviderId(info.provider(), info.providerId());
+        boolean newUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> userRepository.save(User.createSocialUser(
+                info.provider(), info.providerId(),
+                info.nickname(), info.email(), info.profileImageUrl())));
+        if (newUser) {
+            recordRegistered(user.getId());
+        }
+        user.updateLastLogin(Instant.now());
+        return issueTokens(user, newUser);
+    }
+
+    /** Apple 자격증명 저장까지 회원·가입 이벤트와 같은 트랜잭션에서 처리한다. */
+    @Transactional
+    public TokenResponse loginApple(OAuthUserInfo info, AppleCredentialStore credentials,
+                                    String appleRefreshToken) {
+        Optional<User> existing = userRepository.findByProviderAndProviderId(info.provider(), info.providerId());
+        boolean newUser = existing.isEmpty();
+        User user = existing.orElseGet(() -> userRepository.save(User.createSocialUser(
+                info.provider(), info.providerId(), info.nickname(), info.email(), info.profileImageUrl())));
+        if (newUser) {
+            recordRegistered(user.getId());
+        }
+        credentials.save(user.getId(), appleRefreshToken);
+        user.updateLastLogin(Instant.now());
+        return issueTokens(user, newUser);
+    }
+
+    /**
+     * 회원 저장과 같은 트랜잭션에 이벤트를 남긴다. 커밋되면 이벤트도 반드시 남고, 롤백되면 함께 사라진다.
+     * 실제 발행은 OutboxPublisher가 커밋 이후에 맡는다.
+     */
+    private void recordRegistered(Long userId) {
+        outboxRecorder.record(
+            String.valueOf(userId),
+            UserRegisteredEvent.TYPE,
+            new UserRegisteredEvent(UUID.randomUUID().toString(), userId, Instant.now()));
+    }
+
+    @Transactional
+    public TokenResponse refresh(String refreshToken) {
+        // Redis TTL이 만료를 처리하므로, 만료됐거나 없으면 findUserId가 빈 값을 준다.
+        Long userId = refreshTokenStore.findUserId(refreshToken)
+                .orElseThrow(() -> new RefreshTokenNotFoundException("리프레시 토큰을 찾을 수 없습니다."));
+        refreshTokenStore.delete(refreshToken); // 회전: 기존 토큰 폐기 후 새로 발급
+        // 탈퇴 회원의 리프레시 토큰은 Redis에 남아 있을 수 있다(회원별로 모아 지울 수 없는 구조). 여기서 막는다.
+        User user = userRepository.findById(userId)
+                .filter(found -> !found.isWithdrawn())
+                .orElseThrow(() -> new RefreshTokenNotFoundException("사용자를 찾을 수 없습니다."));
+        return issueTokens(user, false);
+    }
+
+    @Transactional
+    public void logout(String refreshToken) {
+        refreshTokenStore.delete(refreshToken);
+    }
+
+    private TokenResponse issueTokens(User user, boolean newUser) {
+        String accessToken = jwtProvider.createAccessToken(user.getId(), user.getRole());
+        String refreshToken = UUID.randomUUID().toString();
+        Duration ttl = Duration.ofDays(jwtProperties.refreshTokenExpirationDays());
+        refreshTokenStore.save(refreshToken, user.getId(), ttl);
+        return new TokenResponse(
+                user.getId(), accessToken, refreshToken, "Bearer",
+                jwtProvider.getAccessTokenExpiresInSeconds(), ttl.getSeconds(), newUser);
+    }
+}

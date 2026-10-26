@@ -1,0 +1,405 @@
+package com.moamap.place.controller;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moamap.common.exception.BusinessException;
+import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
+import com.moamap.place.dto.PhotoUploadUrlRequest;
+import com.moamap.place.dto.PhotoUploadUrlResponse;
+import com.moamap.place.dto.PlaceCreateRequest;
+import com.moamap.place.dto.PlaceResponse;
+import com.moamap.place.dto.PlaceUpdateRequest;
+import com.moamap.place.entity.PlaceSourceType;
+import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.exception.PlaceErrorCode;
+import com.moamap.place.service.PlacePhotoService;
+import com.moamap.place.service.PlaceService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * 라우팅/요청 바인딩/상태 코드가 배선대로 동작하는지만 검증한다.
+ * 승인 상태 결정, 권한 분기 같은 비즈니스 로직 자체는 PlaceServiceTest에서 이미 검증한다.
+ */
+@WebMvcTest(PlaceController.class)
+class PlaceControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private PlaceService placeService;
+
+    @MockitoBean
+    private PlacePhotoService placePhotoService;
+
+    private PlaceResponse response() {
+        return new PlaceResponse(
+            1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
+            null, 0, 0, false, null, null, null, null, List.of(), List.of()
+        );
+    }
+
+    private PlaceCreateRequest createRequest() {
+        return new PlaceCreateRequest(
+            "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, null, null
+        );
+    }
+
+    @Test
+    void create는_성공하면_201과_등록된_장소를_반환한다() throws Exception {
+        // given
+        given(placeService.create(any(), eq(1L))).willReturn(response());
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createRequest())))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"))
+            .andExpect(jsonPath("$.data.status").value("APPROVED"));
+        verify(placeService).create(any(), eq(1L));
+    }
+
+    @Test
+    void create는_태그를_그대로_응답에_담아_반환한다() throws Exception {
+        // given
+        PlaceCreateRequest request = new PlaceCreateRequest(
+            "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, List.of("데이트", "조용한"), null
+        );
+        PlaceResponse responseWithTags = new PlaceResponse(
+            1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", "서울 강남구 테헤란로 1",
+            BigDecimal.valueOf(37.497852), BigDecimal.valueOf(127.027618), "카페", "26338954",
+            PlaceSourceType.KAKAO_SEARCH, null, null, 10L, 1L, PlaceStatus.APPROVED,
+            null, 0, 0, false, null, null, null, null, List.of("데이트", "조용한"), List.of()
+        );
+        given(placeService.create(any(), eq(1L))).willReturn(responseWithTags);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.tags[0]").value("데이트"))
+            .andExpect(jsonPath("$.data.tags[1]").value("조용한"));
+    }
+
+    @Test
+    void create는_필수값이_없으면_400을_반환한다() throws Exception {
+        // given: name이 비어있음(@NotBlank 위반)
+        String invalidBody = """
+            {"name": "", "lat": 37.5, "lng": 127.0, "kakaoPlaceId": "1",
+             "sourceType": "KAKAO_SEARCH", "mapId": 10}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placeService, org.mockito.Mockito.never()).create(any(), any());
+    }
+
+    @Test
+    void getById는_존재하면_200과_장소를_반환한다() throws Exception {
+        // given
+        given(placeService.findById(eq(1L), any())).willReturn(response());
+
+        // when & then
+        mockMvc.perform(get("/api/v1/places/{id}", 1L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(1))
+            .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"));
+    }
+
+    @Test
+    void getById는_존재하지_않으면_404를_반환한다() throws Exception {
+        // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
+        given(placeService.findById(eq(999L), any())).willThrow(new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/places/{id}", 999L))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.error.code").value("PLACE_001"));
+    }
+
+    @Test
+    void getAll은_mapId로_페이지_결과를_반환한다() throws Exception {
+        // given
+        PageResponse<PlaceResponse> page = new PageResponse<>(List.of(response()), 0, 20, 1, 1, true);
+        given(placeService.findAllByMapId(eq(10L), any(), any())).willReturn(page);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/places").param("mapId", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].id").value(1))
+            .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @Test
+    void getPending은_요청자_헤더와_mapId를_그대로_서비스에_전달한다() throws Exception {
+        // given
+        PendingPlaceResponse pendingPlace = new PendingPlaceResponse(
+            1L, "스타벅스 강남점", "서울 강남구 테헤란로 1", null, List.of(), "닉네임", null, null
+        );
+        PageResponse<PendingPlaceResponse> page = new PageResponse<>(List.of(pendingPlace), 0, 20, 1, 1, true);
+        given(placeService.findPendingByMapId(eq(10L), eq(2L), any())).willReturn(page);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/places/pending").param("mapId", "10").header("X-User-Id", 2L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].id").value(1))
+            .andExpect(jsonPath("$.data.content[0].createdByNickname").value("닉네임"));
+        verify(placeService).findPendingByMapId(eq(10L), eq(2L), any());
+    }
+
+    @Test
+    void counts는_mapId와_userIds를_그대로_서비스에_전달한다() throws Exception {
+        given(placeService.countApprovedByCreator(10L, List.of(1L, 2L, 3L)))
+            .willReturn(Map.of(1L, 12L, 2L, 0L, 3L, 5L));
+
+        mockMvc.perform(get("/api/v1/places/counts").param("mapId", "10").param("userIds", "1,2,3"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.1").value(12))
+            .andExpect(jsonPath("$.data.2").value(0))
+            .andExpect(jsonPath("$.data.3").value(5));
+        verify(placeService).countApprovedByCreator(10L, List.of(1L, 2L, 3L));
+    }
+
+    @Test
+    void update는_성공하면_200과_수정된_장소를_반환한다() throws Exception {
+        // given
+        PlaceUpdateRequest request = new PlaceUpdateRequest("새 이름", null, null, null, null, null, null, null);
+        given(placeService.update(eq(1L), eq(1L), any())).willReturn(response());
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/places/{id}", 1L)
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.name").value("스타벅스 강남점"));
+    }
+
+    @Test
+    void delete는_성공하면_success_envelope을_반환한다() throws Exception {
+        // when & then
+        mockMvc.perform(delete("/api/v1/places/{id}", 1L).header("X-User-Id", 1L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+        verify(placeService).delete(1L, 1L);
+    }
+
+    @Test
+    void approve는_성공하면_200과_승인된_장소를_반환한다() throws Exception {
+        // given
+        given(placeService.approve(1L, 2L)).willReturn(response());
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/places/{id}/approve", 1L).header("X-User-Id", 2L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("APPROVED"));
+    }
+
+    @Test
+    void reject는_성공하면_200과_반려된_장소를_반환한다() throws Exception {
+        // given
+        given(placeService.reject(1L, 2L)).willReturn(response());
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/places/{id}/reject", 1L).header("X-User-Id", 2L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(1));
+    }
+
+    /*
+     * 장소 사진 업로드 presigned URL 배치 발급 엔드포인트(청사진 배치 발급 변경).
+     * 권한 분기(3-1)/파일 검증(3-2)/원자적 거부(3-2, 3-3) 자체는 PlacePhotoServiceTest에서 이미 검증했으므로,
+     * 여기서는 라우팅/바인딩(리스트 형태)/상태 코드 배선만 확인한다.
+     */
+
+    private PhotoUploadUrlRequest.FileSpec fileSpec(String contentType, long fileSize) {
+        return new PhotoUploadUrlRequest.FileSpec(contentType, fileSize);
+    }
+
+    private PhotoUploadUrlRequest photoUploadUrlRequest(PhotoUploadUrlRequest.FileSpec... files) {
+        return new PhotoUploadUrlRequest(10L, List.of(files));
+    }
+
+    private PhotoUploadUrlResponse photoUploadUrlResponse() {
+        return new PhotoUploadUrlResponse(
+            "https://upload.example.com/signed",
+            "places/10/uuid.jpg",
+            "https://cdn.moamap.com/places/10/uuid.jpg",
+            300L
+        );
+    }
+
+    @Test
+    void photoUploadUrl은_성공하면_200과_발급_결과_리스트를_반환한다() throws Exception {
+        // given
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
+            .willReturn(List.of(photoUploadUrlResponse(), photoUploadUrlResponse()));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    photoUploadUrlRequest(fileSpec("image/jpeg", 1024L), fileSpec("image/png", 2048L)))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].uploadUrl").value("https://upload.example.com/signed"))
+            .andExpect(jsonPath("$.data[0].objectKey").value("places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data[0].fileUrl").value("https://cdn.moamap.com/places/10/uuid.jpg"))
+            .andExpect(jsonPath("$.data[0].expiresInSeconds").value(300));
+    }
+
+    @Test
+    void photoUploadUrl은_X_User_Id_헤더가_없으면_401을_반환한다() throws Exception {
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(fileSpec("image/jpeg", 1024L)))))
+            .andExpect(status().isUnauthorized());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_서비스가_OFFICIAL_지도_거부를_던지면_403을_반환한다() throws Exception {
+        // given: GlobalExceptionHandler가 BusinessException을 errorCode의 status로 변환하는지 검증
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
+            .willThrow(new BusinessException(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(fileSpec("image/jpeg", 1024L)))))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("PLACE_003"));
+    }
+
+    @Test
+    void photoUploadUrl은_contentType이_비어있으면_400을_반환한다() throws Exception {
+        // given: files[0].contentType이 @NotBlank 위반
+        String invalidBody = """
+            {"mapId": 10, "files": [{"contentType": "", "fileSize": 1024}]}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_빈_리스트이면_400을_반환한다() throws Exception {
+        // given: @NotEmpty 위반(청사진 2장/3-5)
+        String invalidBody = """
+            {"mapId": 10, "files": []}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_없으면_400을_반환한다() throws Exception {
+        // given: @NotEmpty(null도 위반)
+        String invalidBody = """
+            {"mapId": 10}
+            """;
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidBody))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_6개면_400을_반환한다() throws Exception {
+        // given: @Size(max=5) 위반(청사진 3-5, 발급 요청 단위 상한)
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L)
+                ))))
+            .andExpect(status().isBadRequest());
+        verify(placePhotoService, org.mockito.Mockito.never()).issueUploadUrls(any(), any());
+    }
+
+    @Test
+    void photoUploadUrl은_files가_5개면_통과해서_서비스를_호출한다() throws Exception {
+        // given: @Size(max=5) 경계값(허용)
+        given(placePhotoService.issueUploadUrls(any(), eq(1L)))
+            .willReturn(List.of(photoUploadUrlResponse(), photoUploadUrlResponse(), photoUploadUrlResponse(),
+                photoUploadUrlResponse(), photoUploadUrlResponse()));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/places/photo-upload-url")
+                .header("X-User-Id", 1L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(photoUploadUrlRequest(
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L),
+                    fileSpec("image/jpeg", 1024L)
+                ))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(5));
+        verify(placePhotoService).issueUploadUrls(any(), eq(1L));
+    }
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# NHN Cloud 인증 정보(OpenStack openrc). 이 파일을 `openrc`로 복사해 실제 값을 채운 뒤
+# `source openrc` 하고 terraform 명령을 실행한다.
+# 실제 값이 담긴 `openrc`는 gitignore 대상 — 절대 커밋 금지.
+
+# 리전별 Identity(keystone) endpoint. 정확한 URL은 NHN Cloud 콘솔/문서에서 확인.
+export OS_AUTH_URL="REPLACE_ME_identity_endpoint"
+export OS_REGION_NAME="KR1"
+
+# 프로젝트(테넌트) 및 API 계정. 콘솔에서 발급.
+export OS_TENANT_ID="REPLACE_ME_tenant_id"
+export OS_USERNAME="REPLACE_ME_api_username"
+export OS_PASSWORD="REPLACE_ME_api_password"

@@ -1,24 +1,96 @@
-# Compiled class file
+### Gradle ###
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### Spring Boot ###
+out/
+
+### Java ###
 *.class
-
-# Log file
 *.log
-
-# BlueJ files
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
 .mtj.tmp/
-
-# Package Files #
-*.jar
 *.war
 *.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+### Environment & Secrets ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+application-local.yml
+application-local.yaml
+application-local.properties
+application-secret.yml
+application-secret.yaml
+
+### IDE - IntelliJ ###
+.idea/
+*.iml
+*.ipr
+*.iws
+
+### IDE - Eclipse / STS ###
+.classpath
+.project
+.settings/
+bin/
+
+### IDE - VS Code ###
+.vscode/
+
+### Claude Code ###
+# 개인 로컬 설정/메모리는 제외하고, 팀 공유용(.claude/settings.json, CLAUDE.md)은 커밋 가능하도록 둡니다.
+.claude/settings.local.json
+CLAUDE.local.md
+
+# 팀 공유 문서는 docs/에, 로컬 전용 설계 드래프트는 docs/specs/에 둔다(원격 제외).
+docs/specs/
+docs/superpowers/
+
+### AI 도구 산출물 (로컬 전용) ###
+docs/superpowers/
+.understand-anything/
+.gstack/
+
+### Kubernetes ###
+# 실제 시크릿 매니페스트는 커밋 금지 (예시 템플릿만 커밋)
+k8s/secrets/*.yaml
+!k8s/secrets/*.example.yaml
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Windows Zone.Identifier (ADS) ###
+*:Zone.Identifier
+
+### Terraform ###
+# state는 민감정보(비번 등)를 평문으로 담으므로 절대 커밋 금지 (원격 backend 사용)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.tfstate.lock.info
+# 실제 변수 값(환경 ID 등)은 제외, 예시 파일만 커밋
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+# terraform plan 파일 — k3s 조인 토큰·DB 비밀번호가 평문으로 들어간다
+tfplan
+*.tfplan
+# 인증 정보(OpenStack openrc). 실제 파일은 커밋 금지, .sample만 커밋
+openrc
+.openrc
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

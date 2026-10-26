@@ -1,0 +1,388 @@
+package com.moamap.place.service;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import com.moamap.common.exception.BusinessException;
+import com.moamap.common.exception.CommonErrorCode;
+import com.moamap.place.dto.PageResponse;
+import com.moamap.place.dto.PendingPlaceResponse;
+import com.moamap.place.dto.PlaceBulkCreateRequest;
+import com.moamap.place.dto.PlaceBulkCreateResponse;
+import com.moamap.place.dto.PlaceCreateRequest;
+import com.moamap.place.dto.PlaceResponse;
+import com.moamap.place.dto.PlaceUpdateRequest;
+import com.moamap.place.entity.Place;
+import com.moamap.place.entity.PlaceStatus;
+import com.moamap.place.event.ActivitySignal;
+import com.moamap.place.event.PlaceCountChangeSignal;
+import com.moamap.place.event.PlaceCountEventPublisher;
+import com.moamap.place.exception.PlaceErrorCode;
+import com.moamap.place.map.MapClient;
+import com.moamap.place.map.dto.MapMemberResponse;
+import com.moamap.place.map.dto.MapMemberRole;
+import com.moamap.place.map.dto.MapType;
+import com.moamap.place.repository.PlaceLikeRepository;
+import com.moamap.place.repository.PlaceRepository;
+import com.moamap.place.user.UserBlockClient;
+import com.moamap.place.user.UserClient;
+import com.moamap.place.user.dto.UserProfileResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class PlaceService {
+
+    private static final String DUPLICATE_PLACE_CONSTRAINT = "uk_places_map_kakao_place";
+
+    private final PlaceRepository placeRepository;
+    private final PlaceLikeRepository placeLikeRepository;
+    private final MapClient mapClient;
+    private final UserClient userClient;
+    private final UserBlockClient userBlockClient;
+    private final PlaceBulkRegistrar placeBulkRegistrar;
+    private final ApplicationEventPublisher eventPublisher;
+    private final PlaceCountEventPublisher placeCountEventPublisher;
+
+    @Transactional
+    public PlaceResponse create(PlaceCreateRequest request, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
+        PlaceStatus status = resolveInitialStatus(memberInfo);
+        checkDuplicate(request.mapId(), request.kakaoPlaceId());
+
+        Place place = Place.builder()
+            .name(request.name())
+            .address(request.address())
+            .roadAddress(request.roadAddress())
+            .lat(request.lat())
+            .lng(request.lng())
+            .category(request.category())
+            .kakaoPlaceId(request.kakaoPlaceId())
+            .sourceType(request.sourceType())
+            .sourceUrl(request.sourceUrl())
+            .description(request.description())
+            .tags(request.tags() == null ? new ArrayList<>() : request.tags())
+            .photoUrls(request.photoUrls() == null ? new ArrayList<>() : request.photoUrls())
+            .mapId(request.mapId())
+            .createdBy(userId)
+            .status(status)
+            .build();
+        // checkDuplicate는 흔한 경우를 빠르게 막기 위한 사전 체크일 뿐이고,
+        // 동시 요청 race condition은 uk_places_map_kakao_place 유니크 제약으로 막는다.
+        Place saved;
+        try {
+            saved = placeRepository.saveAndFlush(place);
+        } catch (DataIntegrityViolationException e) {
+            if (isDuplicatePlaceConstraintViolation(e)) {
+                throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+            }
+            throw e;
+        }
+        if (status == PlaceStatus.APPROVED) {
+            eventPublisher.publishEvent(new PlaceCountChangeSignal(request.mapId()));
+        }
+        // 방금 만들어진 장소라 하트가 있을 수 없다. 확인하러 갈 필요 없이 false가 사실이다.
+        return PlaceResponse.of(saved, false);
+    }
+
+    /**
+     * 장소 일괄 등록. 건별로 부분 성공한다.
+     *
+     * 클래스에 @Transactional(readOnly = true)가 걸려 있으므로, 이 루프가 바깥 트랜잭션에
+     * 묶이지 않도록 NOT_SUPPORTED로 명시한다. 실제 쓰기는 PlaceBulkRegistrar가
+     * 건별 REQUIRES_NEW 트랜잭션에서 수행한다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PlaceBulkCreateResponse createBulk(PlaceBulkCreateRequest request, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        // 지도 권한·유형은 맵 단위라 루프 밖에서 한 번만 확인한다.
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
+        PlaceStatus status = resolveInitialStatus(memberInfo);
+
+        List<PlaceBulkCreateResponse.Result> results = new ArrayList<>(request.places().size());
+        int created = 0;
+        for (int index = 0; index < request.places().size(); index++) {
+            PlaceBulkCreateRequest.Item item = request.places().get(index);
+            try {
+                Long placeId = placeBulkRegistrar.register(item, request.mapId(), userId, status);
+                results.add(PlaceBulkCreateResponse.Result.created(index, item.name(), placeId));
+                created++;
+            } catch (BusinessException e) {
+                // 지금은 등록기가 DUPLICATE_PLACE만 던지지만, 다른 도메인 예외를 중복으로
+                // 뭉개지 않도록 코드를 확인하고 분기한다.
+                if (e.getErrorCode() == PlaceErrorCode.DUPLICATE_PLACE) {
+                    results.add(PlaceBulkCreateResponse.Result.duplicate(index, item.name(), e.getMessage()));
+                } else {
+                    results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), e.getMessage()));
+                }
+            } catch (DataIntegrityViolationException e) {
+                // 사전 체크를 통과한 뒤 동시 요청이 먼저 들어온 경우.
+                if (isDuplicatePlaceConstraintViolation(e)) {
+                    results.add(PlaceBulkCreateResponse.Result.duplicate(
+                        index, item.name(), PlaceErrorCode.DUPLICATE_PLACE.getMessage()));
+                } else {
+                    results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), "등록에 실패했습니다."));
+                }
+            } catch (RuntimeException e) {
+                log.warn("일괄 등록 중 예상치 못한 실패: index={}, name={}", index, item.name(), e);
+                results.add(PlaceBulkCreateResponse.Result.failed(index, item.name(), "등록에 실패했습니다."));
+            }
+        }
+        // 바깥 트랜잭션이 없고(NOT_SUPPORTED) 건별 REQUIRES_NEW로 이미 커밋된 상태이므로,
+        // 신호가 아니라 publishNow를 여기서 직접 1회만 호출한다(청사진 3-1(가), 3-3(가)).
+        if (status == PlaceStatus.APPROVED && created > 0) {
+            placeCountEventPublisher.publishNow(request.mapId());
+        }
+        return new PlaceBulkCreateResponse(
+            request.places().size(), created, request.places().size() - created, results);
+    }
+
+    // 길이 초과, NOT NULL 등 다른 무결성 위반까지 DUPLICATE_PLACE로 뭉개지 않도록,
+    // uk_places_map_kakao_place 제약 위반일 때만 변환한다.
+    private boolean isDuplicatePlaceConstraintViolation(DataIntegrityViolationException e) {
+        if (e.getCause() instanceof ConstraintViolationException cve) {
+            String constraintName = cve.getConstraintName();
+            return constraintName != null && constraintName.toLowerCase().contains(DUPLICATE_PLACE_CONSTRAINT);
+        }
+        return false;
+    }
+
+    private PlaceStatus resolveInitialStatus(MapMemberResponse memberInfo) {
+        if (memberInfo.role() == MapMemberRole.NONE) {
+            throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        }
+        if (memberInfo.mapType() == MapType.OFFICIAL) {
+            throw new BusinessException(PlaceErrorCode.OFFICIAL_MAP_NOT_REGISTRABLE);
+        }
+        if (memberInfo.mapType() == MapType.PRIVATE) {
+            return PlaceStatus.APPROVED;
+        }
+        // COMMUNITY: 방장/관리자는 바로 승인, 일반 멤버는 승인 대기.
+        return switch (memberInfo.role()) {
+            case OWNER, ADMIN -> PlaceStatus.APPROVED;
+            case MEMBER -> PlaceStatus.PENDING;
+            case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        };
+    }
+
+    private void checkDuplicate(Long mapId, String kakaoPlaceId) {
+        if (placeRepository.existsByMapIdAndKakaoPlaceIdAndDeletedAtIsNull(mapId, kakaoPlaceId)) {
+            throw new BusinessException(PlaceErrorCode.DUPLICATE_PLACE);
+        }
+    }
+
+    public PlaceResponse findById(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        return PlaceResponse.of(place, isLikedBy(id, userId));
+    }
+
+    /** 요청한 사람이 차단한 사용자가 등록한 장소는 빼고 준다. */
+    public PageResponse<PlaceResponse> findAllByMapId(Long mapId, Long userId, Pageable pageable) {
+        List<Long> blockedIds = userBlockClient.findBlockedIds(userId);
+        Page<Place> places = blockedIds.isEmpty()
+            ? placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.APPROVED, pageable)
+            : placeRepository.findByMapIdAndStatusAndDeletedAtIsNullAndCreatedByNotIn(
+                mapId, PlaceStatus.APPROVED, blockedIds, pageable);
+        return toPageResponse(places, userId);
+    }
+
+    /**
+     * 지도 멤버별 등록 장소 수. 멤버 관리 화면의 "등록한 장소 수"에 쓰인다.
+     *
+     * GROUP BY 결과에는 등록 이력이 있는 멤버만 나오므로, 요청받은 멤버 전원이 키로 존재하도록 0을 채운다.
+     */
+    public Map<Long, Long> countApprovedByCreator(Long mapId, Collection<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> counts = new LinkedHashMap<>();
+        userIds.forEach(userId -> counts.put(userId, 0L));
+        placeRepository.countApprovedByCreator(mapId, userIds)
+            .forEach(row -> counts.put(row.getCreatedBy(), row.getPlaceCount()));
+        return counts;
+    }
+
+    public PageResponse<PendingPlaceResponse> findPendingByMapId(Long mapId, Long userId, Pageable pageable) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
+        MapMemberRole role = memberInfo.role();
+        // role == null은 역직렬화가 어긋난 비정상 상황이라 fail-closed로 차단한다.
+        Page<Place> pendingPlaces = switch (role != null ? role : MapMemberRole.NONE) {
+            case OWNER, ADMIN ->
+                placeRepository.findByMapIdAndStatusAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, pageable);
+            case MEMBER ->
+                placeRepository.findByMapIdAndStatusAndCreatedByAndDeletedAtIsNull(mapId, PlaceStatus.PENDING, userId, pageable);
+            case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        };
+        return PageResponse.from(enrichWithCreatorProfiles(pendingPlaces));
+    }
+
+    // UserClient는 표시용 부가정보라 실패해도 조회 전체를 죽이면 안 된다. PlaceActivityService와 동일하게
+    // 등록자 수만큼만 모아 페이지당 최대 1회만 호출해 N+1을 피한다.
+    private Page<PendingPlaceResponse> enrichWithCreatorProfiles(Page<Place> pendingPlaces) {
+        Set<Long> creatorIds = new LinkedHashSet<>();
+        for (Place place : pendingPlaces.getContent()) {
+            if (place.getCreatedBy() != null) {
+                creatorIds.add(place.getCreatedBy());
+            }
+        }
+        Map<Long, UserProfileResponse> profiles;
+        if (creatorIds.isEmpty()) {
+            profiles = Map.of();
+        } else {
+            try {
+                profiles = userClient.findProfiles(creatorIds);
+            } catch (RuntimeException e) {
+                // UserClient는 원칙적으로 예외를 던지지 않지만 방어적으로 한 번 더 막는다.
+                log.warn("user-service 프로필 조회 중 예외가 발생해 닉네임 없이 진행합니다.", e);
+                profiles = Map.of();
+            }
+        }
+        Map<Long, UserProfileResponse> resolvedProfiles = profiles == null ? Map.of() : profiles;
+        return pendingPlaces.map(place -> {
+            UserProfileResponse profile = place.getCreatedBy() == null ? null : resolvedProfiles.get(place.getCreatedBy());
+            return PendingPlaceResponse.of(
+                place,
+                profile == null ? null : profile.nickname(),
+                profile == null ? null : profile.profileImageUrl()
+            );
+        });
+    }
+
+    @Transactional
+    public PlaceResponse update(Long id, Long userId, PlaceUpdateRequest request) {
+        Place place = getOrThrow(id);
+        checkModifyPermission(place, userId);
+        place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
+            request.category(), request.description(), request.tags());
+        return PlaceResponse.of(place, isLikedBy(id, userId));
+    }
+
+    @Transactional
+    public void delete(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        checkModifyPermission(place, userId);
+        boolean wasApproved = place.getStatus() == PlaceStatus.APPROVED;
+        place.delete(userId);
+        if (wasApproved) {
+            eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
+        }
+    }
+
+    @Transactional
+    public PlaceResponse approve(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        requireReviewer(place.getMapId(), userId);
+        checkPending(place);
+        place.approve(userId);
+        eventPublisher.publishEvent(new PlaceCountChangeSignal(place.getMapId()));
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.PLACE_APPROVED, place.getCreatedBy(), userId, id, place.getMapId()));
+        return PlaceResponse.of(place, isLikedBy(id, userId));
+    }
+
+    @Transactional
+    public PlaceResponse reject(Long id, Long userId) {
+        Place place = getOrThrow(id);
+        requireReviewer(place.getMapId(), userId);
+        checkPending(place);
+        place.reject(userId);
+        eventPublisher.publishEvent(
+            new ActivitySignal(ActivitySignal.PLACE_REJECTED, place.getCreatedBy(), userId, id, place.getMapId()));
+        return PlaceResponse.of(place, isLikedBy(id, userId));
+    }
+
+    private Place getOrThrow(Long id) {
+        return placeRepository.findByIdAndDeletedAtIsNull(id)
+            .orElseThrow(() -> new BusinessException(PlaceErrorCode.PLACE_NOT_FOUND));
+    }
+
+    private PageResponse<PlaceResponse> toPageResponse(Page<Place> places, Long userId) {
+        Set<Long> likedPlaceIds = likedPlaceIds(userId, places.getContent());
+        return PageResponse.from(places.map(place -> PlaceResponse.of(place, likedPlaceIds.contains(place.getId()))));
+    }
+
+    /**
+     * 이 페이지에서 요청자가 하트를 눌러 둔 장소 id들. 페이지 건수와 무관하게 쿼리 1회다.
+     *
+     * 건별로 물으면 20건 페이지에 20쿼리가 붙는다(MapService.joinedMapIds와 같은 방식으로 피한다).
+     */
+    private Set<Long> likedPlaceIds(Long userId, List<Place> places) {
+        // Set.of()/Set.copyOf()가 만드는 불변 셋은 contains(null)에서 NPE를 낸다.
+        // 아직 id가 없는 엔티티가 섞여도 조회가 깨지지 않도록 HashSet을 쓴다(MapService.joinedMapIds와 동일).
+        if (userId == null || places.isEmpty()) {
+            return new HashSet<>();
+        }
+        List<Long> placeIds = places.stream().map(Place::getId).toList();
+        return new HashSet<>(placeLikeRepository.findLikedPlaceIds(userId, placeIds));
+    }
+
+    private boolean isLikedBy(Long placeId, Long userId) {
+        return userId != null && placeLikeRepository.existsByPlaceIdAndUserId(placeId, userId);
+    }
+
+    /**
+     * 장소 수정/삭제 권한.
+     * - PRIVATE 지도: 멤버면 누구든 가능
+     * - COMMUNITY 지도: 방장/관리자는 누구 장소든 가능, 그 외 멤버는 본인이 등록한 장소만 가능
+     * - 그 외(OFFICIAL 등): 본인이 등록한 장소만 가능
+     */
+    private void checkModifyPermission(Place place, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(place.getMapId(), userId);
+        if (memberInfo.role() == MapMemberRole.NONE) {
+            throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
+        }
+        if (memberInfo.mapType() == MapType.PRIVATE || isReviewer(memberInfo.role())) {
+            return;
+        }
+        if (!place.getCreatedBy().equals(userId)) {
+            throw new BusinessException(PlaceErrorCode.NOT_PLACE_OWNER);
+        }
+    }
+
+    private void requireReviewer(Long mapId, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        MapMemberResponse memberInfo = mapClient.getMemberInfo(mapId, userId);
+        if (!isReviewer(memberInfo.role())) {
+            throw new BusinessException(PlaceErrorCode.NOT_REVIEWER);
+        }
+    }
+
+    private void checkPending(Place place) {
+        if (place.getStatus() != PlaceStatus.PENDING) {
+            throw new BusinessException(PlaceErrorCode.ALREADY_PROCESSED);
+        }
+    }
+
+    private boolean isReviewer(MapMemberRole role) {
+        return role == MapMemberRole.OWNER || role == MapMemberRole.ADMIN;
+    }
+}

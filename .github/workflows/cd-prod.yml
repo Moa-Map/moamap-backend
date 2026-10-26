@@ -1,0 +1,48 @@
+name: CD (prod)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cd-prod-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-push-deploy:
+    name: build, push, update prod manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to NCR
+        run: echo "${{ secrets.NCR_SECRET_KEY }}" | docker login 9c5fef4c-kr1-registry.container.nhncloud.com -u "${{ secrets.NCR_ACCESS_KEY }}" --password-stdin
+
+      - name: Build and push all services
+        run: |
+          for svc in gateway-service user-service map-service place-service; do
+            echo "=== building $svc ==="
+            docker build --build-arg SERVICE=$svc \
+              -t 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/$svc:${{ github.sha }} .
+            docker push 9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/$svc:${{ github.sha }}
+          done
+
+      - name: Update prod overlay image tags
+        run: |
+          for svc in gateway-service user-service map-service place-service; do
+            yq -i "(.images[] | select(.name == \"9c5fef4c-kr1-registry.container.nhncloud.com/moamap-ncr/${svc}\")).newTag = \"${{ github.sha }}\"" k8s/overlays/prod/kustomization.yaml
+          done
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/overlays/prod/kustomization.yaml
+          git diff --cached --quiet && echo "변경 없음, 커밋 스킵" && exit 0
+          # [skip ci] — 이 커밋이 main에 push되어도 워크플로우가 자기 자신을 다시 트리거하지 않게 함
+          git commit -m "chore: prod 이미지 태그 갱신 (${{ github.sha }}) [skip ci]"
+          git push

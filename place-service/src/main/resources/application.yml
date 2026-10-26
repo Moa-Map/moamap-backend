@@ -1,0 +1,75 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: place-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: place_service
+  http:
+    client:
+      # 외부 HTTP 호출(map-service, 카카오 등) 타임아웃 — 장애 시 요청 스레드가 오래 묶이지 않도록.
+      connect-timeout: 2s
+      read-timeout: 3s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
+    listener:
+      simple:
+        default-requeue-rejected: false # 실패 메시지는 무한 재큐 대신 DLQ로
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # 브로커가 잠깐 죽어도 place-service는 정상 동작한다(카운트 발행만 지연) — health에 반영하지 않는다.
+    rabbit:
+      enabled: false
+
+kakao:
+  local:
+    # 카카오 로컬(키워드 검색) API. REST API 키는 절대 커밋 금지 — 환경변수로 주입.
+    rest-api-key: ${KAKAO_REST_API_KEY:}
+    base-url: https://dapi.kakao.com/v2/local/search/keyword.json
+
+gemini:
+  api:
+    # 인스타그램 설명글 → 장소 추출용 Google Gemini API. 키는 절대 커밋 금지 — 환경변수로 주입.
+    key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL_ID:}
+
+services:
+  map:
+    # 지도 유형/멤버 역할 조회용 map-service 내부 호출 주소.
+    base-url: ${MAP_SERVICE_URL:http://localhost:8083}
+  user:
+    # 활동내역 로그 표시용 닉네임/프로필 이미지 조회용 user-service 내부 호출 주소.
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
+
+storage:
+  # AWS S3 연동. 자격증명은 설정으로 받지 않는다 — DefaultCredentialsProvider(EC2 인스턴스 프로파일 / ~/.aws)가 찾는다.
+  region: ${OBJECT_STORAGE_REGION:ap-northeast-2}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+  public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}

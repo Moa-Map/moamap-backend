@@ -1,0 +1,61 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: notification_service
+
+  http:
+    client:
+      # 알림 목록에 닉네임을 붙이는 user-service 호출. 상대가 멈춰도 목록 응답이 오래 묶이지 않게 짧게 둔다.
+      connect-timeout: 2s
+      read-timeout: 3s
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
+    listener:
+      simple:
+        default-requeue-rejected: false # 실패 메시지는 무한 재큐 대신 DLQ로
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # 브로커가 잠깐 죽어도 알림 조회는 정상 동작한다(새 알림 저장만 지연) — health에 반영하지 않는다.
+    rabbit:
+      enabled: false
+
+services:
+  user:
+    # 알림 목록에 행동한 사람의 닉네임·프로필 이미지를 붙이기 위한 user-service 내부 호출 주소.
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
+
+notification:
+  # 받은 지 이 기간(일)이 지난 알림은 매일 정리 배치가 지운다. cron은 한국 시간 기준이다.
+  retention-days: ${NOTIFICATION_RETENTION_DAYS:90}
+  cleanup-cron: ${NOTIFICATION_CLEANUP_CRON:0 30 4 * * *}

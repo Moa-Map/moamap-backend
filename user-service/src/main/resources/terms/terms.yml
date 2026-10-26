@@ -1,0 +1,38 @@
+# 약관 목록. 한 줄 = 약관 한 버전. 서버가 시작할 때 이 목록대로 term 테이블을 맞춘다.
+#
+# 약관을 바꾸는 방법
+#   - 오타·표현 수정 : 해당 .md 파일만 고친다 (재동의 없음)
+#   - 중요한 변경    : 새 .md(예: service-v2.md)와 새 줄(version: v2, active: true)을 추가하고
+#                     이전 줄을 active: false로 바꾼다 → 그 약관만 재동의
+#   - 약관 추가      : 새 .md와 새 줄을 추가한다 → 그 약관만 동의
+#   - 약관 폐지      : 해당 줄을 active: false로 바꾼다 (기록은 남는다)
+#
+# 규칙
+#   - 이미 배포된 줄은 지우지 않는다. 동의 기록이 이 줄을 가리킨다
+#   - 이미 배포된 줄의 kind·file은 바꾸지 않는다(바꿔도 반영되지 않는다). 의미가 바뀌면 새 버전으로
+#   - 한 약관(code)은 한 버전만 active: true
+#   - kind: REQUIRED(동의 필요, 체크박스) / VIEW_ONLY(보기만)
+#
+terms:
+  documents:
+    - code: SERVICE
+      title: 서비스 이용약관
+      version: v1
+      kind: REQUIRED
+      active: true
+      file: service-v1.md
+      displayOrder: 1
+    - code: AGE
+      title: 만 14세 이상 확인
+      version: v1
+      kind: REQUIRED
+      active: true
+      file: age-v1.md
+      displayOrder: 2
+    - code: POLICY
+      title: 개인정보 처리방침
+      version: v1
+      kind: VIEW_ONLY
+      active: true
+      file: policy-v1.md
+      displayOrder: 3

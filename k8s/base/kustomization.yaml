@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# DB는 RDS로 나갔다. postgres/ 디렉터리는 NHN 롤백 대비로 남겨두되 배포 대상에서 제외한다.
+# (스키마 초기화 SQL은 RDS에 수동으로 1회 실행 — docs/infra/aws-deploy-runbook.md 9단계)
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  - rabbitmq/deployment.yaml
+  - rabbitmq/service.yaml
+  - gateway-service/deployment.yaml
+  - gateway-service/service.yaml
+  - gateway-service/ingress.yaml
+  - user-service/deployment.yaml
+  - user-service/service.yaml
+  - map-service/deployment.yaml
+  - map-service/service.yaml
+  - place-service/deployment.yaml
+  - place-service/service.yaml
+# Secret은 값이 민감하므로 여기 포함하지 않고 별도로 apply 한다 (secrets/ 참고).

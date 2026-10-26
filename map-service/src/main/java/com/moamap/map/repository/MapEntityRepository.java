@@ -1,0 +1,112 @@
+package com.moamap.map.repository;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import com.moamap.map.entity.MapEntity;
+import com.moamap.map.entity.MapType;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+
+public interface MapEntityRepository extends JpaRepository<MapEntity, Long> {
+
+    /** 나가기·방장 위임처럼 같은 지도의 참여자를 동시에 바꾸는 작업을 한 줄로 세운다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from MapEntity m where m.id = :id")
+    Optional<MapEntity> findByIdForUpdate(@Param("id") Long id);
+
+    Page<MapEntity> findByType(MapType type, Pageable pageable);
+
+    @Query("select distinct m from MapEntity m join m.tags t where m.type = :type and t = :tag")
+    Page<MapEntity> findByTypeAndTag(@Param("type") MapType type, @Param("tag") String tag, Pageable pageable);
+
+    /**
+     * 모음 탭 목록. 사용자가 지정한 순서(MapMember.sortOrder)를 먼저 따르고, 아직 지정하지 않은 지도는 뒤에 최신순으로 붙인다.
+     *
+     * 정렬 기준이 MapMember에 있어 조인이 필요하다. 정렬을 쿼리에 고정하므로 Pageable의 Sort는 비워서 넘겨야
+     * Spring Data가 order by를 덧붙이지 않는다.
+     * 내 역할도 같은 행에서 꺼낸다. 따로 조회하면 그 사이 탈퇴가 끼어들어 역할이 비는 행이 생길 수 있다.
+     */
+    @Query(value = "select new com.moamap.map.repository.JoinedMapRow(m, mm.role) "
+        + "from MapEntity m join MapMember mm on mm.mapId = m.id "
+        + "where mm.userId = :userId and m.type in :types "
+        + "order by mm.sortOrder asc nulls last, m.createdAt desc, m.id desc",
+        countQuery = "select count(mm) from MapMember mm join MapEntity m on mm.mapId = m.id "
+            + "where mm.userId = :userId and m.type in :types")
+    Page<JoinedMapRow> findJoinedByTypesInMyOrder(
+        @Param("userId") Long userId, @Param("types") Collection<MapType> types, Pageable pageable);
+
+    /**
+     * 공개 지도(커뮤니티·공식)를 이름/설명/태그로 검색한다. PRIVATE은 초대 코드로만 들어가는 지도라 제외한다.
+     *
+     * 태그 컬렉션을 조인하므로 distinct가 필요하고, 파생 count 쿼리는 이 중복을 그대로 세어
+     * totalElements를 부풀린다. countQuery를 직접 준다.
+     */
+    @Query(
+        value = "select distinct m from MapEntity m left join m.tags t "
+            + "where m.type in :types "
+            + "and (lower(m.name) like :keyword escape '\\' "
+            + "or lower(m.description) like :keyword escape '\\' "
+            + "or t like :keyword escape '\\')",
+        countQuery = "select count(distinct m) from MapEntity m left join m.tags t "
+            + "where m.type in :types "
+            + "and (lower(m.name) like :keyword escape '\\' "
+            + "or lower(m.description) like :keyword escape '\\' "
+            + "or t like :keyword escape '\\')"
+    )
+    Page<MapEntity> search(@Param("types") Collection<MapType> types,
+                           @Param("keyword") String keyword,
+                           Pageable pageable);
+
+    Optional<MapEntity> findByInviteCode(String inviteCode);
+
+    boolean existsByInviteCode(String inviteCode);
+
+    /**
+     * 추천 후보의 id를 관심 태그와 많이 겹치는 순으로 뽑는다.
+     *
+     * 태그를 함께 조회하지 않고 id만 먼저 추리는 이유는, 컬렉션 fetch join과 페이징을 같이 쓰면
+     * Hibernate가 전체를 메모리로 올린 뒤 잘라내기 때문이다. id로 범위를 좁힌 뒤 별도 조회로 태그를 채운다.
+     */
+    @Query("select m.id from MapEntity m join m.tags t "
+        + "where m.type = :type and t in :tags "
+        + "group by m.id, m.memberCount, m.createdAt "
+        + "order by count(t) desc, m.memberCount desc, m.createdAt desc")
+    List<Long> findCandidateIdsByTags(@Param("type") MapType type,
+                                      @Param("tags") Collection<String> tags,
+                                      Pageable pageable);
+
+    /**
+     * 관심 태그가 없거나 후보가 모자랄 때 채워 넣을 인기 지도 id.
+     */
+    @Query("select m.id from MapEntity m where m.type = :type "
+        + "order by m.memberCount desc, m.createdAt desc")
+    List<Long> findPopularIds(@Param("type") MapType type, Pageable pageable);
+
+    /**
+     * 점수 계산에 태그가 필요하므로 fetch join으로 함께 읽어 N+1을 막는다.
+     */
+    @Query("select distinct m from MapEntity m left join fetch m.tags where m.id in :ids")
+    List<MapEntity> findAllWithTagsByIdIn(@Param("ids") Collection<Long> ids);
+    boolean existsByOwnerIdAndPersonalIsTrue(Long ownerId);
+
+    // 엔티티를 로드해 setter를 쓰지 않고 벌크 UPDATE로 카운트 컬럼만 갱신한다.
+    // 리스너가 지도 수정/멤버 가입과 동시에 실행돼도 다른 필드를 되돌릴 위험이 없다(청사진 3-3(나)).
+    @Modifying(clearAutomatically = true)
+    @Query("update MapEntity m set m.placeCount = :placeCount where m.id = :mapId")
+    int updatePlaceCount(@Param("mapId") Long mapId, @Param("placeCount") long placeCount);
+
+    // 공식 지도는 별도 키 없이 init.sql 시드 이름으로만 구분된다. 호출부(동기화 배치)가 트랜잭션 없이 돌아 여기서 연다.
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("update MapEntity m set m.placeCount = :placeCount "
+        + "where m.type = com.moamap.map.entity.MapType.OFFICIAL and m.name = :name")
+    int updateOfficialPlaceCount(@Param("name") String name, @Param("placeCount") long placeCount);
+}

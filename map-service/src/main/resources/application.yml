@@ -1,0 +1,144 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: map-service
+  datasource:
+    # 기본값은 로컬 개발용. 비밀정보는 커밋 금지 — 실제 값은 환경변수로 주입한다.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/moamap}
+    username: ${DB_USERNAME:moamap}
+    password: ${DB_PASSWORD:moamap}
+  jpa:
+    hibernate:
+      # ponytail: dev 편의용 update. 스키마 안정화되면 Flyway 마이그레이션으로 이관.
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    # sql.init(seed data)가 Hibernate의 테이블 생성 이후에 돌게 순서를 미룬다.
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        default_schema: map_service
+  sql:
+    init:
+      # postgres 같은 외부 DB는 기본적으로 자동 실행 안 됨 — 켜준다.
+      mode: always
+      data-locations: classpath:db/init.sql
+
+  task:
+    scheduling:
+      pool:
+        # 화장실 동기화(수 시간)와 혼잡도 수집(5분 주기)이 기본 풀(size=1)을 공유하면
+        # 화장실 배치가 도는 동안 혼잡도 수집이 멈춘다 — 각자 스레드를 쓰도록 늘린다.
+        size: 2
+
+  http:
+    client:
+      # 외부·내부 HTTP 호출 타임아웃. 상대가 멈췄을 때 요청 스레드가 오래 붙잡히지 않도록 상한을 둔다.
+      connect-timeout: 2s
+      read-timeout: 3s
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:moamap}
+    password: ${RABBITMQ_PASSWORD:moamap}
+    listener:
+      simple:
+        concurrency: 1 # 절대값 전송이라 순서가 뒤바뀌면 옛 값이 덮어쓸 수 있음 — 큐 내 순서 보존을 위해 동시성 1 고정
+        default-requeue-rejected: false # 실패 메시지는 무한 재큐 대신 DLQ로
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # 브로커가 잠깐 죽어도 map-service는 정상 동작한다(카운트 갱신만 지연) — health에 반영하지 않는다.
+    rabbit:
+      enabled: false
+
+seoul:
+  api:
+    # 서울 열린데이터광장. KEY는 절대 커밋 금지 — 환경변수로 주입.
+    base-url: ${SEOUL_API_BASE_URL:http://openapi.seoul.go.kr:8088}
+    key: ${SEOUL_API_KEY:}
+    service: citydata_ppltn
+
+restroom:
+  api:
+    # 행정안전부 공중화장실 정보 조회 서비스. 서비스키는 절대 커밋 금지 — 환경변수로 주입.
+    # 일일 트래픽 10,000건. 매달 전체 수집은 약 54페이지(53,582건 / 1000, PublicRestroomSyncService.PAGE_SIZE)라 여유 있음.
+    # 데이터는 매일 갱신되지만 2일 전 기준으로 현행화됨.
+    base-url: ${RESTROOM_API_BASE_URL:https://apis.data.go.kr}
+    path: ${RESTROOM_API_PATH:/1741000/public_restroom_info_v2/info_v2}
+    service-key: ${RESTROOM_API_SERVICE_KEY:}
+
+kakao:
+  local:
+    # 카카오 로컬(주소 검색) API. place-service와 동일한 환경변수 이름을 쓴다.
+    rest-api-key: ${KAKAO_REST_API_KEY:}
+    base-url: https://dapi.kakao.com/v2/local/search/address.json
+
+storage:
+  # AWS S3 연동. 자격증명은 설정으로 받지 않는다 — DefaultCredentialsProvider(EC2 인스턴스 프로파일 / ~/.aws)가 찾는다.
+  # bucket이 비어 있으면 발급 빈을 만들지 않는다(ObjectStorageConfig 참고).
+  region: ${OBJECT_STORAGE_REGION:ap-northeast-2}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+  public-base-url: ${OBJECT_STORAGE_PUBLIC_BASE_URL:}
+
+services:
+  user:
+    # 멤버 목록에 닉네임/프로필 이미지를 채우기 위한 user-service 내부 호출 주소.
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
+  place:
+    # 멤버 목록에 등록한 장소 수를 채우기 위한 place-service 내부 호출 주소.
+    base-url: ${PLACE_SERVICE_URL:http://localhost:8082}
+
+map:
+  personal-map:
+    # 가입 시 만들어지는 지도 이름. 문구를 바꿀 때 재배포하지 않아도 되도록 설정으로 뺀다.
+    name: ${PERSONAL_MAP_NAME:나만의 지도}
+  restroom:
+    # 원천이 월 단위로 갱신되므로 매월 1일 04:00
+    sync-cron: ${RESTROOM_SYNC_CRON:0 0 4 1 * *}
+  congestion:
+    # 서울시 citydata_ppltn 데이터 갱신 주기(5분)에 맞춤
+    sync-interval-ms: ${CONGESTION_SYNC_INTERVAL_MS:300000}
+  recommendation:
+    # 홈 화면 추천 지도. 값을 바꿔가며 추천 결과를 조정할 수 있게 코드 밖으로 뺐다.
+    default-size: 5
+    max-size: 20
+    # 점수를 매길 후보 상한. 지도가 늘어도 계산량이 이 선에서 유지된다.
+    candidate-limit: 300
+    weights:
+      # 합이 1이 되도록 유지한다. 관심 프로필이 비면 아래 cold-start 값을 대신 쓴다.
+      tag: 0.55
+      popularity: 0.25
+      freshness: 0.20
+      # 참여 이력이 없을 때(콜드스타트) 쓰는 가중치. tag는 항상 0이라 나머지 둘의 합이 1이다.
+      # "지금 많이 찾는 지도예요" 문구에 맞게 인기도가 결과를 주도하고, 신선도는 오래된 지도를 밀어내는 역할만 한다.
+      cold-start:
+        popularity: 0.80
+        freshness: 0.20
+    diversity:
+      # 결과가 한 사람의 지도나 한 주제로 쏠리지 않게 하는 보정값
+      max-per-owner: 1
+      tag-overlap-penalty: 0.15
+    profile:
+      # 직접 만들거나 운영하는 지도에 주는 가중
+      manager-role-weight: 1.5
+      # 초대로 들어간 프라이빗 지도는 "내가 고른 컨셉"이 아니므로 신호를 약하게 본다
+      invited-member-weight: 0.4
+      # 참여 시점이 오래될수록 영향력이 줄어드는 기준(일)
+      recency-half-life-days: 60
+      # 지도 생성일이 오래될수록 신선도가 낮아지는 기준(일)
+      freshness-half-life-days: 90

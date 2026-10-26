@@ -1,0 +1,73 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dev
+resources:
+  - ../../base
+# base/namespace.yaml은 공용 이름(moamap)으로 고정돼 있어서, dev 전용으로 이름만 덮어씀.
+# 유동인구 혼잡도 동기화 주기 — 테스트 중 API 호출량을 줄이려고 1시간으로 늘림 (기본값은 5분).
+#
+# PUBLIC_GATEWAY_URL — Swagger servers용 gateway 외부 주소. 비밀값 아님.
+#   AWS에서는 worker-1에 붙은 Elastic IP다. terraform -chdir=infra/aws output -raw ingress_eip
+#   도메인 절체 후에는 https://dev-api.moamap.co.kr 로 바꾼다.
+#
+# DEV_LOGIN_ENABLED — 개발용 카카오 로그인 콜백 활성화. dev에서만 켠다(운영 오버레이에는 넣지 않음).
+patches:
+  - target:
+      kind: Namespace
+      name: moamap
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: dev
+  - target:
+      kind: ConfigMap
+      name: moamap-config
+    patch: |-
+      - op: add
+        path: /data/CONGESTION_SYNC_INTERVAL_MS
+        value: "3600000"
+      - op: add
+        path: /data/PUBLIC_GATEWAY_URL
+        value: "http://43.202.231.196"
+      - op: add
+        path: /data/DEV_LOGIN_ENABLED
+        value: "true"
+      - op: add
+        path: /data/KAKAO_REDIRECT_URI
+        value: "http://43.202.231.196/api/v1/auth/test/kakao/callback"
+      # Google 로그인. 허용할 client ID를 쉼표로 구분한다. iOS, Web(Android 토큰의 aud) 순.
+      - op: replace
+        path: /data/GOOGLE_ENABLED
+        value: "true"
+      - op: replace
+        path: /data/GOOGLE_CLIENT_IDS
+        value: "481427766287-airpbbn9mt841nrl8iplhii4lj4s9h4d.apps.googleusercontent.com,481427766287-818l56rttj5fvc7209kc0e5rdsebdqvn.apps.googleusercontent.com"
+      # Apple 로그인. client-id는 iOS 앱 Bundle ID. 개인키·암호화 키는 Secret(moamap-secrets)에 있다.
+      # Secret에 APPLE_PRIVATE_KEY, APPLE_CREDENTIAL_KEY_V1이 없으면 user-service가 기동하지 않는다.
+      - op: add
+        path: /data/APPLE_ENABLED
+        value: "true"
+      - op: add
+        path: /data/APPLE_CLIENT_ID
+        value: "com.moamap.MoaMap"
+      - op: add
+        path: /data/APPLE_TEAM_ID
+        value: "A4BC8YG62N"
+      - op: add
+        path: /data/APPLE_KEY_ID
+        value: "KF57XKT8QM"
+      # DB는 클러스터 내 postgres 파드가 아니라 RDS다.
+      - op: replace
+        path: /data/DB_URL
+        value: "jdbc:postgresql://moamap-postgres.cxyguouuy4x2.ap-northeast-2.rds.amazonaws.com:5432/moamap"
+# 개발 환경 조정은 여기서 한다. GitHub Actions가 빌드 후 newTag를 커밋 SHA로 갱신함.
+# base의 image가 이미 ECR 경로라 newName은 불필요, newTag(커밋 SHA)만 갱신한다.
+images:
+  - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/gateway-service
+    newTag: 409f7a52f9cec2eced09f971497ad262d296140e
+  - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/user-service
+    newTag: 409f7a52f9cec2eced09f971497ad262d296140e
+  - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/map-service
+    newTag: 409f7a52f9cec2eced09f971497ad262d296140e
+  - name: 189923011357.dkr.ecr.ap-northeast-2.amazonaws.com/moamap/place-service
+    newTag: 409f7a52f9cec2eced09f971497ad262d296140e

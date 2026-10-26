@@ -1,0 +1,25 @@
+# cp terraform.tfvars.example terraform.tfvars 후 값 채우기. terraform.tfvars는 커밋 금지.
+
+account_id = "123456789012" # 팀 계정(B)
+
+budget_alert_emails = ["team@example.com"]
+# monthly_budget_usd = 100
+
+envs = {
+  prod = {
+    instance_type     = "t4g.medium"
+    spot              = false
+    root_volume_size  = 30
+    api_domain        = "api.moamap.co.kr"
+    photo_bucket_name = "moamap-prod-photos-xxxx"
+  }
+  dev = {
+    instance_type     = "t4g.medium"
+    spot              = true
+    root_volume_size  = 30
+    api_domain        = "api-dev.moamap.co.kr"
+    photo_bucket_name = "moamap-dev-photos-xxxx"
+  }
+}
+
+# db_deletion_protection = true   # 실데이터가 들어간 뒤 켠다

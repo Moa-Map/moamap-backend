@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+  namespace: moamap
+spec:
+  # 외부 노출은 traefik Ingress가 맡는다. 이 Service는 클러스터 내부용.
+  type: ClusterIP
+  selector:
+    app: gateway-service
+  ports:
+    - port: 8080
+      targetPort: 8080

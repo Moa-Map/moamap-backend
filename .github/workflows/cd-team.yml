@@ -1,0 +1,123 @@
+name: CD (team account)
+
+# 팀 계정(B) EC2 배포. develop → dev 서버, main → prod 서버(GitHub Environment "production" 승인 후).
+# 이전 계정(A)의 cd-dev.yml과 동시에 돈다 — A 정리 때 cd-dev.yml·cd-prod.yml을 지운다.
+#
+# GitHub Variables (Settings → Secrets and variables → Actions → Variables), 값은 terraform output:
+#   TEAM_AWS_CI_ROLE_ARN            ci_role_arn           (빌드 + dev 배포)
+#   TEAM_AWS_DEPLOY_PROD_ROLE_ARN   deploy_prod_role_arn  (environment production에서만 맡을 수 있음)
+#   TEAM_ECR_REGISTRY       ecr_registry
+#   TEAM_DEV_INSTANCE_ID    server_instance_ids.dev
+#   TEAM_PROD_INSTANCE_ID   server_instance_ids.prod
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# 배포 대상 서버 기준으로 묶는다. dev로 가는 브랜치가 여러 개여도 한 번에 하나만 배포한다.
+concurrency:
+  group: cd-team-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: ${{ vars.TEAM_ECR_REGISTRY }}
+
+jobs:
+  build-push:
+    name: build & push (${{ matrix.service }})
+    # 서버가 Graviton(arm64). arm64 러너에서 네이티브로 빌드한다(public 저장소 무료, QEMU 에뮬레이션보다 수 배 빠름).
+    # private 전환 시 arm64 러너가 유료가 될 수 있다 → ubuntu-latest + docker/setup-qemu-action으로 되돌린다.
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway-service, user-service, map-service, place-service, notification-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TEAM_AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      # 태그가 IMMUTABLE이라 같은 SHA를 다시 push하면 실패한다(재실행, develop→main 같은 커밋).
+      - name: Check existing image
+        id: exists
+        run: |
+          if aws ecr describe-images --repository-name moamap/${{ matrix.service }} \
+               --image-ids imageTag=${{ github.sha }} >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          build-args: SERVICE=${{ matrix.service }}
+          # main 빌드에는 prod- 태그도 단다 → ECR 수명 주기 규칙이 prod 이미지를 따로 보관한다.
+          tags: |
+            ${{ env.ECR_REGISTRY }}/moamap/${{ matrix.service }}:${{ github.sha }}
+            ${{ github.ref_name == 'main' && format('{0}/moamap/{1}:prod-{2}', env.ECR_REGISTRY, matrix.service, github.sha) || '' }}
+          push: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      TARGET_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      INSTANCE_ID: ${{ github.ref_name == 'main' && vars.TEAM_PROD_INSTANCE_ID || vars.TEAM_DEV_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # prod 배포 역할은 environment production에서만 맡을 수 있다(IAM 신뢰 정책). 승인 없이 prod로 명령을 보낼 길이 없다.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.ref_name == 'main' && vars.TEAM_AWS_DEPLOY_PROD_ROLE_ARN || vars.TEAM_AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # deploy/ + DB 스키마 초기화 SQL을 묶어 명령에 실어 보낸다(수 KB). 서버에 git·별도 버킷이 필요 없다.
+      - name: Send deploy command
+        id: send
+        run: |
+          mkdir bundle
+          cp -r deploy/. bundle/
+          cp -r docker/postgres/init bundle/postgres-init
+          B64=$(tar czf - -C bundle . | base64 -w0)
+          CMD="set -e; mkdir -p /opt/moamap && cd /opt/moamap && echo $B64 | base64 -d | tar xzf - && bash deploy.sh $TARGET_ENV ${{ github.sha }} $ECR_REGISTRY"
+          ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $TARGET_ENV ${GITHUB_SHA::7}" \
+            --parameters "$(jq -n --arg c "$CMD" '{commands: [$c], executionTimeout: ["900"]}')" \
+            --query Command.CommandId --output text)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for deploy
+        run: |
+          for _ in $(seq 1 120); do
+            STATUS=$(aws ssm get-command-invocation --command-id ${{ steps.send.outputs.id }} \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Success) break ;;
+              Pending|InProgress|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+          aws ssm get-command-invocation --command-id ${{ steps.send.outputs.id }} \
+            --instance-id "$INSTANCE_ID" --query '[StandardOutputContent, StandardErrorContent]' --output text
+          test "$STATUS" = Success

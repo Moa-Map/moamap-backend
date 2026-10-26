@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: moamap-config
+  namespace: moamap
+# 비밀이 아닌 설정만. 비밀(비번·키·JWT_SECRET)은 Secret(app-secrets)에 둔다.
+data:
+  # JVM 기본 시간대. 이미지 기본값은 UTC라 LocalDateTime.now()·Auditing·DB 세션 시간대가 UTC가 된다.
+  TZ: "Asia/Seoul"
+  # 서비스 간 내부 호출 주소 (k8s 서비스 DNS)
+  USER_SERVICE_URL: "http://user-service:8081"
+  MAP_SERVICE_URL: "http://map-service:8083"
+  PLACE_SERVICE_URL: "http://place-service:8082"
+  # DB/Redis 호스트 — 개발/테스트 임시로 클러스터 내 postgres/redis Pod 사용.
+  # 운영 환경은 관리형 DB로 교체 예정 (prod 네임스페이스 분리 시 정리).
+  DB_URL: "jdbc:postgresql://postgres:5432/moamap"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  # 개발용 카카오 로그인 콜백(dev-login) 리다이렉트 주소. dev-login.enabled=true일 때만 쓰인다.
+  KAKAO_REDIRECT_URI: "REPLACE_ME_kakao_redirect_uri"
+  # Google 로그인. client ID는 앱 바이너리에 공개되는 값이라 Secret이 아니라 ConfigMap에 둔다.
+  GOOGLE_ENABLED: "false"
+  GOOGLE_CLIENT_IDS: ""

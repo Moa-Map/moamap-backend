@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: moamap-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Moa-Map/moamap-backend.git
+    targetRevision: main
+    path: k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    # 자동 동기화 안 함 — 배포는 ArgoCD UI/CLI에서 수동 승인.

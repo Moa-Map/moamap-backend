@@ -1,0 +1,64 @@
+plugins {
+	id 'org.springframework.boot' version '3.5.6' apply false
+	id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+def springCloudVersion = '2025.0.0'
+def springDotenvVersion = '5.1.0'
+
+allprojects {
+	group = 'com.moamap'
+	version = '0.0.1-SNAPSHOT'
+
+	repositories {
+		mavenCentral()
+	}
+}
+
+subprojects {
+	apply plugin: 'java'
+	apply plugin: 'io.spring.dependency-management'
+
+	java {
+		toolchain {
+			languageVersion = JavaLanguageVersion.of(17)
+		}
+	}
+
+	configurations {
+		compileOnly {
+			extendsFrom annotationProcessor
+		}
+	}
+
+	dependencyManagement {
+		imports {
+			mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+			mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+			mavenBom "me.paulschwarz:spring-dotenv-bom:${springDotenvVersion}"
+		}
+	}
+
+	dependencies {
+		compileOnly 'org.projectlombok:lombok'
+		annotationProcessor 'org.projectlombok:lombok'
+
+		testImplementation 'org.springframework.boot:spring-boot-starter-test'
+		testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	}
+
+	tasks.named('test') {
+		useJUnitPlatform()
+	}
+
+	// 부트 서비스 공통: 로컬 개발 시 루트 .env 파일에서 환경변수를 읽는다.
+	plugins.withId('org.springframework.boot') {
+		dependencies {
+			developmentOnly 'me.paulschwarz:springboot3-dotenv'
+		}
+
+		tasks.named('bootRun') {
+			workingDir = rootProject.projectDir
+		}
+	}
+}

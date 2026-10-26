@@ -1,0 +1,40 @@
+package com.moamap.place.exception;
+
+import com.moamap.common.exception.ErrorCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * place-service 도메인 에러 코드.
+ */
+@Getter
+@RequiredArgsConstructor
+public enum PlaceErrorCode implements ErrorCode {
+
+    PLACE_NOT_FOUND("PLACE_001", "장소를 찾을 수 없습니다.", 404),
+    NOT_MAP_MEMBER("PLACE_002", "해당 지도의 멤버가 아닙니다.", 403),
+    OFFICIAL_MAP_NOT_REGISTRABLE("PLACE_003", "공식 지도에는 장소를 추가할 수 없습니다.", 403),
+    NOT_PLACE_OWNER("PLACE_004", "해당 장소에 대한 권한이 없습니다.", 403),
+    NOT_REVIEWER("PLACE_005", "방장/관리자만 접근할 수 있습니다.", 403),
+    ALREADY_PROCESSED("PLACE_006", "이미 처리된 장소입니다.", 400),
+    MAP_NOT_FOUND("PLACE_007", "지도를 찾을 수 없습니다.", 404),
+    MAP_SERVICE_UNAVAILABLE("PLACE_008", "지도 서비스와 통신할 수 없습니다. 잠시 후 다시 시도해 주세요.", 503),
+    GEMINI_EXTRACTION_FAILED("PLACE_009", "인스타그램 설명글에서 장소를 추출하지 못했습니다. 잠시 후 다시 시도해 주세요.", 503),
+    DUPLICATE_PLACE("PLACE_010", "해당 지도에 이미 등록된 장소입니다.", 409),
+    COMMENT_NOT_FOUND("PLACE_011", "댓글을 찾을 수 없습니다.", 404),
+    NOT_COMMENT_OWNER("PLACE_012", "본인이 작성한 댓글만 수정/삭제할 수 있습니다.", 403),
+    INVALID_FILE_TYPE("PLACE_013", "허용되지 않은 파일 형식입니다.", 400),
+    FILE_SIZE_EXCEEDED("PLACE_014", "파일 크기가 허용치를 초과했습니다.", 400),
+    UNSUPPORTED_SHARE_LINK("PLACE_015", "지원하지 않는 공유 링크입니다. 네이버지도·카카오맵·구글맵의 리스트 공유 링크를 넣어주세요.", 400),
+    SHARE_LINK_EXTRACTION_FAILED("PLACE_016", "공유 링크에서 장소 목록을 가져오지 못했습니다. 공개된 리스트인지 확인해 주세요.", 502),
+    SHARE_LIST_STRUCTURE_CHANGED("PLACE_017", "공유 링크의 응답 형식이 변경되어 장소를 읽지 못했습니다.", 502),
+    OFFICIAL_MAP_NO_ACTIVITY_LOG("PLACE_018", "공식 지도는 활동 내역을 제공하지 않습니다.", 403),
+    ALREADY_REPORTED_COMMENT("PLACE_019", "이미 신고한 댓글입니다.", 409),
+    CANNOT_REPORT_OWN_COMMENT("PLACE_020", "본인이 작성한 댓글은 신고할 수 없습니다.", 400),
+    CANNOT_REPORT_OWN_PLACE("PLACE_021", "본인이 등록한 장소는 신고할 수 없습니다.", 400),
+    ALREADY_REPORTED_PLACE("PLACE_022", "이미 신고한 장소입니다.", 409);
+
+    private final String code;
+    private final String message;
+    private final int status;
+}

@@ -1,0 +1,385 @@
+package com.moamap.map.service;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import com.moamap.common.exception.BusinessException;
+import com.moamap.map.dto.MapCreateRequest;
+import com.moamap.map.dto.MapDetailResponse;
+import com.moamap.map.dto.MapMemberListResponse;
+import com.moamap.map.dto.MapMemberRoleResponse;
+import com.moamap.map.dto.MapMemberSummaryResponse;
+import com.moamap.map.dto.MapMemberRoleUpdateRequest;
+import com.moamap.map.dto.MapMemberRoleUpdateResponse;
+import com.moamap.map.dto.MapOrderUpdateRequest;
+import com.moamap.map.dto.MapSort;
+import com.moamap.map.dto.MapSummaryResponse;
+import com.moamap.map.dto.MapUpdateRequest;
+import com.moamap.map.dto.MyMapSummaryResponse;
+import com.moamap.map.entity.MapEntity;
+import com.moamap.map.entity.MapMember;
+import com.moamap.map.entity.MapRole;
+import com.moamap.map.entity.MapType;
+import com.moamap.map.event.ActivitySignal;
+import com.moamap.map.exception.MapErrorCode;
+import com.moamap.map.repository.MapEntityRepository;
+import com.moamap.map.repository.MapMemberRepository;
+import com.moamap.map.place.PlaceClient;
+import com.moamap.map.user.UserClient;
+import com.moamap.map.user.dto.UserProfileResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class MapService {
+
+    private static final int MAX_INVITE_CODE_TRIES = 5;
+    private static final List<MapType> SEARCHABLE_TYPES = List.of(MapType.COMMUNITY);
+
+    private final MapEntityRepository mapRepository;
+    private final MapMemberRepository mapMemberRepository;
+    private final InviteCodeGenerator inviteCodeGenerator;
+    private final UserClient userClient;
+    private final PlaceClient placeClient;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MapOwnerSuccession ownerSuccession;
+
+    @Transactional
+    public MapDetailResponse create(MapCreateRequest request, Long ownerId) {
+        MapType type = request.visibility().toMapType();
+        String inviteCode = (type == MapType.PRIVATE) ? generateUniqueInviteCode() : null;
+
+        MapEntity map = MapEntity.create(
+            request.name(), request.description(), request.imageUrl(),
+            type, ownerId, request.tags(), inviteCode
+        );
+        mapRepository.save(map);
+        mapMemberRepository.save(MapMember.of(map.getId(), ownerId, MapRole.OWNER));
+
+        return assembleDetail(map, ownerId, MapRole.OWNER);
+    }
+
+    public MapDetailResponse getDetail(Long mapId, Long requesterId) {
+        MapEntity map = getMapOrThrow(mapId);
+        MapRole role = roleOf(mapId, requesterId);
+        if (map.isPrivate() && role == MapRole.NONE) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_MEMBER, "프라이빗 지도는 멤버만 조회할 수 있습니다.");
+        }
+        return assembleDetail(map, requesterId, role);
+    }
+
+    public Page<MapSummaryResponse> getCommunityMaps(String tag, MapSort sort, Pageable pageable, Long requesterId) {
+        Pageable sorted = withSort(pageable, sort);
+        Page<MapEntity> maps = (tag == null || tag.isBlank())
+            ? mapRepository.findByType(MapType.COMMUNITY, sorted)
+            : mapRepository.findByTypeAndTag(MapType.COMMUNITY, tag, sorted);
+        return toSummaryPage(maps, requesterId);
+    }
+
+    /**
+     * 커뮤니티 지도를 이름/설명/태그로 검색한다. 로그인하지 않아도 볼 수 있어 requesterId는 null일 수 있다.
+     */
+    public Page<MapSummaryResponse> search(String keyword, MapSort sort, Pageable pageable, Long requesterId) {
+        Page<MapEntity> maps = mapRepository.search(
+            SEARCHABLE_TYPES, toLikePattern(keyword), withSort(pageable, sort));
+        return toSummaryPage(maps, requesterId);
+    }
+
+    /** 사용자가 '%'만 입력해 전체를 긁는 일이 없도록 와일드카드는 이스케이프한다. */
+    private static String toLikePattern(String keyword) {
+        String escaped = keyword.strip()
+            .toLowerCase(Locale.ROOT)
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_");
+        return "%" + escaped + "%";
+    }
+
+    public Page<MapSummaryResponse> getOfficialMaps(Pageable pageable, Long requesterId) {
+        Pageable sorted = withSort(pageable, MapSort.LATEST);
+        Page<MapEntity> maps = mapRepository.findByType(MapType.OFFICIAL, sorted);
+        return toSummaryPage(maps, requesterId);
+    }
+
+    // OFFICIAL을 따로 두면 같은 탭의 sortOrder 번호 공간이 둘로 갈라져 중복이 생기므로 COMMUNITY와 같은 탭으로 묶는다.
+    private static List<MapType> tabTypesOf(MapType type) {
+        return switch (type) {
+            case PRIVATE -> List.of(MapType.PRIVATE);
+            case COMMUNITY, OFFICIAL -> List.of(MapType.COMMUNITY, MapType.OFFICIAL);
+        };
+    }
+
+    public Page<MyMapSummaryResponse> getMyMaps(MapType type, Pageable pageable, Long requesterId) {
+        // 정렬은 쿼리가 고정한다(내 순서 → 최신순). Sort를 실어 보내면 order by가 중복으로 붙는다.
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return mapRepository.findJoinedByTypesInMyOrder(requesterId, tabTypesOf(type), unsorted)
+            .map(MyMapSummaryResponse::from);
+    }
+
+    /**
+     * 모음 탭 순서를 요청받은 순서대로 다시 매긴다(0부터).
+     *
+     * 보낸 목록이 해당 탭의 내 참여 목록과 정확히 일치할 때만 반영한다. 하나라도 빠지거나 남거나 중복되면
+     * 전체를 거부한다 — 일부만 반영되면 화면과 서버의 순서가 어긋난 채로 남기 때문이다.
+     * 남의 지도 ID를 섞어 보내도 집합이 달라져 같은 400으로 막히므로, 응답으로 남의 멤버십을 떠볼 수 없다.
+     * 커뮤니티 탭은 COMMUNITY+OFFICIAL을 함께 다루므로 type=OFFICIAL도 같은 집합으로 처리한다.
+     */
+    @Transactional
+    public void updateMyMapOrder(Long requesterId, MapOrderUpdateRequest request) {
+        List<Long> mapIds = request.mapIds();
+        Map<Long, MapMember> myMemberships = mapMemberRepository
+            .findByUserIdAndMapTypeIn(requesterId, tabTypesOf(request.type())).stream()
+            .collect(Collectors.toMap(MapMember::getMapId, member -> member));
+
+        Set<Long> requested = Set.copyOf(mapIds);
+        if (requested.size() != mapIds.size() || !requested.equals(myMemberships.keySet())) {
+            throw new BusinessException(MapErrorCode.INVALID_MAP_ORDER);
+        }
+
+        for (int order = 0; order < mapIds.size(); order++) {
+            myMemberships.get(mapIds.get(order)).changeSortOrder(order);
+        }
+    }
+
+    @Transactional
+    public MapDetailResponse update(Long mapId, Long requesterId, MapUpdateRequest request) {
+        MapEntity map = getMapOrThrow(mapId);
+        MapRole role = roleOf(mapId, requesterId);
+        requireManagePermission(role);
+        map.update(request.name(), request.description(), request.imageUrl(), request.tags());
+        return assembleDetail(map, requesterId, role);
+    }
+
+    @Transactional
+    public void delete(Long mapId, Long requesterId) {
+        MapEntity map = getMapOrThrow(mapId);
+        if (!map.isOwnedBy(requesterId)) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_OWNER);
+        }
+        if (map.isPersonal()) {
+            throw new BusinessException(MapErrorCode.CANNOT_DELETE_PERSONAL_MAP);
+        }
+        mapMemberRepository.deleteByMapId(mapId);
+        mapRepository.delete(map);
+    }
+
+    /**
+     * 가입한 사용자에게 나만의 지도를 하나 만들어준다. 이미 있으면 아무것도 하지 않는다.
+     *
+     * 메시지는 최소 한 번 배달되므로 같은 이벤트가 다시 올 수 있다. 사전 조회로 흔한 중복을 싸게 걸러내되,
+     * 동시에 처리되는 경우까지는 막지 못하므로 DB 유니크 제약을 최종 방어선으로 둔다.
+     */
+    @Transactional
+    public void createPersonalMapIfAbsent(Long userId, String mapName) {
+        if (mapRepository.existsByOwnerIdAndPersonalIsTrue(userId)) {
+            return;
+        }
+        try {
+            MapEntity map = mapRepository.saveAndFlush(MapEntity.createPersonal(userId, mapName));
+            mapMemberRepository.save(MapMember.of(map.getId(), userId, MapRole.OWNER));
+        } catch (DataIntegrityViolationException e) {
+            // 동시 처리로 이미 만들어졌다. 목표 상태(지도가 하나 존재)는 달성됐으므로 정상 종료한다.
+            log.info("나만의 지도가 이미 생성되어 있어 건너뛴다. userId={}", userId);
+        }
+    }
+
+    @Transactional
+    public MapDetailResponse joinCommunity(Long mapId, Long userId) {
+        MapEntity map = getMapOrThrow(mapId);
+        if (map.getType() == MapType.PRIVATE) {
+            throw new BusinessException(MapErrorCode.NOT_COMMUNITY_MAP);
+        }
+        addMember(map, userId);
+        return assembleDetail(map, userId, MapRole.MEMBER);
+    }
+
+    @Transactional
+    public MapDetailResponse joinByInviteCode(String inviteCode, Long userId) {
+        MapEntity map = mapRepository.findByInviteCode(inviteCode)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.INVALID_INVITE_CODE));
+        addMember(map, userId);
+        return assembleDetail(map, userId, MapRole.MEMBER);
+    }
+
+    /**
+     * 지도에서 나간다. 방장이면 다음 사람에게 방장을 넘기고 나간다(회원 탈퇴와 같은 규칙, MapOwnerSuccession).
+     *
+     * 탈퇴와 달리 쓴 글·댓글·장소는 그대로 남기고, 넘길 사람이 없으면 지도를 지우지 않고 막는다.
+     * 나가기는 실수로 누를 수 있어, 되돌릴 수 없는 지도 삭제는 직접 하도록 한다.
+     *
+     * 지도 행을 잠가, 방장과 후계자가 동시에 나가도 지도에 없는 사람이 방장이 되지 않게 한다.
+     *
+     * @return 방장이 나가서 새로 방장이 된 사람의 ID. 방장이 아니었으면 비어 있다
+     */
+    @Transactional
+    public Optional<Long> leave(Long mapId, Long userId) {
+        MapEntity map = mapRepository.findByIdForUpdate(mapId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_NOT_FOUND));
+        MapMember member = mapMemberRepository.findByMapIdAndUserId(mapId, userId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.NOT_MAP_MEMBER));
+
+        if (member.getRole() != MapRole.OWNER) {
+            mapMemberRepository.delete(member);
+            map.decreaseMemberCount();
+            return Optional.empty();
+        }
+        if (map.isPersonal()) {
+            throw new BusinessException(MapErrorCode.CANNOT_LEAVE_PERSONAL_MAP);
+        }
+        MapMember newOwner = ownerSuccession.handOver(map, member)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.SOLE_OWNER_CANNOT_LEAVE));
+        log.info("방장이 지도를 나가 방장을 넘겼습니다. mapId={}, newOwnerId={}", mapId, newOwner.getUserId());
+        return Optional.of(newOwner.getUserId());
+    }
+
+    /**
+     * 지도에 참여 중인 멤버 전체를 역할 순(방장 → 관리자 → 멤버)으로 조회한다.
+     *
+     * 닉네임·프로필 이미지는 user-service에서, 등록한 장소 수는 place-service에서 한 번에 받아와 채운다.
+     * 멤버가 몇 명이든 각 호출은 1회다.
+     * 조회에 실패하면 해당 값만 비운 채 목록을 그대로 내려보낸다 — 표시용 정보 때문에 화면 전체가 막히면 안 된다.
+     */
+    public MapMemberListResponse getMembers(Long mapId, Long requesterId) {
+        // 없는 지도면 404가 먼저 나가야 한다.
+        getMapOrThrow(mapId);
+        requireMember(mapId, requesterId);
+
+        List<MapMember> members = mapMemberRepository.findByMapId(mapId);
+        List<Long> userIds = members.stream().map(MapMember::getUserId).toList();
+        Map<Long, UserProfileResponse> profiles = userClient.findProfiles(userIds);
+        Map<Long, Long> placeCounts = placeClient.countByCreator(mapId, userIds);
+
+        List<MapMemberSummaryResponse> summaries = members.stream()
+            // MapRole은 OWNER, ADMIN, MEMBER 순으로 선언돼 있어 enum 순서가 곧 화면 노출 순서다.
+            .sorted(Comparator.comparing(MapMember::getRole))
+            .map(member -> MapMemberSummaryResponse.of(
+                member, profiles.get(member.getUserId()), placeCounts.get(member.getUserId())))
+            .toList();
+        return MapMemberListResponse.of(summaries);
+    }
+
+    /**
+     * 멤버 역할 조회. 미참여 시 role=NONE으로 응답한다. (place-service 승인 판단용)
+     */
+    public MapMemberRoleResponse getMemberRole(Long mapId, Long userId) {
+        MapEntity map = getMapOrThrow(mapId);
+        return MapMemberRoleResponse.of(map.getType(), roleOf(mapId, userId));
+    }
+
+    @Transactional
+    public MapMemberRoleUpdateResponse changeMemberRole(
+        Long mapId, Long requesterId, Long targetUserId, MapMemberRoleUpdateRequest request
+    ) {
+        MapRole requestedRole = request.role();
+        if (requestedRole != MapRole.ADMIN && requestedRole != MapRole.MEMBER) {
+            throw new BusinessException(MapErrorCode.INVALID_ROLE_ASSIGNMENT);
+        }
+
+        MapEntity map = getMapOrThrow(mapId);
+        if (!map.isOwnedBy(requesterId)) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_OWNER);
+        }
+
+        MapMember target = mapMemberRepository.findByMapIdAndUserId(mapId, targetUserId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.TARGET_NOT_MAP_MEMBER));
+        if (target.getRole() == MapRole.OWNER) {
+            throw new BusinessException(MapErrorCode.CANNOT_CHANGE_OWNER_ROLE);
+        }
+
+        if (target.getRole() != requestedRole) {
+            target.changeRole(requestedRole);
+            if (requestedRole == MapRole.ADMIN) {
+                eventPublisher.publishEvent(
+                    new ActivitySignal(ActivitySignal.MAP_ADMIN_ASSIGNED, targetUserId, requesterId, mapId, mapId));
+            }
+        }
+        return MapMemberRoleUpdateResponse.of(mapId, targetUserId, requestedRole);
+    }
+
+    private void addMember(MapEntity map, Long userId) {
+        if (mapMemberRepository.existsByMapIdAndUserId(map.getId(), userId)) {
+            throw new BusinessException(MapErrorCode.ALREADY_JOINED);
+        }
+        mapMemberRepository.save(MapMember.of(map.getId(), userId, MapRole.MEMBER));
+        map.increaseMemberCount();
+    }
+
+    private String generateUniqueInviteCode() {
+        for (int i = 0; i < MAX_INVITE_CODE_TRIES; i++) {
+            String code = inviteCodeGenerator.generate();
+            if (!mapRepository.existsByInviteCode(code)) {
+                return code;
+            }
+        }
+        throw new BusinessException(MapErrorCode.INVITE_CODE_GENERATION_FAILED);
+    }
+
+    private MapDetailResponse assembleDetail(MapEntity map, Long requesterId, MapRole role) {
+        boolean canSeeInviteCode = (role == MapRole.OWNER || role == MapRole.ADMIN);
+        return MapDetailResponse.of(map, role, canSeeInviteCode ? map.getInviteCode() : null);
+    }
+
+    private Page<MapSummaryResponse> toSummaryPage(Page<MapEntity> maps, Long requesterId) {
+        Set<Long> joinedIds = joinedMapIds(requesterId, maps.getContent());
+        return maps.map(map -> MapSummaryResponse.of(map, joinedIds.contains(map.getId())));
+    }
+
+    private Set<Long> joinedMapIds(Long userId, List<MapEntity> maps) {
+        if (userId == null || maps.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> mapIds = maps.stream().map(MapEntity::getId).toList();
+        return mapMemberRepository.findByUserIdAndMapIdIn(userId, mapIds).stream()
+            .map(MapMember::getMapId)
+            .collect(Collectors.toSet());
+    }
+
+    private MapRole roleOf(Long mapId, Long userId) {
+        if (userId == null) {
+            return MapRole.NONE;
+        }
+        return mapMemberRepository.findByMapIdAndUserId(mapId, userId)
+            .map(MapMember::getRole)
+            .orElse(MapRole.NONE);
+    }
+
+    private void requireMember(Long mapId, Long requesterId) {
+        if (roleOf(mapId, requesterId) == MapRole.NONE) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_MEMBER);
+        }
+    }
+
+    private void requireManagePermission(MapRole role) {
+        if (role != MapRole.OWNER && role != MapRole.ADMIN) {
+            throw new BusinessException(MapErrorCode.NO_MANAGE_PERMISSION);
+        }
+    }
+
+    private MapEntity getMapOrThrow(Long mapId) {
+        return mapRepository.findById(mapId)
+            .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_NOT_FOUND));
+    }
+
+    private Pageable withSort(Pageable pageable, MapSort sort) {
+        Sort resolved = switch (sort == null ? MapSort.POPULAR : sort) {
+            case POPULAR -> Sort.by(Sort.Direction.DESC, "memberCount").and(Sort.by(Sort.Direction.DESC, "createdAt"));
+            case LATEST -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), resolved);
+    }
+}
