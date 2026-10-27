@@ -1,7 +1,6 @@
-name: CD (team account)
+name: CD
 
 # 팀 계정(B) EC2 배포. develop → dev 서버, main → prod 서버(GitHub Environment "production" 승인 후).
-# 이전 계정(A)의 cd-dev.yml과 동시에 돈다 — A 정리 때 cd-dev.yml·cd-prod.yml을 지운다.
 #
 # GitHub Variables (Settings → Secrets and variables → Actions → Variables), 값은 terraform output:
 #   TEAM_AWS_CI_ROLE_ARN            ci_role_arn           (빌드 + dev 배포)
@@ -13,22 +12,29 @@ name: CD (team account)
 on:
   push:
     branches: [develop, main]
+    # 이미지·배포 번들에 영향 없는 파일만 바뀌면 배포하지 않는다.
+    # infra/ 변경(SSM 값 등)은 terraform apply 뒤 Actions에서 수동 실행해 반영한다.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'infra/**'
+      - 'k8s/**'
   workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
-# 배포 대상 서버 기준으로 묶는다. dev로 가는 브랜치가 여러 개여도 한 번에 하나만 배포한다.
-concurrency:
-  group: cd-team-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
-  cancel-in-progress: false
-
 env:
   AWS_REGION: ap-northeast-2
   ECR_REGISTRY: ${{ vars.TEAM_ECR_REGISTRY }}
 
 jobs:
+  # 테스트를 통과한 커밋만 배포한다. 테스트와 이미지 빌드는 병렬로 돌고, deploy가 둘 다 기다린다.
+  # develop·main push의 테스트는 여기서만 돈다(ci.yml은 PR만). 같은 정의를 쓰도록 ci.yml을 호출한다.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   build-push:
     name: build & push (${{ matrix.service }})
     # 서버가 Graviton(arm64). arm64 러너에서 네이티브로 빌드한다(public 저장소 무료, QEMU 에뮬레이션보다 수 배 빠름).
@@ -75,8 +81,12 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   deploy:
-    needs: build-push
+    needs: [test, build-push]
     runs-on: ubuntu-latest
+    # 배포 대상 서버 기준으로 묶는다. 테스트·빌드는 커밋마다 돌고, 서버 배포만 한 번에 하나씩 한다.
+    concurrency:
+      group: cd-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      cancel-in-progress: false
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     env:
       TARGET_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}

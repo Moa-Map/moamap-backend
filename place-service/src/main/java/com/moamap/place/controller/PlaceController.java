@@ -150,7 +150,7 @@ public class PlaceController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "장소 정보 수정", description = "장소를 등록한 본인만 이름/주소/좌표/카테고리/설명을 수정할 수 있다.")
+    @Operation(summary = "장소 정보 수정", description = "장소를 등록한 본인만 이름/주소/좌표/카테고리/설명/태그/사진을 수정할 수 있다. 보내지 않은 필드는 유지된다. tags·photoUrls는 보내면 전체 교체되므로 사진 1장을 추가할 때도 기존 URL을 포함한 전체 목록을 보내야 하고, 빈 목록([])은 모두 삭제한다.")
     public ApiResponse<PlaceResponse> update(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
         @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,

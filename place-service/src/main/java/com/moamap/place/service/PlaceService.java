@@ -281,7 +281,7 @@ public class PlaceService {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
         place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
-            request.category(), request.description(), request.tags());
+            request.category(), request.description(), request.tags(), request.photoUrls());
         return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 

@@ -494,7 +494,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when
         PlaceResponse response = placeService.update(1L, 1L, request);
@@ -514,10 +514,11 @@ class PlaceServiceTest {
             .mapId(10L)
             .createdBy(1L)
             .tags(new ArrayList<>(List.of("기존태그")))
+            .photoUrls(new ArrayList<>(List.of("https://old/1.jpg")))
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
-        PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null, null);
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new name", null, null, null, null, null, null, null, null);
 
         // when
         PlaceResponse response = placeService.update(1L, 1L, request);
@@ -527,6 +528,7 @@ class PlaceServiceTest {
         assertThat(response.address()).isEqualTo("old address");
         assertThat(response.category()).isEqualTo("카페");
         assertThat(response.tags()).containsExactly("기존태그");
+        assertThat(response.photoUrls()).containsExactly("https://old/1.jpg");
     }
 
     @Test
@@ -540,7 +542,7 @@ class PlaceServiceTest {
             .build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
-        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, List.of("new1"));
+        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, List.of("new1"), null);
 
         // when
         PlaceResponse response = placeService.update(1L, 1L, request);
@@ -550,13 +552,54 @@ class PlaceServiceTest {
     }
 
     @Test
+    void update는_사진을_보내면_기존_사진을_통째로_교체한다() {
+        // given
+        Place place = Place.builder()
+            .name("old")
+            .mapId(10L)
+            .createdBy(1L)
+            .photoUrls(new ArrayList<>(List.of("https://old/1.jpg", "https://old/2.jpg")))
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
+        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, null,
+            List.of("https://new/1.jpg"));
+
+        // when
+        PlaceResponse response = placeService.update(1L, 1L, request);
+
+        // then
+        assertThat(response.photoUrls()).containsExactly("https://new/1.jpg");
+    }
+
+    @Test
+    void update는_사진을_빈_목록으로_보내면_모두_지운다() {
+        // given
+        Place place = Place.builder()
+            .name("old")
+            .mapId(10L)
+            .createdBy(1L)
+            .photoUrls(new ArrayList<>(List.of("https://old/1.jpg")))
+            .build();
+        given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
+        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
+        PlaceUpdateRequest request = new PlaceUpdateRequest(null, null, null, null, null, null, null, null, List.of());
+
+        // when
+        PlaceResponse response = placeService.update(1L, 1L, request);
+
+        // then
+        assertThat(response.photoUrls()).isEmpty();
+    }
+
+    @Test
     void update는_COMMUNITY_지도에서_방장이면_생성자가_아니어도_수정된다() {
         // given
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when
         PlaceResponse response = placeService.update(1L, 2L, request);
@@ -572,7 +615,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
@@ -588,7 +631,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when
         PlaceResponse response = placeService.update(1L, 2L, request);
@@ -604,7 +647,7 @@ class PlaceServiceTest {
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, 2L, request))
@@ -619,7 +662,7 @@ class PlaceServiceTest {
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         PlaceUpdateRequest request = new PlaceUpdateRequest("new", "new address", "new road address",
-            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null);
+            BigDecimal.ONE, BigDecimal.TEN, "카페", "new description", null, null);
 
         // when & then
         assertThatThrownBy(() -> placeService.update(1L, null, request))
@@ -910,7 +953,7 @@ class PlaceServiceTest {
         Place place = Place.builder().name("old").mapId(10L).createdBy(1L).status(PlaceStatus.APPROVED).build();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
         given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
-        PlaceUpdateRequest request = new PlaceUpdateRequest("new", null, null, null, null, null, null, null);
+        PlaceUpdateRequest request = new PlaceUpdateRequest("new", null, null, null, null, null, null, null, null);
 
         // when
         placeService.update(1L, 1L, request);
