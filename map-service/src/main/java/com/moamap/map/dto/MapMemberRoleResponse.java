@@ -8,10 +8,11 @@ import com.moamap.map.entity.MapType;
  */
 public record MapMemberRoleResponse(
     MapType mapType,
-    MapRole role
+    MapRole role,
+    boolean memberAutoApproval
 ) {
 
-    public static MapMemberRoleResponse of(MapType mapType, MapRole role) {
-        return new MapMemberRoleResponse(mapType, role);
+    public static MapMemberRoleResponse of(MapType mapType, MapRole role, boolean memberAutoApproval) {
+        return new MapMemberRoleResponse(mapType, role, memberAutoApproval);
     }
 }

@@ -54,7 +54,7 @@ public class MapController {
     private final MapService mapService;
     private final MapLeaveService mapLeaveService;
 
-    @Operation(summary = "지도 생성", description = "공개(COMMUNITY) 또는 프라이빗 지도를 만든다. 프라이빗은 초대 코드가 발급된다.")
+    @Operation(summary = "지도 생성", description = "공개(COMMUNITY) 또는 프라이빗 지도를 만든다. 프라이빗은 초대 코드가 발급된다. memberAutoApproval(기본 false)을 켜면 커뮤니티 지도의 일반 멤버 장소가 승인 없이 바로 등록되며, 프라이빗 지도에서는 무시된다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<MapDetailResponse> create(
@@ -128,7 +128,7 @@ public class MapController {
         return ApiResponse.success(mapService.getDetail(mapId, userId));
     }
 
-    @Operation(summary = "지도 수정", description = "OWNER 또는 ADMIN만 수정할 수 있다.")
+    @Operation(summary = "지도 수정", description = "OWNER 또는 ADMIN만 수정할 수 있다. memberAutoApproval을 보내지 않으면 기존 값을 유지한다.")
     @PatchMapping("/{mapId}")
     public ApiResponse<MapDetailResponse> update(
         @PathVariable Long mapId,
@@ -193,7 +193,7 @@ public class MapController {
         return ApiResponse.success(mapService.getMembers(mapId, userId));
     }
 
-    @Operation(summary = "멤버 역할 조회", description = "지도 유형과 해당 사용자의 역할을 반환한다. (place-service 승인 판단용)")
+    @Operation(summary = "멤버 역할 조회", description = "지도 유형, 해당 사용자의 역할, 멤버 장소 자동 승인 여부(memberAutoApproval)를 반환한다. (place-service 승인 판단용)")
     @GetMapping("/{mapId}/members/{userId}")
     public ApiResponse<MapMemberRoleResponse> getMemberRole(
         @PathVariable Long mapId,

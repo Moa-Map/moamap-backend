@@ -80,7 +80,7 @@ class PlaceCommentReportServiceTest {
     }
 
     private void givenMember(MapType mapType, MapMemberRole role) {
-        given(mapClient.getMemberInfo(MAP_ID, REPORTER_ID)).willReturn(new MapMemberResponse(mapType, role));
+        given(mapClient.getMemberInfo(MAP_ID, REPORTER_ID)).willReturn(new MapMemberResponse(mapType, role, false));
     }
 
     @Test
@@ -169,7 +169,7 @@ class PlaceCommentReportServiceTest {
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(COMMENT_ID)).willReturn(Optional.of(comment()));
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
         given(mapClient.getMemberInfo(MAP_ID, AUTHOR_ID))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when & then
         assertThatThrownBy(() -> placeCommentReportService.report(PLACE_ID, COMMENT_ID, AUTHOR_ID, request()))

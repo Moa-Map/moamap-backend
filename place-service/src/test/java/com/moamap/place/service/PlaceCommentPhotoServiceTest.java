@@ -74,7 +74,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void 발급에_성공하면_uploadUrl_objectKey_fileUrl_expiresInSeconds를_그대로_응답에_담는다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         stubPresign();
 
         CommentPhotoUploadUrlResponse response =
@@ -89,7 +89,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void place_reviews_접두사로_placeId별로_나뉘어_발급한다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         stubPresign();
 
         placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID);
@@ -111,7 +111,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void 해당_지도의_멤버가_아니면_NOT_MAP_MEMBER를_던진다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
 
         assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
@@ -133,7 +133,7 @@ class PlaceCommentPhotoServiceTest {
     @ValueSource(strings = {"image/gif", "application/pdf", "text/plain"})
     void 허용되지_않은_형식이면_INVALID_FILE_TYPE을_던진다(String invalidContentType) {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
 
         assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request(invalidContentType, 1024L), USER_ID))
             .isInstanceOf(BusinessException.class)
@@ -145,7 +145,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void fileSize가_0이하면_FILE_SIZE_EXCEEDED를_던진다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
 
         assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", 0L), USER_ID))
             .isInstanceOf(BusinessException.class)
@@ -157,7 +157,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void fileSize가_5MB를_초과하면_FILE_SIZE_EXCEEDED를_던진다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
 
         assertThatThrownBy(() -> placeCommentPhotoService.issueUploadUrl(PLACE_ID, request("image/jpeg", MAX_FILE_SIZE + 1), USER_ID))
             .isInstanceOf(BusinessException.class)
@@ -169,7 +169,7 @@ class PlaceCommentPhotoServiceTest {
     @Test
     void fileSize가_정확히_5MB이면_허용한다() {
         given(placeRepository.findByIdAndDeletedAtIsNull(PLACE_ID)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(MAP_ID, USER_ID)).willReturn(new MapMemberResponse(MapType.PRIVATE, MapMemberRole.MEMBER, false));
         stubPresign();
 
         CommentPhotoUploadUrlResponse response =
