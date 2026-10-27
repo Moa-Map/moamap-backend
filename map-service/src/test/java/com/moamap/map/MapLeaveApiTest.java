@@ -3,6 +3,7 @@ package com.moamap.map;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,18 +45,48 @@ class MapLeaveApiTest {
     @MockitoBean private PlaceClient placeClient;
 
     @Test
-    @DisplayName("방장이 나가면 새 방장을 응답에 담는다")
+    @DisplayName("방장이 새 방장을 지정해 나가면 새 방장을 응답에 담는다")
     void ownerLeaveReturnsNewOwner() throws Exception {
         given(userClient.findProfiles(anyCollection()))
             .willReturn(Map.of(MEMBER, new UserProfileResponse(MEMBER, "새 방장", null)));
         long mapId = createMap();
         join(mapId, MEMBER);
 
-        mockMvc.perform(delete("/api/v1/maps/{mapId}/members/me", mapId).header(USER_HEADER, OWNER))
+        mockMvc.perform(delete("/api/v1/maps/{mapId}/members/me", mapId)
+                .param("newOwnerId", String.valueOf(MEMBER))
+                .header(USER_HEADER, OWNER))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data.newOwner.userId").value(MEMBER))
             .andExpect(jsonPath("$.data.newOwner.nickname").value("새 방장"));
+    }
+
+    @Test
+    @DisplayName("방장이 새 방장을 지정하지 않고 나가려 하면 400(MAP_027)이다")
+    void ownerLeaveWithoutNewOwnerIsRejected() throws Exception {
+        long mapId = createMap();
+        join(mapId, MEMBER);
+
+        mockMvc.perform(delete("/api/v1/maps/{mapId}/members/me", mapId).header(USER_HEADER, OWNER))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error.code").value("MAP_027"));
+    }
+
+    @Test
+    @DisplayName("방장은 위임 후보를 조회할 수 있고, 방장이 아니면 403(MAP_004)이다")
+    void ownerCandidatesAreForOwnerOnly() throws Exception {
+        long mapId = createMap();
+        join(mapId, MEMBER);
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}/owner-candidates", mapId).header(USER_HEADER, OWNER))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].userId").value(MEMBER))
+            .andExpect(jsonPath("$.data[0].role").value("MEMBER"));
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}/owner-candidates", mapId).header(USER_HEADER, MEMBER))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error.code").value("MAP_004"));
     }
 
     @Test

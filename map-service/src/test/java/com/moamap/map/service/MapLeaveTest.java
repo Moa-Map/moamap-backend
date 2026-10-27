@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import com.moamap.common.exception.BusinessException;
 import com.moamap.map.config.JpaAuditingConfig;
+import com.moamap.map.dto.MapMemberSummaryResponse;
 import com.moamap.map.entity.MapEntity;
 import com.moamap.map.entity.MapMember;
 import com.moamap.map.entity.MapPost;
@@ -32,7 +33,7 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
- * 지도 나가기를 실제 DB로 확인한다. 방장 위임 순서는 회원 탈퇴와 같아야 한다(MapWithdrawalCleanupTest).
+ * 지도 나가기와 방장 위임 후보를 실제 DB로 확인한다. 나가기는 방장이 새 방장을 고르고, 회원 탈퇴는 자동으로 넘긴다(MapWithdrawalCleanupTest).
  */
 @DataJpaTest
 @RecordApplicationEvents
@@ -65,7 +66,7 @@ class MapLeaveTest {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
         join(map, EARLY_MEMBER, MapRole.MEMBER);
 
-        Optional<Long> newOwner = leaveAndReload(map, EARLY_MEMBER);
+        Optional<Long> newOwner = leaveAndReload(map, EARLY_MEMBER, null);
 
         assertThat(newOwner).isEmpty();
         assertThat(mapMemberRepository.findByMapIdAndUserId(map.getId(), EARLY_MEMBER)).isEmpty();
@@ -75,45 +76,79 @@ class MapLeaveTest {
     }
 
     @Test
-    void 방장이_나가면_먼저_들어온_멤버보다_관리자에게_넘어가고_관리자끼리는_먼저_참여한_사람이다() {
+    void 관리자나_멤버가_새_방장을_보내도_무시하고_나가기만_한다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+        join(map, EARLY_ADMIN, MapRole.ADMIN);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+
+        assertThat(leaveAndReload(map, EARLY_ADMIN, EARLY_MEMBER)).isEmpty();
+
+        assertThat(mapRepository.findById(map.getId()).orElseThrow().getOwnerId()).isEqualTo(OWNER);
+        assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.MEMBER);
+    }
+
+    @Test
+    void 방장이_고른_관리자에게_넘어가고_방장은_빠진다() {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
         join(map, EARLY_MEMBER, MapRole.MEMBER);
         join(map, EARLY_ADMIN, MapRole.ADMIN);
         join(map, LATE_ADMIN, MapRole.ADMIN);
 
-        Optional<Long> newOwner = leaveAndReload(map, OWNER);
+        // 먼저 참여한 관리자가 아니라 방장이 고른 사람에게 넘어간다.
+        Optional<Long> newOwner = leaveAndReload(map, OWNER, LATE_ADMIN);
 
-        assertThat(newOwner).contains(EARLY_ADMIN);
+        assertThat(newOwner).contains(LATE_ADMIN);
         MapEntity reloaded = mapRepository.findById(map.getId()).orElseThrow();
-        assertThat(reloaded.getOwnerId()).isEqualTo(EARLY_ADMIN);
+        assertThat(reloaded.getOwnerId()).isEqualTo(LATE_ADMIN);
         assertThat(reloaded.getMemberCount()).isEqualTo(3);
-        assertThat(roleOf(map, EARLY_ADMIN)).isEqualTo(MapRole.OWNER);
-        assertThat(roleOf(map, LATE_ADMIN)).isEqualTo(MapRole.ADMIN);
+        assertThat(roleOf(map, LATE_ADMIN)).isEqualTo(MapRole.OWNER);
+        assertThat(roleOf(map, EARLY_ADMIN)).isEqualTo(MapRole.ADMIN);
         assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.MEMBER);
         assertThat(mapMemberRepository.findByMapIdAndUserId(map.getId(), OWNER)).isEmpty();
     }
 
     @Test
-    void 관리자가_없으면_가장_먼저_참여한_멤버에게_넘어간다() {
+    void 관리자가_없으면_방장이_고른_멤버에게_넘어간다() {
         MapEntity map = map(OWNER, MapType.PRIVATE);
         join(map, EARLY_MEMBER, MapRole.MEMBER);
         join(map, LATE_MEMBER, MapRole.MEMBER);
 
-        assertThat(leaveAndReload(map, OWNER)).contains(EARLY_MEMBER);
-        assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.OWNER);
-        assertThat(roleOf(map, LATE_MEMBER)).isEqualTo(MapRole.MEMBER);
+        assertThat(leaveAndReload(map, OWNER, LATE_MEMBER)).contains(LATE_MEMBER);
+        assertThat(roleOf(map, LATE_MEMBER)).isEqualTo(MapRole.OWNER);
+        assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.MEMBER);
     }
 
     @Test
-    void 새_방장도_나가면_그다음_사람에게_넘어간다() {
+    void 새_방장을_고르지_않으면_나갈_수_없고_아무것도_바뀌지_않는다() {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
         join(map, EARLY_MEMBER, MapRole.MEMBER);
-        join(map, LATE_MEMBER, MapRole.MEMBER);
 
-        leaveAndReload(map, OWNER);
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, null), MapErrorCode.OWNER_HANDOVER_REQUIRED);
 
-        assertThat(leaveAndReload(map, EARLY_MEMBER)).contains(LATE_MEMBER);
-        assertThat(mapRepository.findById(map.getId()).orElseThrow().getMemberCount()).isEqualTo(1);
+        assertNothingChanged(map, 2);
+    }
+
+    @Test
+    void 관리자가_있으면_일반_멤버에게는_넘길_수_없다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+        join(map, EARLY_ADMIN, MapRole.ADMIN);
+
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, EARLY_MEMBER), MapErrorCode.NOT_OWNER_CANDIDATE);
+
+        assertNothingChanged(map, 3);
+        assertThat(roleOf(map, EARLY_MEMBER)).isEqualTo(MapRole.MEMBER);
+    }
+
+    @Test
+    void 지도_멤버가_아니거나_자기_자신은_새_방장으로_고를_수_없다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, OUTSIDER), MapErrorCode.NOT_OWNER_CANDIDATE);
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, OWNER), MapErrorCode.NOT_OWNER_CANDIDATE);
+
+        assertNothingChanged(map, 2);
     }
 
     @Test
@@ -121,33 +156,33 @@ class MapLeaveTest {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
         join(map, EARLY_MEMBER, MapRole.MEMBER);
 
-        leaveAndReload(map, OWNER);
+        leaveAndReload(map, OWNER, EARLY_MEMBER);
 
         assertThat(events.stream(ActivitySignal.class)).containsExactly(
             new ActivitySignal(ActivitySignal.MAP_OWNER_TRANSFERRED, EARLY_MEMBER, null, map.getId(), map.getId()));
     }
 
     @Test
-    void 멤버가_나가거나_혼자_남은_방장이_막히면_알림을_보내지_않는다() {
+    void 멤버가_나가거나_방장_나가기가_막히면_알림을_보내지_않는다() {
         MapEntity shared = map(OWNER, MapType.COMMUNITY);
         join(shared, EARLY_MEMBER, MapRole.MEMBER);
         MapEntity solo = map(LATE_ADMIN, MapType.COMMUNITY);
 
-        leaveAndReload(shared, EARLY_MEMBER);
-        assertErrorCode(() -> mapService.leave(solo.getId(), LATE_ADMIN), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
+        assertErrorCode(() -> mapService.leave(shared.getId(), OWNER, null), MapErrorCode.OWNER_HANDOVER_REQUIRED);
+        leaveAndReload(shared, EARLY_MEMBER, null);
+        assertErrorCode(() -> mapService.leave(solo.getId(), LATE_ADMIN, null), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
 
         assertThat(events.stream(ActivitySignal.class)).isEmpty();
     }
 
     @Test
-    void 혼자_남은_방장은_나갈_수_없고_아무것도_바뀌지_않는다() {
+    void 혼자_남은_방장은_나갈_수_없고_위임보다_지도_삭제를_먼저_안내한다() {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
 
-        assertErrorCode(() -> mapService.leave(map.getId(), OWNER), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, null), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
+        assertErrorCode(() -> mapService.leave(map.getId(), OWNER, OUTSIDER), MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
 
-        em.clear();
-        assertThat(mapRepository.findById(map.getId())).isPresent();
-        assertThat(roleOf(map, OWNER)).isEqualTo(MapRole.OWNER);
+        assertNothingChanged(map, 1);
     }
 
     @Test
@@ -155,7 +190,7 @@ class MapLeaveTest {
         MapEntity personal = mapRepository.save(MapEntity.createPersonal(OWNER, "나만의 지도"));
         mapMemberRepository.save(MapMember.of(personal.getId(), OWNER, MapRole.OWNER));
 
-        assertErrorCode(() -> mapService.leave(personal.getId(), OWNER), MapErrorCode.CANNOT_LEAVE_PERSONAL_MAP);
+        assertErrorCode(() -> mapService.leave(personal.getId(), OWNER, null), MapErrorCode.CANNOT_LEAVE_PERSONAL_MAP);
     }
 
     @Test
@@ -166,7 +201,7 @@ class MapLeaveTest {
         MapPost post = mapPostRepository.save(MapPost.create(map.getId(), OWNER, "방장의 글", List.of(), List.of()));
         MapPostComment comment = mapPostCommentRepository.save(MapPostComment.create(post.getId(), OWNER, "방장의 댓글"));
 
-        leaveAndReload(map, OWNER);
+        leaveAndReload(map, OWNER, EARLY_MEMBER);
 
         assertThat(mapPostRepository.findById(post.getId()).orElseThrow().getDeletedAt()).isNull();
         assertThat(mapPostCommentRepository.findById(comment.getId()).orElseThrow().getDeletedAt()).isNull();
@@ -176,12 +211,53 @@ class MapLeaveTest {
     void 멤버가_아니거나_없는_지도면_나갈_수_없다() {
         MapEntity map = map(OWNER, MapType.COMMUNITY);
 
-        assertErrorCode(() -> mapService.leave(map.getId(), OUTSIDER), MapErrorCode.NOT_MAP_MEMBER);
-        assertErrorCode(() -> mapService.leave(9999L, OWNER), MapErrorCode.MAP_NOT_FOUND);
+        assertErrorCode(() -> mapService.leave(map.getId(), OUTSIDER, null), MapErrorCode.NOT_MAP_MEMBER);
+        assertErrorCode(() -> mapService.leave(9999L, OWNER, null), MapErrorCode.MAP_NOT_FOUND);
     }
 
-    private Optional<Long> leaveAndReload(MapEntity map, Long userId) {
-        Optional<Long> newOwner = mapService.leave(map.getId(), userId);
+    @Test
+    void 위임_후보는_관리자가_있으면_관리자만_먼저_참여한_순으로_나온다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+        join(map, EARLY_ADMIN, MapRole.ADMIN);
+        join(map, LATE_ADMIN, MapRole.ADMIN);
+
+        assertThat(mapService.getOwnerCandidates(map.getId(), OWNER))
+            .extracting(MapMemberSummaryResponse::userId)
+            .containsExactly(EARLY_ADMIN, LATE_ADMIN);
+    }
+
+    @Test
+    void 위임_후보는_관리자가_없으면_일반_멤버_전체다() {
+        MapEntity map = map(OWNER, MapType.PRIVATE);
+        join(map, EARLY_MEMBER, MapRole.MEMBER);
+        join(map, LATE_MEMBER, MapRole.MEMBER);
+
+        assertThat(mapService.getOwnerCandidates(map.getId(), OWNER))
+            .extracting(MapMemberSummaryResponse::userId)
+            .containsExactly(EARLY_MEMBER, LATE_MEMBER);
+    }
+
+    @Test
+    void 위임_후보는_혼자_남은_지도면_비어_있고_방장만_볼_수_있다() {
+        MapEntity map = map(OWNER, MapType.COMMUNITY);
+
+        assertThat(mapService.getOwnerCandidates(map.getId(), OWNER)).isEmpty();
+
+        join(map, EARLY_ADMIN, MapRole.ADMIN);
+        assertErrorCode(() -> mapService.getOwnerCandidates(map.getId(), EARLY_ADMIN), MapErrorCode.NOT_MAP_OWNER);
+    }
+
+    private void assertNothingChanged(MapEntity map, int memberCount) {
+        em.clear();
+        MapEntity reloaded = mapRepository.findById(map.getId()).orElseThrow();
+        assertThat(reloaded.getOwnerId()).isEqualTo(OWNER);
+        assertThat(reloaded.getMemberCount()).isEqualTo(memberCount);
+        assertThat(roleOf(map, OWNER)).isEqualTo(MapRole.OWNER);
+    }
+
+    private Optional<Long> leaveAndReload(MapEntity map, Long userId, Long newOwnerId) {
+        Optional<Long> newOwner = mapService.leave(map.getId(), userId, newOwnerId);
         em.flush();
         em.clear();
         return newOwner;

@@ -29,30 +29,30 @@ class MapLeaveServiceTest {
 
     @Test
     void 방장이_나가면_새_방장의_닉네임을_담는다() {
-        given(mapService.leave(MAP_ID, LEAVER)).willReturn(Optional.of(NEW_OWNER));
+        given(mapService.leave(MAP_ID, LEAVER, NEW_OWNER)).willReturn(Optional.of(NEW_OWNER));
         given(userClient.findProfiles(List.of(NEW_OWNER)))
             .willReturn(Map.of(NEW_OWNER, new UserProfileResponse(NEW_OWNER, "모아", null)));
 
-        MapLeaveResponse response = mapLeaveService.leave(MAP_ID, LEAVER);
+        MapLeaveResponse response = mapLeaveService.leave(MAP_ID, LEAVER, NEW_OWNER);
 
         assertThat(response.newOwner()).isEqualTo(new MapLeaveResponse.NewOwner(NEW_OWNER, "모아"));
     }
 
     @Test
     void 회원_정보를_가져오지_못해도_나가기는_성공하고_닉네임만_비운다() {
-        given(mapService.leave(MAP_ID, LEAVER)).willReturn(Optional.of(NEW_OWNER));
+        given(mapService.leave(MAP_ID, LEAVER, NEW_OWNER)).willReturn(Optional.of(NEW_OWNER));
         given(userClient.findProfiles(List.of(NEW_OWNER))).willReturn(Map.of());
 
-        MapLeaveResponse response = mapLeaveService.leave(MAP_ID, LEAVER);
+        MapLeaveResponse response = mapLeaveService.leave(MAP_ID, LEAVER, NEW_OWNER);
 
         assertThat(response.newOwner()).isEqualTo(new MapLeaveResponse.NewOwner(NEW_OWNER, null));
     }
 
     @Test
     void 방장이_아니면_새_방장이_없고_회원_정보도_조회하지_않는다() {
-        given(mapService.leave(MAP_ID, LEAVER)).willReturn(Optional.empty());
+        given(mapService.leave(MAP_ID, LEAVER, null)).willReturn(Optional.empty());
 
-        assertThat(mapLeaveService.leave(MAP_ID, LEAVER).newOwner()).isNull();
+        assertThat(mapLeaveService.leave(MAP_ID, LEAVER, null).newOwner()).isNull();
         verifyNoInteractions(userClient);
     }
 }
