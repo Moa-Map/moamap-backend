@@ -72,7 +72,7 @@ class PlaceCommentServiceTest {
         // given
         Place place = place();
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
         given(placeCommentRepository.averageRatingByPlaceId(any())).willReturn(5.0);
 
@@ -90,7 +90,7 @@ class PlaceCommentServiceTest {
     void create는_장소_등록자에게_댓글_알림_신호를_발행한다() {
         // given
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
         given(placeCommentRepository.averageRatingByPlaceId(any())).willReturn(5.0);
 
@@ -105,7 +105,7 @@ class PlaceCommentServiceTest {
     void create는_지도_멤버가_아니면_BusinessException을_던진다() {
         // given
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.NONE, false));
 
         // when & then
         assertThatThrownBy(() -> placeCommentService.create(1L, 2L, createRequest()))
@@ -119,7 +119,7 @@ class PlaceCommentServiceTest {
     void create는_imageUrls를_안_보내면_빈_리스트로_저장한다() {
         // given
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 2L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
         given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(1L);
         given(placeCommentRepository.averageRatingByPlaceId(any())).willReturn(5.0);
         PlaceCommentCreateRequest request = new PlaceCommentCreateRequest(5, "최고예요", null);
@@ -253,7 +253,7 @@ class PlaceCommentServiceTest {
         PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
 
         // when & then
         assertThatThrownBy(() -> placeCommentService.delete(1L, 5L, 3L))
@@ -269,7 +269,7 @@ class PlaceCommentServiceTest {
         PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.OWNER, false));
         given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(0L);
 
         // when
@@ -286,7 +286,7 @@ class PlaceCommentServiceTest {
         PlaceComment comment = PlaceComment.builder().placeId(1L).userId(2L).rating(3).build();
         given(placeCommentRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(comment));
         given(placeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(place()));
-        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN));
+        given(mapClient.getMemberInfo(10L, 3L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN, false));
         given(placeCommentRepository.countByPlaceIdAndDeletedAtIsNull(any())).willReturn(0L);
 
         // when

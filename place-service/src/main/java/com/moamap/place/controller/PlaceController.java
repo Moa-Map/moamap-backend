@@ -65,7 +65,7 @@ public class PlaceController {
         summary = "장소 등록",
         description = """
             지도에 장소를 등록한다. 지도 내 역할에 따라 상태가 결정된다: PRIVATE 멤버·COMMUNITY OWNER/ADMIN은 즉시 APPROVED,
-            COMMUNITY MEMBER는 PENDING(승인 대기). OFFICIAL 지도이거나 멤버가 아니면 403.
+            COMMUNITY MEMBER는 PENDING(승인 대기)이고, 지도의 memberAutoApproval이 켜져 있으면 APPROVED. OFFICIAL 지도이거나 멤버가 아니면 403.
             인스타그램 추출 후보(PlaceCandidateResponse)를 등록할 때는 후보 값에 sourceType("INSTAGRAM")과 mapId를 추가로 채운다.
             """
     )
@@ -82,7 +82,8 @@ public class PlaceController {
         description = """
             여러 장소를 한 번에 등록한다. 건별로 부분 성공하며, 중복이나 실패는 결과 목록에 사유와 함께 담긴다.
             전부 성공한 것이 아닐 수 있으므로 201이 아니라 200을 반환한다.
-            지도 권한과 등록 상태(APPROVED/PENDING) 규칙은 단건 등록과 같다.
+            지도 권한 규칙은 단건 등록과 같되, COMMUNITY 지도의 일반 멤버(MEMBER)는 멤버 자동 승인 설정과 관계없이 403(PLACE_023)이다.
+            따라서 등록된 장소는 항상 APPROVED다.
             사진(photoUrls)도 단건 등록과 동일하게 항목별 최대 5장까지 담을 수 있다. 발급 방법은 사진 업로드 URL 발급 API를 참고한다.
             """
     )
@@ -149,7 +150,7 @@ public class PlaceController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "장소 정보 수정", description = "장소를 등록한 본인만 이름/주소/좌표/카테고리/설명을 수정할 수 있다.")
+    @Operation(summary = "장소 정보 수정", description = "장소를 등록한 본인만 이름/주소/좌표/카테고리/설명/태그/사진을 수정할 수 있다. 보내지 않은 필드는 유지된다. tags·photoUrls는 보내면 전체 교체되므로 사진 1장을 추가할 때도 기존 URL을 포함한 전체 목록을 보내야 하고, 빈 목록([])은 모두 삭제한다.")
     public ApiResponse<PlaceResponse> update(
         @Parameter(description = "장소 ID", example = "1") @PathVariable Long id,
         @Parameter(hidden = true) @RequestHeader("X-User-Id") Long userId,

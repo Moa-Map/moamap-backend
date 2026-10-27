@@ -140,7 +140,7 @@ public class Place {
      * 부분 수정. null인 필드는 기존 값을 유지하고, 넘어온 필드만 바꾼다.
      */
     public void update(String name, String address, String roadAddress, BigDecimal lat, BigDecimal lng,
-            String category, String description, List<String> tags) {
+            String category, String description, List<String> tags, List<String> photoUrls) {
         if (name != null) {
             this.name = name;
         }
@@ -165,6 +165,10 @@ public class Place {
         if (tags != null) {
             this.tags.clear();
             this.tags.addAll(tags);
+        }
+        if (photoUrls != null) {
+            this.photoUrls.clear();
+            this.photoUrls.addAll(photoUrls);
         }
         this.updatedAt = LocalDateTime.now();
     }

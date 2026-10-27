@@ -119,6 +119,10 @@ public class PlaceService {
         // 지도 권한·유형은 맵 단위라 루프 밖에서 한 번만 확인한다.
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         PlaceStatus status = resolveInitialStatus(memberInfo);
+        // 외부 지도 불러오기로 수백 건이 한꺼번에 들어오는 걸 막는다. 멤버 자동 승인이 켜져 있어도 마찬가지.
+        if (memberInfo.mapType() == MapType.COMMUNITY && memberInfo.role() == MapMemberRole.MEMBER) {
+            throw new BusinessException(PlaceErrorCode.BULK_CREATE_NOT_ALLOWED);
+        }
 
         List<PlaceBulkCreateResponse.Result> results = new ArrayList<>(request.places().size());
         int created = 0;
@@ -178,10 +182,10 @@ public class PlaceService {
         if (memberInfo.mapType() == MapType.PRIVATE) {
             return PlaceStatus.APPROVED;
         }
-        // COMMUNITY: 방장/관리자는 바로 승인, 일반 멤버는 승인 대기.
+        // COMMUNITY: 방장/관리자는 바로 승인, 일반 멤버는 지도가 멤버 자동 승인을 켰을 때만 바로 승인.
         return switch (memberInfo.role()) {
             case OWNER, ADMIN -> PlaceStatus.APPROVED;
-            case MEMBER -> PlaceStatus.PENDING;
+            case MEMBER -> memberInfo.memberAutoApproval() ? PlaceStatus.APPROVED : PlaceStatus.PENDING;
             case NONE -> throw new BusinessException(PlaceErrorCode.NOT_MAP_MEMBER);
         };
     }
@@ -277,7 +281,7 @@ public class PlaceService {
         Place place = getOrThrow(id);
         checkModifyPermission(place, userId);
         place.update(request.name(), request.address(), request.roadAddress(), request.lat(), request.lng(),
-            request.category(), request.description(), request.tags());
+            request.category(), request.description(), request.tags(), request.photoUrls());
         return PlaceResponse.of(place, isLikedBy(id, userId));
     }
 

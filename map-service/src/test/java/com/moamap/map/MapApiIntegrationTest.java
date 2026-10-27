@@ -256,6 +256,55 @@ class MapApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("멤버 자동 승인을 켜고 공개 지도를 만들면 상세와 멤버 역할 조회에 그대로 담긴다")
+    void createCommunityMapWithMemberAutoApproval() throws Exception {
+        long mapId = createMap(OWNER, "자동 승인 지도", "PUBLIC", true);
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OWNER))
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(true));
+        mockMvc.perform(get("/api/v1/maps/{mapId}/members/{userId}", mapId, OTHER))
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(true));
+    }
+
+    @Test
+    @DisplayName("멤버 자동 승인을 보내지 않으면 false로 만들어진다")
+    void memberAutoApprovalDefaultsToFalse() throws Exception {
+        long mapId = createMap(OWNER, "기본값 지도", "PUBLIC");
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OWNER))
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(false));
+    }
+
+    @Test
+    @DisplayName("프라이빗 지도는 멤버 자동 승인을 보내도 false로 만들어진다")
+    void privateMapIgnoresMemberAutoApproval() throws Exception {
+        long mapId = createMap(OWNER, "프라이빗 지도", "PRIVATE", true);
+
+        mockMvc.perform(get("/api/v1/maps/{mapId}", mapId).header(USER_HEADER, OWNER))
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(false));
+    }
+
+    @Test
+    @DisplayName("지도 수정에서 멤버 자동 승인을 빼고 보내면 유지되고, 값을 보내면 바뀐다")
+    void updateMemberAutoApproval() throws Exception {
+        long mapId = createMap(OWNER, "수정 지도", "PUBLIC", true);
+
+        mockMvc.perform(patch("/api/v1/maps/{mapId}", mapId)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("name", "이름만 수정"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(true));
+
+        mockMvc.perform(patch("/api/v1/maps/{mapId}", mapId)
+                .header(USER_HEADER, OWNER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("name", "수정 지도", "memberAutoApproval", false))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.memberAutoApproval").value(false));
+    }
+
+    @Test
     @DisplayName("프라이빗 지도 상세는 멤버가 아니면 403이다")
     void privateDetailForbiddenForNonMember() throws Exception {
         long mapId = createMap(OWNER, "숨은 지도", "PRIVATE");
@@ -474,21 +523,31 @@ class MapApiIntegrationTest {
     }
 
     private long createMap(long userId, String name, String visibility) throws Exception {
+        return createMap(userId, name, visibility, null);
+    }
+
+    private long createMap(long userId, String name, String visibility, Boolean memberAutoApproval) throws Exception {
         String response = mockMvc.perform(post("/api/v1/maps")
                 .header(USER_HEADER, userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(createBody(name, visibility, List.of())))
+                .content(createBody(name, visibility, List.of(), memberAutoApproval)))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(response).path("data").path("id").asLong();
     }
 
     private String createBody(String name, String visibility, List<String> tags) throws Exception {
+        return createBody(name, visibility, tags, null);
+    }
+
+    private String createBody(String name, String visibility, List<String> tags, Boolean memberAutoApproval)
+        throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
         body.put("description", "테스트 지도 설명");
         body.put("visibility", visibility);
         body.put("tags", tags);
+        body.put("memberAutoApproval", memberAutoApproval);
         return objectMapper.writeValueAsString(body);
     }
 }
