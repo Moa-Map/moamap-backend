@@ -20,6 +20,8 @@ import com.moamap.place.user.UserClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -228,21 +230,25 @@ class PlaceBulkCreateTest {
             .containsExactly(PlaceStatus.APPROVED);
     }
 
-    @Test
-    void createBulk는_COMMUNITY_일반_멤버면_PENDING으로_등록한다() {
+    @ParameterizedTest(name = "멤버 자동 승인 {0}")
+    @ValueSource(booleans = {false, true})
+    void createBulk는_COMMUNITY_일반_멤버면_멤버_자동_승인과_관계없이_전체를_거부한다(boolean memberAutoApproval) {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, memberAutoApproval));
 
-        placeService.createBulk(new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111"))), USER_ID);
+        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111")));
 
-        assertThat(placeRepository.findAll()).extracting(Place::getStatus)
-            .containsExactly(PlaceStatus.PENDING);
+        assertThatThrownBy(() -> placeService.createBulk(request, USER_ID))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                .isEqualTo(PlaceErrorCode.BULK_CREATE_NOT_ALLOWED));
+        assertThat(placeRepository.count()).isZero();
     }
 
     @Test
-    void createBulk는_COMMUNITY_일반_멤버라도_멤버_자동_승인_지도면_APPROVED로_등록한다() {
+    void createBulk는_COMMUNITY_관리자면_APPROVED로_등록한다() {
         given(mapClient.getMemberInfo(anyLong(), anyLong()))
-            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, true));
+            .willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.ADMIN, false));
 
         placeService.createBulk(new PlaceBulkCreateRequest(MAP_ID, List.of(item("A", "111"))), USER_ID);
 

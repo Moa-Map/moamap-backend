@@ -943,20 +943,6 @@ class PlaceServiceTest {
     }
 
     @Test
-    void createBulk는_PENDING이면_publishNow를_호출하지_않는다() {
-        // given
-        given(mapClient.getMemberInfo(10L, 1L)).willReturn(new MapMemberResponse(MapType.COMMUNITY, MapMemberRole.MEMBER, false));
-        given(placeBulkRegistrar.register(any(), eq(10L), eq(1L), eq(PlaceStatus.PENDING))).willReturn(100L);
-        PlaceBulkCreateRequest request = new PlaceBulkCreateRequest(10L, List.of(bulkItem("장소1", "111")));
-
-        // when
-        placeService.createBulk(request, 1L);
-
-        // then
-        verifyNoInteractions(placeCountEventPublisher);
-    }
-
-    @Test
     void 멤버별_장소_수는_등록_이력이_없는_멤버를_0으로_채운다() {
         given(placeRepository.countApprovedByCreator(10L, List.of(1L, 2L, 3L)))
             .willReturn(List.of(countOf(1L, 12L), countOf(3L, 5L)));

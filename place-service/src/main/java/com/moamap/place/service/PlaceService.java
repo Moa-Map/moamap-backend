@@ -119,6 +119,10 @@ public class PlaceService {
         // 지도 권한·유형은 맵 단위라 루프 밖에서 한 번만 확인한다.
         MapMemberResponse memberInfo = mapClient.getMemberInfo(request.mapId(), userId);
         PlaceStatus status = resolveInitialStatus(memberInfo);
+        // 외부 지도 불러오기로 수백 건이 한꺼번에 들어오는 걸 막는다. 멤버 자동 승인이 켜져 있어도 마찬가지.
+        if (memberInfo.mapType() == MapType.COMMUNITY && memberInfo.role() == MapMemberRole.MEMBER) {
+            throw new BusinessException(PlaceErrorCode.BULK_CREATE_NOT_ALLOWED);
+        }
 
         List<PlaceBulkCreateResponse.Result> results = new ArrayList<>(request.places().size());
         int created = 0;
