@@ -104,7 +104,7 @@ class PlaceRepositoryTest {
         entityManager.clear();
         Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
-        managed.update(null, null, null, null, null, null, null, List.of("new1"));
+        managed.update(null, null, null, null, null, null, null, List.of("new1"), null);
         placeRepository.saveAndFlush(managed);
         entityManager.clear();
 
@@ -119,12 +119,28 @@ class PlaceRepositoryTest {
         entityManager.clear();
         Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
 
-        managed.update("새 이름", null, null, null, null, null, null, null);
+        managed.update("새 이름", null, null, null, null, null, null, null, null);
         placeRepository.saveAndFlush(managed);
         entityManager.clear();
 
         Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
         assertThat(found.getTags()).containsExactly("유지됨");
+    }
+
+    @Test
+    void update로_사진을_줄여_교체하면_실제_DB에도_순서대로_반영된다() {
+        Place saved = placeRepository.saveAndFlush(
+            placeBuilder().photoUrls(new ArrayList<>(List.of("https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg")))
+                .build());
+        entityManager.clear();
+        Place managed = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+
+        managed.update(null, null, null, null, null, null, null, null, List.of("https://a/3.jpg"));
+        placeRepository.saveAndFlush(managed);
+        entityManager.clear();
+
+        Place found = placeRepository.findByIdAndDeletedAtIsNull(saved.getId()).orElseThrow();
+        assertThat(found.getPhotoUrls()).containsExactly("https://a/3.jpg");
     }
 
     /*
