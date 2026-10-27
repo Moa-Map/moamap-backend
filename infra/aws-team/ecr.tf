@@ -11,7 +11,7 @@ resource "aws_ecr_repository" "service" {
   }
 }
 
-# main 빌드는 `prod-<sha>` 태그를 함께 단다(cd-team.yml). 상위 규칙에 걸린 이미지는 하위 규칙이 지우지 않으므로
+# main 빌드는 `prod-<sha>` 태그를 함께 단다(cd.yml). 상위 규칙에 걸린 이미지는 하위 규칙이 지우지 않으므로
 # develop push가 많아도 prod 이미지(롤백용 최근 10개)는 남는다.
 resource "aws_ecr_lifecycle_policy" "service" {
   for_each   = aws_ecr_repository.service
