@@ -21,9 +21,9 @@ public class MapLeaveService {
     private final MapService mapService;
     private final UserClient userClient;
 
-    public MapLeaveResponse leave(Long mapId, Long userId) {
-        return mapService.leave(mapId, userId)
-            .map(newOwnerId -> MapLeaveResponse.handedOverTo(newOwnerId, nicknameOf(newOwnerId)))
+    public MapLeaveResponse leave(Long mapId, Long userId, Long newOwnerId) {
+        return mapService.leave(mapId, userId, newOwnerId)
+            .map(successorId -> MapLeaveResponse.handedOverTo(successorId, nicknameOf(successorId)))
             .orElseGet(MapLeaveResponse::notOwner);
     }
 

@@ -219,17 +219,19 @@ public class MapService {
     }
 
     /**
-     * 지도에서 나간다. 방장이면 다음 사람에게 방장을 넘기고 나간다(회원 탈퇴와 같은 규칙, MapOwnerSuccession).
+     * 지도에서 나간다. 방장이면 newOwnerId로 고른 사람에게 방장을 넘기고 나간다. 고를 수 있는 사람은 MapOwnerSuccession이 정한다.
      *
      * 탈퇴와 달리 쓴 글·댓글·장소는 그대로 남기고, 넘길 사람이 없으면 지도를 지우지 않고 막는다.
      * 나가기는 실수로 누를 수 있어, 되돌릴 수 없는 지도 삭제는 직접 하도록 한다.
      *
-     * 지도 행을 잠가, 방장과 후계자가 동시에 나가도 지도에 없는 사람이 방장이 되지 않게 한다.
+     * 위임과 나가기를 한 트랜잭션에서 처리해, 방장만 넘어가고 나가기는 안 된 상태가 남지 않게 한다.
+     * 지도 행을 잠가, 고른 사람이 동시에 나가도 지도에 없는 사람이 방장이 되지 않게 한다.
      *
+     * @param newOwnerId 새 방장. 방장이 나갈 때만 쓰고, 관리자·멤버가 보내면 무시한다
      * @return 방장이 나가서 새로 방장이 된 사람의 ID. 방장이 아니었으면 비어 있다
      */
     @Transactional
-    public Optional<Long> leave(Long mapId, Long userId) {
+    public Optional<Long> leave(Long mapId, Long userId, Long newOwnerId) {
         MapEntity map = mapRepository.findByIdForUpdate(mapId)
             .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_NOT_FOUND));
         MapMember member = mapMemberRepository.findByMapIdAndUserId(mapId, userId)
@@ -243,10 +245,34 @@ public class MapService {
         if (map.isPersonal()) {
             throw new BusinessException(MapErrorCode.CANNOT_LEAVE_PERSONAL_MAP);
         }
-        MapMember newOwner = ownerSuccession.handOver(map, member)
-            .orElseThrow(() -> new BusinessException(MapErrorCode.SOLE_OWNER_CANNOT_LEAVE));
-        log.info("방장이 지도를 나가 방장을 넘겼습니다. mapId={}, newOwnerId={}", mapId, newOwner.getUserId());
-        return Optional.of(newOwner.getUserId());
+        MapMember successor = chooseSuccessor(map, newOwnerId);
+        ownerSuccession.handOver(map, member, successor);
+        log.info("방장이 지도를 나가 방장을 넘겼습니다. mapId={}, newOwnerId={}", mapId, successor.getUserId());
+        return Optional.of(successor.getUserId());
+    }
+
+    /** 혼자 남은 지도면 위임보다 지도 삭제를 먼저 안내한다. 고를 사람이 있는데 고르지 않았으면 위임을 안내한다. */
+    private MapMember chooseSuccessor(MapEntity map, Long newOwnerId) {
+        List<MapMember> candidates = ownerSuccession.candidates(map);
+        if (candidates.isEmpty()) {
+            throw new BusinessException(MapErrorCode.SOLE_OWNER_CANNOT_LEAVE);
+        }
+        if (newOwnerId == null) {
+            throw new BusinessException(MapErrorCode.OWNER_HANDOVER_REQUIRED);
+        }
+        return candidates.stream()
+            .filter(candidate -> candidate.getUserId().equals(newOwnerId))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException(MapErrorCode.NOT_OWNER_CANDIDATE));
+    }
+
+    /** 방장 위임 화면의 후보 목록. 관리자가 있으면 관리자만, 없으면 일반 멤버가 나온다. 방장만 볼 수 있다. */
+    public List<MapMemberSummaryResponse> getOwnerCandidates(Long mapId, Long requesterId) {
+        MapEntity map = getMapOrThrow(mapId);
+        if (!map.isOwnedBy(requesterId)) {
+            throw new BusinessException(MapErrorCode.NOT_MAP_OWNER);
+        }
+        return summarize(mapId, ownerSuccession.candidates(map));
     }
 
     /**
@@ -261,18 +287,22 @@ public class MapService {
         getMapOrThrow(mapId);
         requireMember(mapId, requesterId);
 
-        List<MapMember> members = mapMemberRepository.findByMapId(mapId);
+        List<MapMember> members = mapMemberRepository.findByMapId(mapId).stream()
+            // MapRole은 OWNER, ADMIN, MEMBER 순으로 선언돼 있어 enum 순서가 곧 화면 노출 순서다.
+            .sorted(Comparator.comparing(MapMember::getRole))
+            .toList();
+        return MapMemberListResponse.of(summarize(mapId, members));
+    }
+
+    /** 멤버 카드에 필요한 닉네임·프로필 사진·등록한 장소 수를 붙인다. 받은 순서를 그대로 유지한다. */
+    private List<MapMemberSummaryResponse> summarize(Long mapId, List<MapMember> members) {
         List<Long> userIds = members.stream().map(MapMember::getUserId).toList();
         Map<Long, UserProfileResponse> profiles = userClient.findProfiles(userIds);
         Map<Long, Long> placeCounts = placeClient.countByCreator(mapId, userIds);
-
-        List<MapMemberSummaryResponse> summaries = members.stream()
-            // MapRole은 OWNER, ADMIN, MEMBER 순으로 선언돼 있어 enum 순서가 곧 화면 노출 순서다.
-            .sorted(Comparator.comparing(MapMember::getRole))
+        return members.stream()
             .map(member -> MapMemberSummaryResponse.of(
                 member, profiles.get(member.getUserId()), placeCounts.get(member.getUserId())))
             .toList();
-        return MapMemberListResponse.of(summaries);
     }
 
     /**

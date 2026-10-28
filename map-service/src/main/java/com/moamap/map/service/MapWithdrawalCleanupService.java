@@ -63,7 +63,7 @@ public class MapWithdrawalCleanupService {
     }
 
     private void handOverOrDelete(MapEntity map, MapMember owner) {
-        Optional<MapMember> successor = map.isPersonal() ? Optional.empty() : ownerSuccession.handOver(map, owner);
+        Optional<MapMember> successor = map.isPersonal() ? Optional.empty() : ownerSuccession.handOverToFirstCandidate(map, owner);
         successor.ifPresentOrElse(
             next -> log.info("탈퇴한 방장의 지도를 위임했습니다. mapId={}, newOwnerId={}", map.getId(), next.getUserId()),
             () -> delete(map));
