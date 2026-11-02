@@ -1,11 +1,13 @@
 package com.moamap.map.controller;
 
+import java.util.List;
 import com.moamap.common.response.ApiResponse;
 import com.moamap.map.dto.JoinByInviteCodeRequest;
 import com.moamap.map.dto.MapCreateRequest;
 import com.moamap.map.dto.MapDetailResponse;
 import com.moamap.map.dto.MapLeaveResponse;
 import com.moamap.map.dto.MapMemberListResponse;
+import com.moamap.map.dto.MapMemberSummaryResponse;
 import com.moamap.map.dto.MapMemberRoleResponse;
 import com.moamap.map.dto.MapMemberRoleUpdateRequest;
 import com.moamap.map.dto.MapMemberRoleUpdateResponse;
@@ -169,15 +171,33 @@ public class MapController {
     @Operation(
         summary = "지도 나가기",
         description = "참여 중인 지도에서 나간다. 쓴 글·댓글·장소는 그대로 남는다. "
-            + "방장이 나가면 다음 사람에게 방장이 자동으로 넘어간다(관리자 우선 → 먼저 참여한 순). 이때 newOwner에 새 방장이 담긴다. "
+            + "방장은 newOwnerId로 새 방장을 지정해야 나갈 수 있다. 후보는 방장 위임 후보 조회 API로 받는다(관리자가 있으면 관리자만, 없으면 멤버). "
+            + "위임과 나가기는 함께 처리되고, newOwner에 새 방장이 담긴다. "
+            + "newOwnerId 없이 나가면 400(MAP_027), 후보가 아닌 사람을 지정하면 400(MAP_028). "
             + "혼자 남은 지도의 방장은 나갈 수 없다(400, MAP_008 — 지도 삭제를 안내한다). 나만의 지도는 나갈 수 없다(400, MAP_023)."
     )
     @DeleteMapping("/{mapId}/members/me")
     public ApiResponse<MapLeaveResponse> leave(
         @PathVariable Long mapId,
+        @Parameter(description = "새 방장의 사용자 ID. 방장이 나갈 때만 필요하고, 관리자·멤버가 보내면 무시한다.", example = "12")
+        @RequestParam(required = false) Long newOwnerId,
         @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
     ) {
-        return ApiResponse.success(mapLeaveService.leave(mapId, userId));
+        return ApiResponse.success(mapLeaveService.leave(mapId, userId, newOwnerId));
+    }
+
+    @Operation(
+        summary = "방장 위임 후보 조회",
+        description = "방장이 지도를 나가기 전에 새 방장으로 고를 수 있는 사람을 먼저 참여한 순으로 조회한다. "
+            + "관리자가 있으면 관리자만, 없으면 일반 멤버 전체가 나온다. 비어 있으면 혼자 남은 지도라 나갈 수 없다(지도 삭제를 안내한다). "
+            + "방장만 조회할 수 있다(403, MAP_004)."
+    )
+    @GetMapping("/{mapId}/owner-candidates")
+    public ApiResponse<List<MapMemberSummaryResponse>> getOwnerCandidates(
+        @PathVariable Long mapId,
+        @Parameter(hidden = true) @RequestHeader(USER_ID_HEADER) Long userId
+    ) {
+        return ApiResponse.success(mapService.getOwnerCandidates(mapId, userId));
     }
 
     @Operation(

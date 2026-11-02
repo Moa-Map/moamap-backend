@@ -38,7 +38,9 @@ public enum MapErrorCode implements ErrorCode {
     CANNOT_LEAVE_PERSONAL_MAP("MAP_023", "나만의 지도는 나갈 수 없습니다.", 400),
     OFFICIAL_MAP_NOT_REPORTABLE("MAP_024", "공식 지도는 신고할 수 없습니다. 문의하기로 알려 주세요.", 400),
     CANNOT_REPORT_OWN_CONTENT("MAP_025", "내가 만든 지도나 쓴 글은 신고할 수 없습니다.", 400),
-    ALREADY_REPORTED("MAP_026", "이미 신고했습니다.", 409);
+    ALREADY_REPORTED("MAP_026", "이미 신고했습니다.", 409),
+    OWNER_HANDOVER_REQUIRED("MAP_027", "나가기 전에 방장을 위임해 주세요.", 400),
+    NOT_OWNER_CANDIDATE("MAP_028", "새 방장으로 지정할 수 없는 사용자입니다. 후보 목록을 다시 확인해 주세요.", 400);
 
     private final String code;
     private final String message;
